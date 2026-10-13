@@ -34,7 +34,7 @@ public sealed class BridgeClient : IDisposable
                 tcp = c;
                 var stream = c.GetStream();
                 lock (writeGate) writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
-                Dispatcher.UIThread.Post(() => { state.Note('·', "connected to the NinjaTrader bridge"); Connected?.Invoke(); state.Raise(); });
+                Dispatcher.UIThread.Post(() => { state.Note(BookDepthIQ.Core.OrderLogStatus.Ok, "connected to the NinjaTrader bridge"); Connected?.Invoke(); state.Raise(); });
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 string? line;
                 while ((line = await reader.ReadLineAsync(cts.Token)) != null)
@@ -55,7 +55,7 @@ public sealed class BridgeClient : IDisposable
             lock (writeGate) writer = null;
             Dispatcher.UIThread.Post(() =>
             {
-                if (state.Connected) state.Note('✗', "lost the NinjaTrader bridge — reconnecting");
+                if (state.Connected) state.Note(BookDepthIQ.Core.OrderLogStatus.Error, "lost the NinjaTrader bridge — reconnecting");
                 state.Connected = false;
                 state.Raise();
             });

@@ -1,34 +1,108 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using BookDepthIQ.Core;
 
 namespace BookDepthIQ.Dom;
 
-/// <summary>The user's settings, saved to %APPDATA%\BookDepthIQ-NT\settings.json. Every risk number
-/// here is the user's own; nothing is hard-coded into an order.</summary>
+public enum StopMode { Ticks, Atr, Swing }
+public enum TrailMode { Off, R, St1, St2 }
+public enum PreviewMode { Off, Long, Short }
+
+/// <summary>Which ladder columns show (the Vest panel's set).</summary>
+public sealed class Columns
+{
+    public bool Orders { get; set; } = true;
+    public bool Footprint { get; set; } = true;
+    public bool Pnl { get; set; } = true;
+    public bool Heat { get; set; } = true;
+    public bool Profile { get; set; } = true;
+    public bool Delta { get; set; } = true;
+}
+
+/// <summary>The user's settings, saved to %APPDATA%\BookDepthIQ-NT\settings.json. Every risk number is the
+/// user's own; nothing is hard-coded into an order.</summary>
 public sealed class Settings
 {
+    // ── market / account ──
     public string Instrument { get; set; } = "NQ 12-26";
     public string Account { get; set; } = "Sim101";
+    public int HistoryHours { get; set; } = 8;
+
+    // ── ticket ──
     public SizeMode SizeMode { get; set; } = SizeMode.Contracts;
     public double SizeInput { get; set; } = 1;
-    public int TpTicks { get; set; } = 32;
+    public int[] TpTicks { get; set; } = { 32, 0, 0 };
+    public string TpSplit { get; set; } = "50/30/20";
     public int SlTicks { get; set; } = 16;
+    public StopMode StopMode { get; set; } = StopMode.Ticks;
+    /// <summary>ATR stop: ST1 ATR × this. Swing stop: buffer ticks past the swing.</summary>
+    public double AtrMult { get; set; } = 1.5;
+    public int SwingMinutes { get; set; } = 10;
+    public int SwingBufTicks { get; set; } = 2;
+    /// <summary>ATR / swing mode: targets as R multiples of the stop.</summary>
+    public double[] TpR { get; set; } = { 2, 0, 0 };
     public bool BracketOn { get; set; } = true;
-    /// <summary>Commission + exchange/NFA fees per contract per side, $ (check your broker's).</summary>
+    public bool BeAfterTp1 { get; set; }
+    public int BeOffsetTicks { get; set; } = 1;
+    public TrailMode Trail { get; set; } = TrailMode.Off;
+    public double TrailStartR { get; set; } = 1;
+    public bool StopGuard { get; set; }
+    public string Setup { get; set; } = "pullback";
+    public PreviewMode Preview { get; set; } = PreviewMode.Off;
+    public bool ScaleOn { get; set; }
+    public int ScaleCount { get; set; } = 4;
+    public int ScaleSpanTicks { get; set; } = 16;
+    public double ScaleSkew { get; set; } = 1;
+    public SkewDir ScaleDir { get; set; } = SkewDir.Even;
+    public bool HotkeysArmed { get; set; }
+
+    // ── fees / limits ──
+    /// <summary>Commission + exchange/NFA fees per contract per side, $ (your broker's).</summary>
     public double FeePerSide { get; set; } = 2.09;
     public int MaxContracts { get; set; }
+    /// <summary>Fat-finger warnings (never block): size × normal, far from market (ticks, 0 = 4 × ATR).</summary>
+    public double SizeMult { get; set; } = 2;
+    public int FarTicks { get; set; }
 
-    // Prop account rules (the user's numbers): start, max drawdown, trailing type, lock, daily loss.
+    // ── prop account rules ──
     public double Start { get; set; } = 50000;
     public double MaxDrawdown { get; set; } = 2500;
     public DrawdownKind DrawdownKind { get; set; } = DrawdownKind.TrailingEod;
     public double LockAt { get; set; } = 50100;
     public double DailyLoss { get; set; }
-    /// <summary>Peak equity/balance per account, kept for trailing drawdown.</summary>
     public Dictionary<string, double> Peaks { get; set; } = new();
 
-    private static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BookDepthIQ-NT", "settings.json");
-    private static readonly JsonSerializerOptions Opts = new() { WriteIndented = true };
+    // ── protect my day ──
+    public double DayLossUsd { get; set; }
+    public int DayMaxTrades { get; set; }
+    public int CooldownSec { get; set; }
+    public bool CloseAtDayLimit { get; set; }
+    public bool WeekendClose { get; set; }
+    public string WeekendCloseTime { get; set; } = "16:00";
+    public Dictionary<string, DayState> Days { get; set; } = new();
+
+    // ── ladder ──
+    public int Group { get; set; } = 1;
+    public double RowHeight { get; set; } = 18;
+    public Columns Columns { get; set; } = new();
+    public bool ShowTrend { get; set; } = true;
+    public bool ShowLog { get; set; } = true;
+    public bool ShowJournal { get; set; }
+    public TrendConfig St1 { get; set; } = TrendConfig.DefaultT1;
+    public TrendConfig St2 { get; set; } = TrendConfig.DefaultT2;
+    public PaxOrCfg PaxOr { get; set; } = new();
+    /// <summary>Per-instrument indicator settings (key: instrument root, e.g. NQ).</summary>
+    public Dictionary<string, IndicatorCfg> Indicators { get; set; } = new();
+
+    public IndicatorCfg IndicatorsFor(string inst) => Indicators.TryGetValue(CmeSpecs.RootOf(inst), out var c) ? c : new IndicatorCfg();
+    public void SetIndicators(string inst, IndicatorCfg c) => Indicators[CmeSpecs.RootOf(inst)] = c;
+
+    public DrawdownRules Rules => new(Start, MaxDrawdown, DrawdownKind, LockAt, DailyLoss);
+    public DayLimits Limits => new(DayLossUsd, DayMaxTrades, CooldownSec);
+
+    public static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BookDepthIQ-NT");
+    private static string FilePath => Path.Combine(Dir, "settings.json");
+    private static readonly JsonSerializerOptions Opts = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
     public static Settings Load()
     {
@@ -40,11 +114,9 @@ public sealed class Settings
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+            Directory.CreateDirectory(Dir);
             File.WriteAllText(FilePath, JsonSerializer.Serialize(this, Opts));
         }
         catch { /* settings are a convenience; the DOM works without them */ }
     }
-
-    public DrawdownRules Rules => new(Start, MaxDrawdown, DrawdownKind, LockAt, DailyLoss);
 }

@@ -10,49 +10,93 @@ using BookDepthIQ.Core;
 
 namespace BookDepthIQ.Dom;
 
-/// <summary>The DOM window: header, account + position strips, ladder with tape and order log, and
-/// the ticket with CME risk (contracts, ticks, $ per tick, fees). Built in code so every control
-/// is checked by the compiler.</summary>
-public sealed class MainWindow : Window
+/// <summary>The DOM window — the Vest panel's layout: header (instrument, account, health, SuperTrend and
+/// scalp read, RISK, settings, KILL), account and position strips, bracket bar, ladder with tape / journal /
+/// order log, and the ticket with CME risk. Built in code so the compiler checks every control.</summary>
+public sealed partial class MainWindow : Window
 {
-    private readonly DomState s = new();
     private readonly Settings cfg = Settings.Load();
+    private readonly DomState s;
     private readonly BridgeClient bridge;
     private readonly LadderControl ladder;
     private DrawdownTracker dd;
-
-    private readonly TextBox instBox = Input(130);
-    private readonly ComboBox acctBox = new() { Width = 150, Height = 24, FontSize = 12 };
-    private readonly TextBlock connText = Label("", Pal.Muted);
-    private readonly TextBlock acctLine = Label("", Pal.Muted);
-    private readonly TextBlock posLine = Label("", Pal.Text);
-    private readonly TextBlock riskLine = Label("", Pal.Text);
-    private readonly TextBlock resultBar = Label("", Pal.Muted);
-    private readonly StackPanel tape = new() { Spacing = 0 };
-    private readonly StackPanel log = new() { Spacing = 0 };
-    private readonly ComboBox sizeMode = new() { Width = 110, Height = 24, FontSize = 12, ItemsSource = new[] { "contracts", "$ risk @SL", "% room @SL" } };
-    private readonly TextBox sizeIn = Input(54), tpIn = Input(44), slIn = Input(44), feeIn = Input(50), maxIn = Input(40);
-    private readonly TextBox startIn = Input(70), ddIn = Input(60), lockIn = Input(70), dayIn = Input(60);
-    private readonly ComboBox ddKind = new() { Width = 130, Height = 24, FontSize = 12, ItemsSource = new[] { "static", "trailing intraday", "trailing EOD" } };
-    private readonly ToggleButton bracketBtn = new() { Content = "BRACKET ON", FontSize = 11 };
-    private int cidSeq;
     private bool loading;
+    private int cidSeq;
+    private MarketState? lastState;
+
+    // header
+    private readonly TextBox instBox = Ui.Input(120, "NinjaTrader instrument, e.g. NQ 12-26 (Enter or Go)");
+    private readonly ComboBox acctBox = Ui.Combo(140, Array.Empty<string>(), "NinjaTrader account (Sim101 to test)");
+    private readonly Border bridgePill = Ui.Pill("BRIDGE", Pal.Warn);
+    private readonly Border feedPill = Ui.Pill("FEED", Pal.Warn);
+    private readonly Border trendPill = Ui.Pill("ST", Pal.Muted);
+    private readonly Border scalpPill = Ui.Pill("SCALP", Pal.Muted);
+    private readonly Border statePill = Ui.Pill("STATE", Pal.Muted);
+    private readonly ToggleButton armBtn = new() { Content = "HOTKEYS SAFE", FontSize = 11, Height = 24 };
+
+    // strips
+    private readonly TextBlock acctLine = Ui.Label("", Pal.Muted, size: 11.5);
+    private readonly ProgressBar roomBar = new() { Width = 160, Height = 6, Minimum = 0, Maximum = 1, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Dictionary<string, TextBlock> stat = new();
+    private readonly TextBlock bracketLine = Ui.Label("", Pal.Muted, size: 11.5);
+    private readonly TextBlock lockLine = Ui.Label("", Pal.Neg, bold: true, size: 11.5, wrap: true);
+
+    // side
+    private readonly StackPanel tape = new();
+    private readonly StackPanel logList = new();
+    private readonly StackPanel journalList = new();
+    private readonly ContentControl side = new();
+    private ScrollViewer? tapeScroll, journalScroll;
+    private readonly TextBlock journalSum = Ui.Label("", Pal.Text, size: 11.5, wrap: true);
+
+    // ticket
+    private readonly ComboBox sizeMode = Ui.Combo(130, new[] { "contracts", "$ risk @SL", "% room @SL" }, "how size is set: a fixed number of contracts, $ lost at the stop (fees in), or % of the room left to your fail floor");
+    private readonly TextBox sizeIn = Ui.Input(52);
+    private readonly StackPanel quick = new() { Orientation = Orientation.Horizontal, Spacing = 3 };
+    private readonly ComboBox stopMode = Ui.Combo(112, new[] { "SL ticks", "SL ATR", "SL swing" }, "stop distance: your ticks, ST1 ATR × mult, or past the swing high/low");
+    private readonly TextBox slIn = Ui.Input(44, "stop ticks"), atrIn = Ui.Input(40, "ATR multiple"), swingIn = Ui.Input(36, "swing lookback, minutes"), bufIn = Ui.Input(32, "ticks past the swing");
+    private readonly TextBox[] tpIn = { Ui.Input(44, "TP1 ticks (R in ATR/swing mode)"), Ui.Input(44, "TP2 (0 = off)"), Ui.Input(44, "TP3 (0 = off)") };
+    private readonly TextBox splitIn = Ui.Input(76, "size split across the targets that are on, e.g. 50/30/20");
+    private readonly ToggleButton bracketBtn = new() { Content = "BRACKET ON", FontSize = 11, Height = 24 };
+    private readonly CheckBox beChk = Ui.Check("B/E after TP1", "when TP1 fills, the panel moves your stops to entry ± offset (needs 2+ targets). Acts without a click; off by default.");
+    private readonly TextBox beOff = Ui.Input(32, "B/E offset ticks (+ in your favour)");
+    private readonly ComboBox trailBox = Ui.Combo(118, new[] { "trail off", "trail R", "trail ST1", "trail ST2" }, "trailing stop: after N R, one risk behind the best price; or ON the ST1/ST2 line. Moves only your way; acts without a click.");
+    private readonly TextBox trailR = Ui.Input(36, "start trailing after this many R");
+    private readonly CheckBox guardChk = Ui.Check("stop guard", "if a stop the panel saw on your position disappears, put it back at its last price");
+    private readonly TextBox setupIn = Ui.Input(90, "setup tag saved with the trade in the journal");
+    private readonly ComboBox previewBox = Ui.Combo(150, new[] { "preview off", "PREVIEW LONG", "PREVIEW SHORT" }, "draw the would-be stop and targets on the ladder while flat; drag them to set distances. Nothing is sent.");
+    private readonly CheckBox scaleChk = Ui.Check("SCALE", "a ladder click sends several limits from that price away from the market (no brackets: press B/E or set a stop after)");
+    private readonly TextBox scaleCount = Ui.Input(30, "orders (2–10)"), scaleSpan = Ui.Input(36, "span ticks"), scaleSkew = Ui.Input(30, "size skew (1 = even)");
+    private readonly ComboBox scaleDir = Ui.Combo(104, new[] { "big start", "even", "big end" });
+    private readonly TextBlock riskLine = Ui.Label("", Pal.Text, size: 11.5, wrap: true);
+    private readonly TextBlock checkLine = Ui.Label("", Pal.Warn, size: 11.5, wrap: true);
+    private readonly TextBlock costLine = Ui.Label("", Pal.Muted, size: 11.5, wrap: true);
+    private readonly TextBlock resultBar = Ui.Label("", Pal.Muted, size: 12, wrap: true);
+    private readonly TextBlock notice = Ui.Label("", Pal.Warn, size: 12, wrap: true);
+    private long noticeUntil;
 
     public MainWindow()
     {
         Title = "BookDepthIQ DOM — NinjaTrader";
-        Width = 1100;
-        Height = 820;
+        Width = 1380;
+        Height = 900;
         Background = Pal.B(Pal.Bg);
         FontFamily = Pal.Mono;
         FontSize = 12;
 
-        dd = new DrawdownTracker(cfg.Rules, cfg.Peaks.TryGetValue(cfg.Account, out var pk) ? pk : null);
+        s = new DomState(cfg) { Account = cfg.Account };
+        dd = NewTracker();
         bridge = new BridgeClient(s);
-        ladder = new LadderControl(s);
-        ladder.PlaceRequested += (buy, tick, stop) => Place(buy, tick, stop);
-        ladder.CancelRequested += o => SendCmd($"CANCEL {o.Action} {o.Type} @ {Px(o.Price)}", cid => Protocol.Cancel(cid, s.Account, o.Id));
-        ladder.MoveRequested += (o, t) => SendCmd($"MOVE {o.Action} {o.Type} → {Px(t * s.TickSize)}", cid => Protocol.Move(cid, s.Account, o.Id, t * s.TickSize));
+        ladder = new LadderControl(s, cfg)
+        {
+            Lines = LadderLines,
+            PreviewLegs = PreviewLegs,
+        };
+        ladder.PlaceRequested += (buy, row, stop) => Place(buy, row, stop);
+        ladder.CancelRequested += o => Send($"CANCEL {Leg(o)} @ {Px(o.Price)}", cid => Protocol.Cancel(cid, s.Account, o.Id), exit: true);
+        ladder.MoveRequested += (o, t) => Send($"MOVE {Leg(o)} {Px(o.Price)} → {Px(t * s.TickSize)}", cid => Protocol.Move(cid, s.Account, o.Id, t * s.TickSize), exit: true);
+        ladder.PreviewDropped += PreviewDropped;
+        ladder.GroupStep += d => { cfg.Group = LadderMath.StepGroup(cfg.Group, d); cfg.Save(); };
 
         Content = Build();
         LoadFields();
@@ -60,95 +104,145 @@ public sealed class MainWindow : Window
         {
             bridge.Send(Protocol.SelectAccount(cfg.Account));
             bridge.Send(Protocol.Subscribe(cfg.Instrument));
+            bridge.Send(Protocol.History(cfg.Instrument, cfg.HistoryHours));
         };
-        s.Account = cfg.Account;
-        s.Changed += OnChanged;
+        s.TradeClosed += OnTradeClosed;
         bridge.Start();
-        // Repaint the ladder at most ~20×/s; market messages only mark it dirty.
-        DispatcherTimer.Run(() => { ladder.InvalidateVisual(); return true; }, TimeSpan.FromMilliseconds(50));
+        // Repaint at most ~20×/s; bridge messages only change state. Management runs on the same tick.
+        DispatcherTimer.Run(() => { Tick(); return true; }, TimeSpan.FromMilliseconds(50));
         KeyDown += OnKey;
-        // Dev only: BDIQ_SNAPSHOT=<file.png> saves a picture of the window after 4 s and exits.
+        Closed += (_, _) => { SaveFields(); bridge.Dispose(); };
+
+        // Dev only: BDIQ_SNAPSHOT=<file.png> saves a picture of the window after BDIQ_SNAPSHOT_SEC (4) s and exits.
         if (Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT") is { Length: > 0 } shot)
             DispatcherTimer.RunOnce(() =>
             {
-                var size = new PixelSize((int)Bounds.Width, (int)Bounds.Height);
-                using var bmp = new Avalonia.Media.Imaging.RenderTargetBitmap(size);
+                using var bmp = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)Bounds.Width, (int)Bounds.Height));
                 bmp.Render(this);
                 bmp.Save(shot);
                 Close();
-            }, TimeSpan.FromSeconds(4));
-        Closed += (_, _) => { SaveFields(); bridge.Dispose(); };
+            }, TimeSpan.FromSeconds(double.TryParse(Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT_SEC"), out var sec) ? sec : 4));
     }
+
+    private DrawdownTracker NewTracker() => new(cfg.Rules, cfg.Peaks.TryGetValue(cfg.Account, out var pk) ? pk : null);
 
     // ───────────── layout ─────────────
 
     private Control Build()
     {
-        var header = Bar(
-            Label("BookDepthIQ", Pal.Text, bold: true), instBox, Btn("Go", (_, _) => { cfg.Instrument = instBox.Text?.Trim() ?? ""; cfg.Save(); bridge.Send(Protocol.Subscribe(cfg.Instrument)); ladder.Recenter(); }),
-            Label("account", Pal.Muted), acctBox, connText);
+        instBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) SwitchInstrument(); };
         acctBox.SelectionChanged += (_, _) =>
         {
             if (acctBox.SelectedItem is not string a || a == cfg.Account) return;
-            cfg.Account = a; s.Account = a; cfg.Save();
-            dd = new DrawdownTracker(cfg.Rules, cfg.Peaks.TryGetValue(a, out var pk) ? pk : null);
+            cfg.Account = a; s.Account = a; s.Positions.Clear(); s.Orders.Clear(); cfg.Save();
+            dd = NewTracker();
             bridge.Send(Protocol.SelectAccount(a));
         };
+        armBtn.IsCheckedChanged += (_, _) => { if (loading) return; cfg.HotkeysArmed = armBtn.IsChecked == true; cfg.Save(); };
 
-        var rules = new Expander
+        var header = Ui.Bar(
+            Ui.Label("BookDepthIQ", Pal.Text, bold: true), instBox, Ui.Btn("Go", SwitchInstrument), acctBox, bridgePill, feedPill, trendPill, scalpPill, statePill,
+            Ui.Btn("RISK", () => new RiskWindow(cfg, s, dd, ApplyRiskPlan).Show(this), "risk calculator for every CME contract; Use in DOM writes the plan into the ticket"),
+            Ui.Btn("SETTINGS", () => new SettingsWindow(cfg, OnSettingsSaved).Show(this), "account rules, protect my day, indicators, SuperTrend, ladder columns, fees"),
+            Ui.Btn("journal", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.Save(); RefreshSide(); }),
+            Ui.Btn("log", () => { cfg.ShowLog = !cfg.ShowLog; cfg.Save(); RefreshSide(); }),
+            Ui.Btn("KILL ⏻", Kill, "closes every position and cancels every order on this account (Ctrl+K). Never blocked.", Pal.Neg, Color.Parse("#3a1010")));
+
+        var acctRow = Ui.Bar(acctLine, roomBar);
+        var statRow = new WrapPanel { Margin = new Thickness(8, 4) };
+        foreach (var (k, tip) in new[]
         {
-            Header = Label("account rules (yours): start · max drawdown · trailing · lock · daily loss · fees", Pal.Muted),
-            Content = Bar(
-                Label("start $", Pal.Muted), startIn, Label("max DD $", Pal.Muted), ddIn, ddKind, Label("stops trailing at $", Pal.Muted), lockIn,
-                Label("daily loss $", Pal.Muted), dayIn, Label("fee/side $", Pal.Muted), feeIn, Label("max ct", Pal.Muted), maxIn,
-                Btn("save", (_, _) => { SaveFields(); dd = new DrawdownTracker(cfg.Rules, cfg.Peaks.TryGetValue(cfg.Account, out var pk) ? pk : null); OnChanged(); })),
-            Padding = new Thickness(4),
-        };
-
-        var side = new DockPanel { Width = 270, Background = Pal.B(Pal.Bg) };
-        var tapeHead = Label("TAPE", Pal.Muted, size: 10);
-        var logHead = Label("ORDER LOG", Pal.Muted, size: 10);
-        var logScroll = new ScrollViewer { Content = log, Height = 220 };
-        DockPanel.SetDock(tapeHead, Dock.Top);
-        DockPanel.SetDock(logScroll, Dock.Bottom);
-        DockPanel.SetDock(logHead, Dock.Bottom);
-        side.Children.Add(tapeHead);
-        side.Children.Add(logScroll);
-        side.Children.Add(logHead);
-        side.Children.Add(new ScrollViewer { Content = tape });
-
-        var middle = new DockPanel();
-        DockPanel.SetDock(side, Dock.Right);
-        middle.Children.Add(side);
-        middle.Children.Add(new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 1, 0), Child = ladder });
-
-        bracketBtn.IsCheckedChanged += (_, _) => { bracketBtn.Content = bracketBtn.IsChecked == true ? "BRACKET ON" : "BRACKET OFF"; SaveFields(); };
-        foreach (var tb in new[] { sizeIn, tpIn, slIn }) tb.TextChanged += (_, _) => { SaveFields(); UpdateRiskLine(); };
-        sizeMode.SelectionChanged += (_, _) => { SaveFields(); UpdateRiskLine(); };
-
-        var ticket = new StackPanel { Background = Pal.B(Pal.Panel), Spacing = 4, Margin = new Thickness(0) };
-        ticket.Children.Add(Bar(Label("Size", Pal.Muted), sizeMode, sizeIn, Label("TP ticks", Pal.Muted), tpIn, Label("SL ticks", Pal.Muted), slIn, bracketBtn));
-        ticket.Children.Add(Pad(riskLine));
-        ticket.Children.Add(Pad(resultBar));
-        var buttons = new UniformGrid { Columns = 4, Margin = new Thickness(6, 2, 6, 6) };
-        buttons.Children.Add(BigBtn("BUY MKT", Pal.BuyBtn, Pal.Bid, (_, _) => Market(true)));
-        buttons.Children.Add(BigBtn("SELL MKT", Pal.SellBtn, Pal.Ask, (_, _) => Market(false)));
-        buttons.Children.Add(BigBtn("CANCEL ALL", Color.Parse("#1a2130"), Pal.Text, (_, _) => SendCmd("CANCEL ALL", cid => Protocol.CancelAll(cid, s.Account, s.Instrument))));
-        buttons.Children.Add(BigBtn("FLATTEN", Color.Parse("#4a1414"), Pal.Neg, (_, _) => SendCmd("FLATTEN", cid => Protocol.Flatten(cid, s.Account, s.Instrument))));
-        ticket.Children.Add(buttons);
-
-        var root = new DockPanel();
+            ("POSITION", ""), ("AVG", ""), ("FAIL PRICE", "price where your account hits its floor at this size"), ("OPEN P&L", ""), ("TO FLOOR", "ticks against you before the account fails"),
+            ("POC · VA", "session volume profile: point of control and value area"), ("CUM Δ", "session delta: aggressive buys − sells"), ("ST1 · ST2", "dual SuperTrend lines (60 s / 15 s)"),
+            ("VWAP", "session VWAP and how many σ price is from it"), ("BID / ASK LIQ", "share of resting size on each side (top 10 levels)"), ("REALIZED", "NinjaTrader realized P&L"), ("TODAY", "journal: trades and net $ today"),
+        })
+        {
+            var (box, v) = Ui.Stat(k, tip == "" ? null : tip);
+            stat[k] = v;
+            statRow.Children.Add(box);
+        }
         var top = new StackPanel();
         top.Children.Add(header);
-        top.Children.Add(rules);
-        top.Children.Add(Pad(acctLine));
-        top.Children.Add(Pad(posLine));
+        top.Children.Add(acctRow);
+        top.Children.Add(new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 0, 1), Child = statRow });
+        top.Children.Add(Ui.Pad(bracketLine));
+
+        // side panel: tape / journal + order log
+        var sideDock = new DockPanel { Width = 300, Background = Pal.B(Pal.Bg) };
+        var logHead = Ui.Row(Ui.Label("ORDER LOG", Pal.Muted, size: 10), Ui.Btn("copy", CopyLog, "copy the order log with context — paste it in a bug report"), Ui.Btn("clear", () => { s.OrderLog.Clear(); RefreshSide(); }));
+        var logScroll = new ScrollViewer { Content = logList, Height = 230 };
+        DockPanel.SetDock(logScroll, Dock.Bottom);
+        DockPanel.SetDock(logHead, Dock.Bottom);
+        sideDock.Children.Add(logScroll);
+        sideDock.Children.Add(logHead);
+        sideDock.Children.Add(side);
+
+        var middle = new DockPanel();
+        var sideBorder = new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(1, 0, 0, 0), Child = sideDock };
+        DockPanel.SetDock(sideBorder, Dock.Right);
+        middle.Children.Add(sideBorder);
+        middle.Children.Add(ladder);
+
+        var ticket = BuildTicket();
+        var root = new DockPanel();
         DockPanel.SetDock(top, Dock.Top);
         DockPanel.SetDock(ticket, Dock.Bottom);
         root.Children.Add(top);
         root.Children.Add(ticket);
         root.Children.Add(middle);
+        RefreshSide();
         return root;
+    }
+
+    private Control BuildTicket()
+    {
+        bracketBtn.IsCheckedChanged += (_, _) => { bracketBtn.Content = bracketBtn.IsChecked == true ? "BRACKET ON" : "BRACKET OFF"; SaveFields(); };
+        foreach (var tb in new[] { sizeIn, slIn, atrIn, swingIn, bufIn, splitIn, beOff, trailR, setupIn, scaleCount, scaleSpan, scaleSkew }.Concat(tpIn))
+            tb.TextChanged += (_, _) => SaveFields();
+        foreach (var cb in new[] { sizeMode, stopMode, trailBox, previewBox, scaleDir }) cb.SelectionChanged += (_, _) => { SaveFields(); BuildQuick(); };
+        foreach (var ck in new[] { beChk, guardChk, scaleChk }) ck.IsCheckedChanged += (_, _) => SaveFields();
+
+        var t = new StackPanel { Background = Pal.B(Pal.Panel) };
+        t.Children.Add(Ui.Row(Ui.Label("Size", Pal.Muted), sizeMode, sizeIn, quick, stopMode, slIn, atrIn, swingIn, bufIn,
+            Ui.Label("TP", Pal.Muted), tpIn[0], tpIn[1], tpIn[2], Ui.Label("split", Pal.Muted), splitIn, bracketBtn));
+        t.Children.Add(Ui.Row(beChk, beOff, trailBox, trailR, guardChk, Ui.Label("setup", Pal.Muted), setupIn, previewBox, scaleChk, scaleCount, scaleSpan, scaleSkew, scaleDir, armBtn));
+        t.Children.Add(Ui.Pad(riskLine));
+        t.Children.Add(Ui.Pad(checkLine));
+        t.Children.Add(Ui.Pad(costLine));
+        t.Children.Add(Ui.Pad(lockLine));
+        t.Children.Add(Ui.Pad(notice));
+        t.Children.Add(Ui.Pad(resultBar));
+        var buttons = new UniformGrid { Columns = 7, Margin = new Thickness(6, 2, 6, 6) };
+        buttons.Children.Add(Ui.BigBtn("BUY MKT", Pal.BuyBtn, Pal.Bid, () => Market(true), "market buy with your size and bracket (B when hotkeys are armed)"));
+        buttons.Children.Add(Ui.BigBtn("SELL MKT", Pal.SellBtn, Pal.Ask, () => Market(false), "market sell with your size and bracket (S when armed)"));
+        buttons.Children.Add(Ui.BigBtn("B/E", Color.Parse("#1a2130"), Pal.Text, BreakEven, "move your stops to entry ± B/E offset (E when armed)"));
+        buttons.Children.Add(Ui.BigBtn("CLOSE HALF", Color.Parse("#1a2130"), Pal.Text, CloseHalf, "close half the position at market; bracket legs trimmed. Never blocked."));
+        buttons.Children.Add(Ui.BigBtn("REVERSE", Color.Parse("#1a2130"), Pal.Text, Reverse, "flip the position at market (R when armed)"));
+        buttons.Children.Add(Ui.BigBtn("CANCEL ALL", Color.Parse("#1a2130"), Pal.Text, CancelAll, "cancel every order on this instrument (Esc). Never blocked."));
+        buttons.Children.Add(Ui.BigBtn("FLATTEN", Color.Parse("#4a1414"), Pal.Neg, Flatten, "close the position and cancel its orders (F). Never blocked."));
+        t.Children.Add(buttons);
+        return new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 0), Child = t };
+    }
+
+    /// <summary>Quick size buttons for the size mode: contracts, $ risk or % of room.</summary>
+    private void BuildQuick()
+    {
+        quick.Children.Clear();
+        var (vals, fmt) = cfg.SizeMode switch
+        {
+            SizeMode.Contracts => (new double[] { 1, 2, 3, 5, 10 }, "{0} ct"),
+            SizeMode.RiskUsd => (new double[] { 50, 100, 250, 500 }, "${0}"),
+            _ => (new double[] { 10, 25, 50, 100 }, "{0}%"),
+        };
+        foreach (var v in vals)
+        {
+            var b = Ui.Btn(string.Format(CultureInfo.InvariantCulture, fmt, v), () => { sizeIn.Text = Ui.F(v); SaveFields(); });
+            b.Padding = new Thickness(5, 1);
+            quick.Children.Add(b);
+        }
+        atrIn.IsVisible = cfg.StopMode == StopMode.Atr;
+        swingIn.IsVisible = bufIn.IsVisible = cfg.StopMode == StopMode.Swing;
+        slIn.IsVisible = cfg.StopMode == StopMode.Ticks;
     }
 
     private void LoadFields()
@@ -156,193 +250,107 @@ public sealed class MainWindow : Window
         loading = true;
         instBox.Text = cfg.Instrument;
         sizeMode.SelectedIndex = (int)cfg.SizeMode;
-        sizeIn.Text = F(cfg.SizeInput);
-        tpIn.Text = cfg.TpTicks.ToString(CultureInfo.InvariantCulture);
+        sizeIn.Text = Ui.F(cfg.SizeInput);
+        stopMode.SelectedIndex = (int)cfg.StopMode;
         slIn.Text = cfg.SlTicks.ToString(CultureInfo.InvariantCulture);
+        atrIn.Text = Ui.F(cfg.AtrMult);
+        swingIn.Text = cfg.SwingMinutes.ToString(CultureInfo.InvariantCulture);
+        bufIn.Text = cfg.SwingBufTicks.ToString(CultureInfo.InvariantCulture);
+        for (var i = 0; i < 3; i++) tpIn[i].Text = cfg.StopMode == StopMode.Ticks ? (i < cfg.TpTicks.Length ? cfg.TpTicks[i] : 0).ToString(CultureInfo.InvariantCulture) : Ui.F(i < cfg.TpR.Length ? cfg.TpR[i] : 0);
+        splitIn.Text = cfg.TpSplit;
         bracketBtn.IsChecked = cfg.BracketOn;
-        feeIn.Text = F(cfg.FeePerSide);
-        maxIn.Text = cfg.MaxContracts.ToString(CultureInfo.InvariantCulture);
-        startIn.Text = F(cfg.Start);
-        ddIn.Text = F(cfg.MaxDrawdown);
-        ddKind.SelectedIndex = (int)cfg.DrawdownKind;
-        lockIn.Text = F(cfg.LockAt);
-        dayIn.Text = F(cfg.DailyLoss);
+        bracketBtn.Content = cfg.BracketOn ? "BRACKET ON" : "BRACKET OFF";
+        beChk.IsChecked = cfg.BeAfterTp1;
+        beOff.Text = cfg.BeOffsetTicks.ToString(CultureInfo.InvariantCulture);
+        trailBox.SelectedIndex = (int)cfg.Trail;
+        trailR.Text = Ui.F(cfg.TrailStartR);
+        guardChk.IsChecked = cfg.StopGuard;
+        setupIn.Text = cfg.Setup;
+        previewBox.SelectedIndex = (int)cfg.Preview;
+        scaleChk.IsChecked = cfg.ScaleOn;
+        scaleCount.Text = cfg.ScaleCount.ToString(CultureInfo.InvariantCulture);
+        scaleSpan.Text = cfg.ScaleSpanTicks.ToString(CultureInfo.InvariantCulture);
+        scaleSkew.Text = Ui.F(cfg.ScaleSkew);
+        scaleDir.SelectedIndex = (int)cfg.ScaleDir;
+        armBtn.IsChecked = cfg.HotkeysArmed;
         loading = false;
+        BuildQuick();
     }
 
     private void SaveFields()
     {
         if (loading) return;
+        var prevStop = cfg.StopMode;
         cfg.SizeMode = (SizeMode)Math.Max(0, sizeMode.SelectedIndex);
-        cfg.SizeInput = Num(sizeIn, cfg.SizeInput);
-        cfg.TpTicks = (int)Num(tpIn, cfg.TpTicks);
-        cfg.SlTicks = (int)Num(slIn, cfg.SlTicks);
+        cfg.SizeInput = Ui.Num(sizeIn, cfg.SizeInput);
+        cfg.StopMode = (StopMode)Math.Max(0, stopMode.SelectedIndex);
+        cfg.SlTicks = (int)Ui.Num(slIn, cfg.SlTicks);
+        cfg.AtrMult = Ui.Num(atrIn, cfg.AtrMult);
+        cfg.SwingMinutes = Math.Max(1, (int)Ui.Num(swingIn, cfg.SwingMinutes));
+        cfg.SwingBufTicks = (int)Ui.Num(bufIn, cfg.SwingBufTicks);
+        if (prevStop == cfg.StopMode)
+        {
+            if (cfg.StopMode == StopMode.Ticks) cfg.TpTicks = tpIn.Select((x, i) => (int)Ui.Num(x, i < cfg.TpTicks.Length ? cfg.TpTicks[i] : 0)).ToArray();
+            else cfg.TpR = tpIn.Select((x, i) => Ui.Num(x, i < cfg.TpR.Length ? cfg.TpR[i] : 0)).ToArray();
+        }
+        cfg.TpSplit = splitIn.Text ?? cfg.TpSplit;
         cfg.BracketOn = bracketBtn.IsChecked == true;
-        cfg.FeePerSide = Num(feeIn, cfg.FeePerSide);
-        cfg.MaxContracts = (int)Num(maxIn, cfg.MaxContracts);
-        cfg.Start = Num(startIn, cfg.Start);
-        cfg.MaxDrawdown = Num(ddIn, cfg.MaxDrawdown);
-        cfg.DrawdownKind = (DrawdownKind)Math.Max(0, ddKind.SelectedIndex);
-        cfg.LockAt = Num(lockIn, cfg.LockAt);
-        cfg.DailyLoss = Num(dayIn, cfg.DailyLoss);
+        cfg.BeAfterTp1 = beChk.IsChecked == true;
+        cfg.BeOffsetTicks = (int)Ui.Num(beOff, cfg.BeOffsetTicks);
+        cfg.Trail = (TrailMode)Math.Max(0, trailBox.SelectedIndex);
+        cfg.TrailStartR = Ui.Num(trailR, cfg.TrailStartR);
+        cfg.StopGuard = guardChk.IsChecked == true;
+        cfg.Setup = setupIn.Text ?? "";
+        cfg.Preview = (PreviewMode)Math.Max(0, previewBox.SelectedIndex);
+        cfg.ScaleOn = scaleChk.IsChecked == true;
+        cfg.ScaleCount = (int)Ui.Num(scaleCount, cfg.ScaleCount);
+        cfg.ScaleSpanTicks = (int)Ui.Num(scaleSpan, cfg.ScaleSpanTicks);
+        cfg.ScaleSkew = Ui.Num(scaleSkew, cfg.ScaleSkew);
+        cfg.ScaleDir = (SkewDir)Math.Max(0, scaleDir.SelectedIndex);
         cfg.Save();
+        if (prevStop != cfg.StopMode) LoadFields(); // targets switch between ticks and R
     }
 
-    // ───────────── risk ─────────────
-
-    private double Equity => s.NetLiq > 0 ? s.NetLiq : s.Cash + s.OpenPnl;
-
-    private RiskOut Risk() => CmeRisk.Calc(new RiskInput
+    private void OnSettingsSaved()
     {
-        TickValue = s.TickValue,
-        RoomUsd = dd.Room(Equity),
-        StopTicks = cfg.SlTicks,
-        TargetTicks = cfg.TpTicks,
-        FeePerSide = cfg.FeePerSide,
-        Mode = cfg.SizeMode,
-        Input = cfg.SizeInput,
-        MaxContracts = cfg.MaxContracts,
-    });
-
-    private void UpdateRiskLine()
-    {
-        var r = Risk();
-        var be = CmeRisk.BreakEvenTicks(s.TickValue, cfg.FeePerSide);
-        var why = r.BelowOne ? $" · ${r.RiskWanted:N0} buys less than 1 contract at {cfg.SlTicks}t" : r.Capped ? $" · capped at your max {cfg.MaxContracts}" : "";
-        riskLine.Text = $"= {r.Contracts} ct · ${r.DollarsPerTick:N2}/tick · risk ${r.Loss:N2} at SL · win ${r.Win:N2} at TP · R:R {r.RR:N2} · fees ${r.Fees:N2} · " +
-                        $"{(double.IsInfinity(r.RoomUsed) ? "—" : (r.RoomUsed * 100).ToString("N0", CultureInfo.InvariantCulture) + "% of room")} · {(r.LosersLeft == int.MaxValue ? "—" : r.LosersLeft.ToString(CultureInfo.InvariantCulture))} losers left · break-even {be:N1}t{why}";
-        riskLine.Foreground = Pal.B(r.StopPastFail ? Pal.Neg : Pal.Text);
-        if (r.StopPastFail) riskLine.Text += $" · STOP IS PAST THE FAIL LINE ({r.TicksToFail:N0}t)";
+        dd = NewTracker();
+        s.ResetAnalytics();
+        bridge.Send(Protocol.History(s.Instrument, cfg.HistoryHours));
+        LoadFields();
     }
 
-    // ───────────── orders (each one is a click) ─────────────
-
-    private string NextCid() => $"c{Environment.TickCount64}-{++cidSeq}";
-
-    /// <summary>Sends a command, or says on screen why it can't. Never a silent no-op.</summary>
-    private void SendCmd(string what, Func<string, string> build)
+    private void SwitchInstrument()
     {
-        s.Note('→', $"{s.Account} {what} · {s.Instrument}");
-        if (!s.Connected) { Refuse("not connected to NinjaTrader — is the BookDepthIQBridge AddOn compiled and NT running?"); return; }
-        if (!bridge.Send(build(NextCid()))) Refuse("the bridge connection dropped — reconnecting");
-        OnChanged();
+        var name = instBox.Text?.Trim() ?? "";
+        if (name.Length == 0) return;
+        cfg.Instrument = name;
+        cfg.Save();
+        bridge.Send(Protocol.Subscribe(name));
+        bridge.Send(Protocol.History(name, cfg.HistoryHours));
+        trail.Clear();
+        be.Clear();
+        ladder.Recenter();
     }
 
-    private void Refuse(string why)
+    /// <summary>RISK → Use in DOM: size rule, stop and target into the ticket.</summary>
+    private void ApplyRiskPlan(SizeMode mode, double input, int stopTicks, int tpTicks)
     {
-        s.LastOk = false;
-        s.LastResult = why;
-        s.Note('⊘', why);
-        OnChanged();
+        cfg.SizeMode = mode;
+        cfg.SizeInput = input;
+        cfg.StopMode = StopMode.Ticks;
+        cfg.SlTicks = stopTicks;
+        cfg.TpTicks = new[] { tpTicks, 0, 0 };
+        cfg.Save();
+        LoadFields();
+        Notice($"RISK plan in the ticket: {sizeMode.SelectedItem} {Ui.F(input)}, SL {stopTicks}t, TP {tpTicks}t");
     }
 
-    /// <summary>Why an entry can't go right now (null = ready).</summary>
-    private string? NotReady(int qty)
+    private void Notice(string text, int ms = 6000)
     {
-        if (!s.Connected) return "not connected to NinjaTrader";
-        if (string.IsNullOrEmpty(s.Instrument)) return "no instrument — type one (e.g. NQ 12-26) and press Go";
-        if (qty <= 0)
-        {
-            var r = Risk();
-            return r.BelowOne ? $"size is 0: ${r.RiskWanted:N0} risk buys less than one contract at {cfg.SlTicks} ticks" : $"size is 0 — check Size ({sizeMode.SelectedItem} {cfg.SizeInput})";
-        }
-        return null;
+        notice.Text = text;
+        noticeUntil = Environment.TickCount64 + ms;
     }
-
-    private void Market(bool buy)
-    {
-        var qty = Risk().Contracts;
-        var why = NotReady(qty);
-        if (why != null) { s.Note('→', $"{(buy ? "BUY" : "SELL")} MKT"); Refuse(why); return; }
-        var (tp, sl) = cfg.BracketOn ? (cfg.TpTicks, cfg.SlTicks) : (0, 0);
-        SendCmd($"{(buy ? "BUY" : "SELL")} MKT {qty} ct{(cfg.BracketOn ? $" TP {tp}t SL {sl}t" : "")}", cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", "market", qty, null, tp, sl));
-    }
-
-    private void Place(bool buy, long tick, bool stop)
-    {
-        var qty = Risk().Contracts;
-        var why = NotReady(qty);
-        var px = tick * s.TickSize;
-        if (why != null) { s.Note('→', $"{(buy ? "BUY" : "SELL")} {(stop ? "STOP" : "LIMIT")} @ {Px(px)}"); Refuse(why); return; }
-        var (tp, sl) = cfg.BracketOn ? (cfg.TpTicks, cfg.SlTicks) : (0, 0);
-        SendCmd($"{(buy ? "BUY" : "SELL")} {(stop ? "STOP" : "LIMIT")} {qty} ct @ {Px(px)}{(cfg.BracketOn ? $" TP {tp}t SL {sl}t" : "")}",
-            cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", stop ? "stop" : "limit", qty, px, tp, sl));
-    }
-
-    private void OnKey(object? sender, KeyEventArgs e)
-    {
-        if (e.Source is TextBox) return;
-        if (e.Key == Key.Space) { ladder.Recenter(); e.Handled = true; }
-        else if (e.Key == Key.F) { SendCmd("FLATTEN (F)", cid => Protocol.Flatten(cid, s.Account, s.Instrument)); e.Handled = true; }
-        else if (e.Key == Key.Escape) { SendCmd("CANCEL ALL (Esc)", cid => Protocol.CancelAll(cid, s.Account, s.Instrument)); e.Handled = true; }
-    }
-
-    // ───────────── refresh ─────────────
-
-    private void OnChanged()
-    {
-        connText.Text = s.Connected ? "● NinjaTrader bridge" : "○ waiting for the NinjaTrader bridge (127.0.0.1:" + Protocol.Port + ")";
-        connText.Foreground = Pal.B(s.Connected ? Pal.Pos : Pal.Warn);
-        var names = s.Accounts.Select(a => a.Name).ToList();
-        if (!names.SequenceEqual(acctBox.ItemsSource?.Cast<string>() ?? Enumerable.Empty<string>()))
-        {
-            acctBox.ItemsSource = names;
-            acctBox.SelectedItem = names.Contains(cfg.Account) ? cfg.Account : null;
-        }
-
-        var eq = Equity;
-        dd.OnEquity(eq);
-        if (dd.Peak != (cfg.Peaks.TryGetValue(cfg.Account, out var p) ? p : cfg.Start)) { cfg.Peaks[cfg.Account] = dd.Peak; cfg.Save(); }
-        var room = dd.Room(eq);
-        acctLine.Text = $"{s.Account} · equity ${eq:N2} · floor ${dd.Floor:N2} ({cfg.DrawdownKind}) · room ${room:N2} · realized {LadderControl.Usd(s.Realized)} · " +
-                        $"{s.Instrument} tick {s.TickSize} = ${s.TickValue:N2}{(s.TrailDd != 0 ? $" · NT trailing DD ${s.TrailDd:N2}" : "")}";
-        var ticksToFloor = s.PosQty != 0 && s.TickValue > 0 ? room / (Math.Abs(s.PosQty) * s.TickValue) : double.PositiveInfinity;
-        posLine.Text = s.PosQty == 0
-            ? "POSITION flat"
-            : $"POSITION {(s.PosQty > 0 ? "+" : "")}{s.PosQty} @ {Px(s.PosAvg)} · OPEN P&L {LadderControl.Usd(s.OpenPnl)} · TO FLOOR {ticksToFloor:N0} ticks";
-        posLine.Foreground = Pal.B(s.PosQty == 0 ? Pal.Muted : s.OpenPnl >= 0 ? Pal.Pos : Pal.Neg);
-        resultBar.Text = s.LastResult is null ? "" : (s.LastOk ? "✓ " : "✗ ") + s.LastResult;
-        resultBar.Foreground = Pal.B(s.LastOk ? Pal.Pos : Pal.Neg);
-        UpdateRiskLine();
-
-        tape.Children.Clear();
-        foreach (var t in s.Tape.Take(60))
-            tape.Children.Add(Label($"{DateTimeOffset.FromUnixTimeMilliseconds(t.TimeMs).LocalDateTime:HH:mm:ss}  {Px(t.Tick * s.TickSize),10}  {t.Size,5}", t.Side == 'b' ? Pal.Bid : t.Side == 's' ? Pal.Ask : Pal.Muted, size: 11));
-        log.Children.Clear();
-        foreach (var l in Enumerable.Reverse(s.Log).Take(60))
-            log.Children.Add(Label($"{l.Time:HH:mm:ss} {l.Mark} {l.Text}", l.Mark == '✓' ? Pal.Pos : l.Mark is '✗' or '⊘' ? Pal.Neg : l.Mark == '→' ? Pal.Text : Pal.Muted, size: 11, wrap: true));
-    }
-
-    // ───────────── helpers ─────────────
 
     private string Px(double price) => price.ToString("F" + LadderControl.Decimals(s.TickSize), CultureInfo.InvariantCulture);
-    private static string F(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
-    private static double Num(TextBox t, double dflt) => double.TryParse(t.Text?.Replace(",", ""), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : dflt;
-
-    private static TextBox Input(double w) => new() { Width = w, Height = 24, MinHeight = 24, FontSize = 12, Padding = new Thickness(4, 2), Background = Pal.B(Pal.Bg), BorderBrush = Pal.B(Pal.Line) };
-    private static TextBlock Label(string text, Color c, bool bold = false, double size = 12, bool wrap = false) =>
-        new() { Text = text, Foreground = Pal.B(c), FontWeight = bold ? FontWeight.Bold : FontWeight.Normal, FontSize = size, VerticalAlignment = VerticalAlignment.Center, TextWrapping = wrap ? TextWrapping.Wrap : TextWrapping.NoWrap };
-    private static Control Pad(Control c) => new Border { Padding = new Thickness(8, 2), Child = c };
-    private static Button Btn(string text, EventHandler<Avalonia.Interactivity.RoutedEventArgs> click)
-    {
-        var b = new Button { Content = text, FontSize = 11, Padding = new Thickness(8, 2), Height = 24 };
-        b.Click += click;
-        return b;
-    }
-    private static Button BigBtn(string text, Color bg, Color fg, EventHandler<Avalonia.Interactivity.RoutedEventArgs> click)
-    {
-        var b = new Button
-        {
-            Content = text, Background = Pal.B(bg), Foreground = Pal.B(fg), FontWeight = FontWeight.Bold, Height = 38,
-            HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(2),
-        };
-        b.Click += click;
-        return b;
-    }
-    private static Control Bar(params Control[] items)
-    {
-        var p = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 4) };
-        foreach (var c in items) { c.Margin = new Thickness(0, 0, 8, 0); p.Children.Add(c); }
-        return new Border { Background = Pal.B(Pal.Panel), BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 0, 1), Child = p };
-    }
+    private static string Leg(WorkingOrder o) => $"{(o.Name.StartsWith("BDIQ", StringComparison.Ordinal) ? o.Name[5..] : o.Type)} {o.Action} {o.Left}";
 }

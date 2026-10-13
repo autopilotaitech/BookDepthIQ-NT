@@ -8,16 +8,32 @@ public sealed record WorkingOrder(string Id, string Inst, string Action, string 
 {
     public bool IsBuy => Action is "Buy" or "BuyToCover";
     /// <summary>The price the order rests at on the ladder.</summary>
-    public double Price => Type is "StopMarket" ? Stop : Limit;
+    public double Price => Type is "StopMarket" or "StopLimit" ? Stop : Limit;
     public bool IsStop => Type is "StopMarket" or "StopLimit";
+    public bool IsTarget => Name.StartsWith("BDIQ TP", StringComparison.Ordinal);
+    public bool IsStopLeg => Name.StartsWith("BDIQ SL", StringComparison.Ordinal) || (IsStop && Name != "BDIQ entry");
+    public int Left => Qty - Filled;
 }
-public sealed record LogEntry(DateTime Time, char Mark, string Text);
+public sealed record Exec(string Id, string Inst, string Name, bool Buy, int Qty, double Price, double Fees, long Ms);
 
-/// <summary>Everything the DOM shows, fed by bridge messages. All access on the UI thread.</summary>
+/// <summary>Everything the DOM shows, fed by bridge messages, with the Vest panel's analytics on top.
+/// All access on the UI thread.</summary>
 public sealed class DomState
 {
+    // ── connection / account ──
     public bool Connected { get; set; }
     public List<AccountInfo> Accounts { get; } = new();
+    public string Account { get; set; } = "Sim101";
+    public double Cash, Realized, Unrealized, NetLiq, TrailDd, DailyLimit, Commission;
+    /// <summary>Positions on the streamed account by instrument (they can arrive before the instrument is set).</summary>
+    public Dictionary<string, (int Qty, double Avg)> Positions { get; } = new();
+    public int PosQty => Positions.TryGetValue(Instrument, out var p) ? p.Qty : 0;
+    public double PosAvg => Positions.TryGetValue(Instrument, out var p) ? p.Avg : 0;
+    public List<WorkingOrder> Orders { get; } = new();
+    public long LastMsgMs { get; set; }
+    public long LastFeedMs { get; set; }
+
+    // ── instrument / market ──
     public string Instrument { get; set; } = "";
     public double TickSize { get; set; } = 0.25;
     public double PointValue { get; set; } = 20;
@@ -25,27 +41,54 @@ public sealed class DomState
     public Book Book { get; set; } = Book.Empty;
     public long? LastTick { get; set; }
     public List<Trade> Tape { get; } = new();
-    /// <summary>Volume traded at each price (ticks) this session, split by aggressor.</summary>
-    public Dictionary<long, (long Buy, long Sell)> Volume { get; } = new();
-    public long LastMsgMs { get; set; }
+    public bool HistoryLoaded { get; private set; }
+    public string HistoryNote { get; private set; } = "";
 
-    public string Account { get; set; } = "Sim101";
-    public double Cash, Realized, Unrealized, NetLiq, TrailDd, DailyLimit, Commission;
-    public int PosQty { get; set; }
-    public double PosAvg { get; set; }
-    public List<WorkingOrder> Orders { get; } = new();
+    // ── analytics (ported from the Vest panel) ──
+    public LiquidityTracker Liquidity { get; } = new();
+    public Dictionary<long, double> Bought { get; } = new();
+    public Dictionary<long, double> Sold { get; } = new();
+    /// <summary>Session volume and delta per tick (VWAP session window).</summary>
+    public Dictionary<long, double> Vol { get; } = new();
+    public Dictionary<long, double> Delta { get; } = new();
+    public double CumDelta { get; private set; }
+    public DualTrend Trend { get; private set; } = new();
+    public DualSnapshot TrendSnap { get; private set; } = new(new(TrendDir.Neutral, null, false), new(TrendDir.Neutral, null, false), CombinedState.Chop, 0);
+    public MinuteBars Bars { get; } = new();
+    public Vwap Vwap { get; } = new();
+    private (long From, long To)? vwapWindow;
+    public PaxOr? Or { get; private set; }
+    public SpreadWindow Spread { get; } = new();
 
-    public List<LogEntry> Log { get; } = new();
+    // ── journal, log ──
+    public List<Exec> Execs { get; } = new();
+    public List<JournalTrade> Journal { get; } = new();
+    public OrderLog OrderLog { get; } = new();
     public string? LastResult { get; set; }
     public bool LastOk { get; set; } = true;
 
+    private Settings cfg;
+    public DomState(Settings cfg)
+    {
+        this.cfg = cfg;
+        Trend = new DualTrend(cfg.St1, cfg.St2);
+        LoadJournal();
+    }
+
     public event Action? Changed;
+    public event Action<JournalTrade>? TradeClosed;
     public void Raise() => Changed?.Invoke();
 
-    public void Note(char mark, string text)
+    public void Note(OrderLogStatus st, string text) => OrderLog.Add(st, text);
+
+    /// <summary>Settings that change the analytics (ST configs, OR, VWAP session) rebuild them from history.</summary>
+    public void ResetAnalytics()
     {
-        Log.Add(new LogEntry(DateTime.Now, mark, text));
-        if (Log.Count > 300) Log.RemoveRange(0, Log.Count - 300);
+        Liquidity.Reset(); Bought.Clear(); Sold.Clear(); Vol.Clear(); Delta.Clear(); CumDelta = 0;
+        Trend = new DualTrend(cfg.St1, cfg.St2);
+        TrendSnap = Trend.Snapshot();
+        Bars.Clear(); Vwap.Reset(); vwapWindow = null; Or = null;
+        Tape.Clear(); LastTick = null; HistoryLoaded = false; HistoryNote = "";
     }
 
     /// <summary>Applies one bridge message. Unknown types are ignored.</summary>
@@ -65,32 +108,52 @@ public sealed class DomState
                 TickSize = D(m, "tick", TickSize);
                 PointValue = D(m, "pv", PointValue);
                 Book = Book.Empty;
-                Tape.Clear();
-                Volume.Clear();
-                LastTick = null;
+                ResetAnalytics();
                 break;
             case "book":
+                LastFeedMs = Environment.TickCount64;
                 Book = Book.FromLevels(Levels(m, "bids"), Levels(m, "asks"), TickSize, (long)D(m, "ms", 0));
+                Liquidity.OnBook(Book, NowMs());
+                if (Book.BestBid is long bb && Book.BestAsk is long ba) Spread.Push(ba - bb, NowMs());
+                var bidSum = Book.Bids.Sizes.Take(10).Sum();
+                var askSum = Book.Asks.Sizes.Take(10).Sum();
+                Trend.SetBookImbalance(bidSum + askSum > 0 ? (double)(bidSum - askSum) / (bidSum + askSum) : 0);
                 break;
             case "trade":
             {
-                var t = Book.ToTicks(D(m, "p", 0), TickSize);
-                var v = (long)D(m, "v", 0);
+                LastFeedMs = Environment.TickCount64;
                 var side = S(m, "side") is { Length: > 0 } sd ? sd[0] : '?';
-                LastTick = t;
-                Tape.Insert(0, new Trade(t, v, side, (long)D(m, "ms", 0)));
-                if (Tape.Count > 200) Tape.RemoveRange(200, Tape.Count - 200);
-                Volume.TryGetValue(t, out var cur);
-                Volume[t] = side == 'b' ? (cur.Buy + v, cur.Sell) : side == 's' ? (cur.Buy, cur.Sell + v) : (cur.Buy + v / 2, cur.Sell + v - v / 2);
+                OnPrint((long)D(m, "ms", NowMs()), D(m, "p", 0), (long)D(m, "v", 0), side, live: true);
                 break;
             }
+            case "hist":
+                if (S(m, "inst") != Instrument) break;
+                if (m.TryGetProperty("trades", out var tr))
+                    foreach (var r in tr.EnumerateArray())
+                    {
+                        var a = r.EnumerateArray().ToArray();
+                        if (a.Length < 4) continue;
+                        var sd = a[3].GetString() is { Length: > 0 } x ? x[0] : '?';
+                        OnPrint((long)a[0].GetDouble(), a[1].GetDouble(), (long)a[2].GetDouble(), sd, live: false);
+                    }
+                if (m.TryGetProperty("done", out var dn) && dn.ValueKind == JsonValueKind.True)
+                {
+                    HistoryLoaded = true;
+                    HistoryNote = S(m, "err") is { Length: > 0 } e ? "history: " + e : "";
+                }
+                break;
             case "account":
                 if (S(m, "name") != Account) break;
                 Cash = D(m, "cash", 0); Realized = D(m, "realized", 0); Unrealized = D(m, "unrealized", 0);
                 NetLiq = D(m, "netliq", 0); TrailDd = D(m, "trailDd", 0); DailyLimit = D(m, "dailyLimit", 0); Commission = D(m, "commission", 0);
                 break;
             case "pos":
-                if (S(m, "acct") == Account && S(m, "inst") == Instrument) { PosQty = (int)D(m, "qty", 0); PosAvg = D(m, "avg", 0); }
+                if (S(m, "acct") == Account)
+                {
+                    var q = (int)D(m, "qty", 0);
+                    if (q == 0) Positions.Remove(S(m, "inst"));
+                    else Positions[S(m, "inst")] = (q, D(m, "avg", 0));
+                }
                 break;
             case "orders":
                 if (S(m, "acct") != Account) break;
@@ -98,19 +161,152 @@ public sealed class DomState
                 foreach (var o in m.GetProperty("list").EnumerateArray())
                     Orders.Add(new WorkingOrder(S(o, "id"), S(o, "inst"), S(o, "action"), S(o, "type"), (int)D(o, "qty", 0), (int)D(o, "filled", 0), D(o, "limit", 0), D(o, "stop", 0), S(o, "state"), S(o, "oco"), S(o, "name")));
                 break;
+            case "exec":
+                if (S(m, "acct") != Account) break;
+                OnExec(new Exec(S(m, "id"), S(m, "inst"), S(m, "name"), S(m, "side") == "b", (int)D(m, "qty", 0), D(m, "price", 0), D(m, "commission", 0) + D(m, "fee", 0), (long)D(m, "ms", NowMs())));
+                break;
             case "ack":
             {
                 var ok = m.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True;
                 LastOk = ok;
                 LastResult = S(m, "msg");
-                Note(ok ? '✓' : '✗', LastResult);
+                Note(ok ? OrderLogStatus.Ok : OrderLogStatus.Refused, LastResult);
                 break;
             }
             case "log":
-                Note('·', S(m, "msg"));
+                Note(OrderLogStatus.Error, S(m, "msg"));
                 break;
         }
     }
+
+    // ───────────── prints → analytics ─────────────
+
+    private void OnPrint(long ms, double price, long size, char side, bool live)
+    {
+        if (size <= 0 || !(price > 0)) return;
+        var t = Book.ToTicks(price, TickSize);
+        LastTick = t;
+        if (live)
+        {
+            Tape.Insert(0, new Trade(t, size, side, ms));
+            if (Tape.Count > 300) Tape.RemoveRange(300, Tape.Count - 300);
+            Liquidity.OnTrade(t, size, side, NowMs());
+        }
+        // footprint (session), delta
+        if (side == 'b') Bought[t] = (Bought.TryGetValue(t, out var b) ? b : 0) + size;
+        else if (side == 's') Sold[t] = (Sold.TryGetValue(t, out var s) ? s : 0) + size;
+        // dual SuperTrend (unknown side counts as half each: no delta either way)
+        var snap = Trend.OnTrade(ms, t, size, side != 's');
+        if (snap != null) TrendSnap = snap;
+        Bars.Add(ms, t);
+        // VWAP + profile inside the session window
+        var ind = cfg.IndicatorsFor(Instrument);
+        var w = Session.Window(ms, ind.VwapStart, ind.VwapEnd, ind.VwapTz);
+        if (w is { } win && (vwapWindow is null || win.From != vwapWindow.Value.From))
+        {
+            vwapWindow = win;
+            Vwap.Reset();
+            Vol.Clear(); Delta.Clear(); CumDelta = 0;
+        }
+        if (vwapWindow is { } vw && ms >= vw.From && ms <= vw.To)
+        {
+            Vwap.Add(t, size);
+            Vol[t] = (Vol.TryGetValue(t, out var v) ? v : 0) + size;
+            var sd = side == 'b' ? size : side == 's' ? -size : 0;
+            Delta[t] = (Delta.TryGetValue(t, out var d) ? d : 0) + sd;
+            CumDelta += sd;
+        }
+        // RTH opening range (NQ / ES)
+        var root = PaxOr.OrRoot(Instrument);
+        if (cfg.PaxOr.Enabled && ind.OrOn && root != "")
+        {
+            var sess = PaxOr.SessionAt(ms, cfg.PaxOr);
+            if (sess != null && (Or is null || Or.Session.Start != sess.Start))
+                Or = new PaxOr(sess, PaxOr.LevelFactorTicks(root, cfg.PaxOr, TickSize), cfg.PaxOr.ShowMid || ind.OrMid);
+            Or?.Add(ms, t);
+        }
+    }
+
+    // ───────────── executions → journal ─────────────
+
+    private sealed class OpenTrip
+    {
+        public string Inst = ""; public bool Long; public int Qty; public int MaxQty; public double EntryNotional; public double ExitNotional; public int ExitQty;
+        public double Fees; public long Open; public double? Stop; public double? RiskUsd; public string Setup = ""; public string StopMode = ""; public double? Expected;
+    }
+    private readonly Dictionary<string, OpenTrip> trips = new();
+    /// <summary>What the last entry click expected (price), for slippage in the journal.</summary>
+    public (double Price, long At, bool Long)? LastIntent { get; set; }
+
+    private void OnExec(Exec e)
+    {
+        if (Execs.Any(x => x.Id == e.Id && e.Id != "")) return;
+        Execs.Add(e);
+        var pv = e.Inst == Instrument ? PointValue : CmeSpecs.Find(e.Inst)?.PointValue ?? PointValue;
+        if (!trips.TryGetValue(e.Inst, out var tr) || tr.Qty == 0)
+        {
+            tr = new OpenTrip
+            {
+                Inst = e.Inst, Long = e.Buy, Open = e.Ms, Setup = cfg.Setup, StopMode = cfg.StopMode.ToString(),
+                Expected = LastIntent is { } li && li.Long == e.Buy && NowMs() - li.At < 120_000 ? li.Price : null,
+            };
+            trips[e.Inst] = tr;
+        }
+        tr.Fees += e.Fees;
+        if (e.Buy == tr.Long)
+        {
+            tr.Qty += e.Qty;
+            tr.MaxQty = Math.Max(tr.MaxQty, tr.Qty);
+            tr.EntryNotional += e.Qty * e.Price;
+            var stop = Orders.FirstOrDefault(o => o.Inst == e.Inst && o.IsStopLeg);
+            if (tr.Stop is null && stop != null)
+            {
+                tr.Stop = stop.Price;
+                tr.RiskUsd = Math.Abs(tr.EntryNotional / tr.Qty - stop.Price) * tr.Qty * pv;
+            }
+            return;
+        }
+        var closeQty = Math.Min(e.Qty, tr.Qty);
+        tr.Qty -= closeQty;
+        tr.ExitQty += closeQty;
+        tr.ExitNotional += closeQty * e.Price;
+        if (tr.Qty > 0) return;
+        var entryQty = tr.MaxQty;
+        var avgEntry = tr.EntryNotional / Math.Max(1, entryQty);
+        var avgExit = tr.ExitNotional / Math.Max(1, tr.ExitQty);
+        var gross = (avgExit - avgEntry) * tr.ExitQty * pv * (tr.Long ? 1 : -1);
+        var row = new JournalTrade
+        {
+            Open = tr.Open, Close = e.Ms, Inst = e.Inst, Account = Account, Long = tr.Long, Qty = tr.ExitQty, Entry = avgEntry, Exit = avgExit,
+            Stop = tr.Stop, RiskUsd = tr.RiskUsd, Pnl = gross - tr.Fees, FeesUsd = tr.Fees, Setup = tr.Setup, StopMode = tr.StopMode, Expected = tr.Expected,
+            SlipTicks = tr.Expected is double ex ? Math.Round((avgEntry - ex) / TickSize * (tr.Long ? 1 : -1), 2) : null,
+        };
+        trips.Remove(e.Inst);
+        Journal.Add(row);
+        SaveJournal();
+        TradeClosed?.Invoke(row);
+        // A remainder past flat opens the other way (reversal).
+        var rest = e.Qty - closeQty;
+        if (rest > 0) OnExec(e with { Id = e.Id + "+r", Qty = rest, Fees = 0 });
+    }
+
+    private static string JournalPath => Path.Combine(Settings.Dir, "journal.json");
+    private void LoadJournal()
+    {
+        try { if (File.Exists(JournalPath)) Journal.AddRange(JsonSerializer.Deserialize<List<JournalTrade>>(File.ReadAllText(JournalPath)) ?? new()); }
+        catch { /* a broken journal file starts a new journal */ }
+    }
+    public void SaveJournal()
+    {
+        try
+        {
+            Directory.CreateDirectory(Settings.Dir);
+            File.WriteAllText(JournalPath, JsonSerializer.Serialize(Journal.TakeLast(2000).ToList()));
+        }
+        catch { }
+    }
+
+    // ───────────── views ─────────────
 
     public IEnumerable<WorkingOrder> OrdersOnScreen => Orders.Where(o => o.Inst == Instrument);
 
@@ -126,6 +322,11 @@ public sealed class DomState
         }
     }
 
+    public double Equity => NetLiq > 0 ? NetLiq : Cash + OpenPnl;
+    public double? StopOnScreen => OrdersOnScreen.Where(o => o.IsStopLeg).Select(o => (double?)o.Price).FirstOrDefault();
+    public long FeedAgeMs => LastFeedMs == 0 ? long.MaxValue : Environment.TickCount64 - LastFeedMs;
+
+    public static long NowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     private static string S(JsonElement e, string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : e.TryGetProperty(k, out v) ? v.ToString() : "";
     private static double D(JsonElement e, string k, double dflt) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : dflt;
     private static IEnumerable<double[]> Levels(JsonElement e, string k) =>
