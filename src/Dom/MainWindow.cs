@@ -32,7 +32,7 @@ public sealed partial class MainWindow : Window
     private readonly Border trendPill = Ui.Pill("ST", Pal.Muted);
     private readonly Border scalpPill = Ui.Pill("SCALP", Pal.Muted);
     private readonly Border statePill = Ui.Pill("STATE", Pal.Muted);
-    private readonly ToggleButton armBtn = new() { Content = "HOTKEYS SAFE", FontSize = 11, Height = 24 };
+    private readonly ToggleButton armBtn = Flight.Pill("HOTKEYS SAFE", "B / S / E / R hotkeys work only while armed");
 
     // strips
     private readonly TextBlock acctLine = Ui.Label("", Pal.Muted, size: 11.5);
@@ -47,30 +47,32 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock sideTitle = new() { FontSize = 10, Foreground = Pal.B(Pal.Muted), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
     private Grid sideGrid = null!;
     private StackPanel logButtons = null!;
+    private ScrollViewer ticketPanel = null!;
     private readonly StackPanel journalList = new();
     private readonly ContentControl side = new();
     private ScrollViewer? journalScroll;
     private readonly TextBlock journalSum = Ui.Label("", Pal.Text, size: 11.5, wrap: true);
 
     // ticket
-    private readonly ComboBox sizeMode = Ui.Combo(130, new[] { "contracts", "$ risk @SL", "% room @SL" }, "how size is set: a fixed number of contracts, $ lost at the stop (fees in), or % of the room left to your fail floor");
-    private readonly TextBox sizeIn = Ui.Input(52);
-    private readonly StackPanel quick = new() { Orientation = Orientation.Horizontal, Spacing = 3 };
-    private readonly ComboBox stopMode = Ui.Combo(112, new[] { "SL ticks", "SL ATR", "SL swing" }, "stop distance: your ticks, ST1 ATR × mult, or past the swing high/low");
-    private readonly TextBox slIn = Ui.Input(44, "stop ticks"), atrIn = Ui.Input(40, "ATR multiple"), swingIn = Ui.Input(36, "swing lookback, minutes"), bufIn = Ui.Input(32, "ticks past the swing");
-    private readonly TextBox[] tpIn = { Ui.Input(42, "TP1 ticks (R in ATR/swing mode)"), Ui.Input(42, "TP2 (0 = off)"), Ui.Input(42, "TP3 (0 = off)") };
-    private readonly TextBox splitIn = Ui.Input(70, "size split across the targets that are on, e.g. 50/30/20");
-    private readonly ToggleButton bracketBtn = new() { Content = "BRACKET ON", FontSize = 11, Height = 24 };
-    private readonly CheckBox beChk = Ui.Check("B/E after TP1", "when TP1 fills, the panel moves your stops to entry ± offset (needs 2+ targets). Acts without a click; off by default.");
-    private readonly TextBox beOff = Ui.Input(32, "B/E offset ticks (+ in your favour)");
-    private readonly ComboBox trailBox = Ui.Combo(118, new[] { "trail off", "trail R", "trail ST1", "trail ST2" }, "trailing stop: after N R, one risk behind the best price; or ON the ST1/ST2 line. Moves only your way; acts without a click.");
-    private readonly TextBox trailR = Ui.Input(36, "start trailing after this many R");
-    private readonly CheckBox guardChk = Ui.Check("stop guard", "if a stop the panel saw on your position disappears, put it back at its last price");
-    private readonly TextBox setupIn = Ui.Input(86, "setup tag saved with the trade in the journal");
-    private readonly ComboBox previewBox = Ui.Combo(148, new[] { "preview off", "PREVIEW LONG", "PREVIEW SHORT" }, "draw the would-be stop and targets on the ladder while flat; drag them to set distances. Nothing is sent.");
-    private readonly CheckBox scaleChk = Ui.Check("SCALE", "a ladder click sends several limits from that price away from the market (no brackets: press B/E or set a stop after)");
-    private readonly TextBox scaleCount = Ui.Input(28, "orders (2–10)"), scaleSpan = Ui.Input(32, "span ticks"), scaleSkew = Ui.Input(28, "size skew (1 = even)");
-    private readonly ComboBox scaleDir = Ui.Combo(88, new[] { "big start", "even", "big end" });
+    private readonly Seg sizeMode = new(new[] { "CONTRACTS", "$ RISK", "% ROOM" }, "how size is set: a fixed number of contracts, $ lost at the stop (fees in), or % of the room left to your fail floor");
+    private readonly TextBox sizeIn = Flight.Num(84, "contracts, $ risk at the stop, or % of room — by the mode above");
+    private readonly WrapPanel quick = new() { Orientation = Orientation.Horizontal };
+    private readonly Seg stopMode = new(new[] { "TICKS", "ATR", "SWING" }, "stop distance: your ticks, ST1 ATR × mult, or past the swing high/low");
+    private readonly TextBox slIn = Flight.Num(70, "stop ticks"), atrIn = Flight.Num(70, "ATR multiple"), swingIn = Flight.Num(60, "swing lookback, minutes"), bufIn = Flight.Num(60, "ticks past the swing");
+    private readonly TextBox[] tpIn = { Flight.Num(64, "TP1 ticks (R in ATR/swing mode)"), Flight.Num(64, "TP2 (0 = off)"), Flight.Num(64, "TP3 (0 = off)") };
+    private readonly TextBox splitIn = Flight.Num(96, "size split across the targets that are on, e.g. 50/30/20");
+    private readonly ToggleButton bracketBtn = Flight.Pill("BRACKET", "attach your TP/SL to every entry (one OCO pair per target, like NT's ATM)");
+    private readonly ToggleButton beChk = Flight.Pill("B/E AFTER TP1", "when TP1 fills, the panel moves your stops to entry ± offset (needs 2+ targets). Acts without a click; off by default.");
+    private readonly TextBox beOff = Flight.Num(56, "B/E offset ticks (+ in your favour)");
+    private readonly Seg trailBox = new(new[] { "OFF", "R", "ST1", "ST2" }, "trailing stop: after N R, one risk behind the best price; or ON the ST1/ST2 line. Moves only your way; acts without a click.");
+    private readonly TextBox trailR = Flight.Num(56, "start trailing after this many R");
+    private readonly ToggleButton guardChk = Flight.Pill("STOP GUARD", "if a stop the panel saw on your position disappears, put it back at its last price");
+    private readonly TextBox setupIn = Flight.Text(130, "setup tag saved with the trade in the journal");
+    private readonly Seg previewBox = new(new[] { "OFF", "LONG", "SHORT" }, "preview: the would-be stop and targets on the ladder while flat; drag them to set distances. Nothing is sent.");
+    private readonly ToggleButton scaleChk = Flight.Pill("SCALE", "a ladder click sends several limits from that price away from the market (no brackets: press B/E or set a stop after)");
+    private readonly TextBox scaleCount = Flight.Num(52, "orders (2–10)"), scaleSpan = Flight.Num(56, "span ticks"), scaleSkew = Flight.Num(52, "size skew (1 = even)");
+    private readonly Seg scaleDir = new(new[] { "BIG START", "EVEN", "BIG END" });
+    private readonly Dictionary<string, TextBlock> readout = new();
     private readonly TextBlock riskLine = Ui.Label("", Pal.Text, size: 11.5, wrap: true);
     private readonly TextBlock checkLine = Ui.Label("", Pal.Warn, size: 11.5, wrap: true);
     private readonly TextBlock costLine = Ui.Label("", Pal.Muted, size: 11.5, wrap: true);
@@ -188,6 +190,7 @@ public sealed partial class MainWindow : Window
         toggles.Children.Add(logButtons);
         toggles.Children.Add(Mini("journal", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.ShowLog = false; cfg.Save(); RefreshSide(); }, "trade journal: every round trip with its setup, risk, result and R (click again for the tape)"));
         toggles.Children.Add(Mini("log", () => { cfg.ShowLog = !cfg.ShowLog; cfg.ShowJournal = false; cfg.Save(); RefreshSide(); }, "order log: every click, NinjaTrader's answer, rejections and fills (click again for the tape)"));
+        toggles.Children.Add(Mini("ticket", () => { cfg.ShowTicket = !cfg.ShowTicket; cfg.Save(); ApplyTicketRows(); }, "show or hide the ticket settings (hidden = tape and buttons only)"));
         toggles.Children.Add(Mini("heat", () => { cfg.Columns.Heat = !cfg.Columns.Heat; cfg.Save(); }, "heatmap + pull/stack column on the ladder"));
         toggles.Children.Add(Mini("ST", () => { cfg.ShowTrend = !cfg.ShowTrend; cfg.Save(); }, "SuperTrend lines on the ladder"));
         DockPanel.SetDock(toggles, Dock.Right);
@@ -197,7 +200,7 @@ public sealed partial class MainWindow : Window
 
         var settingsPanel = BuildTicket();
         var buttons = BuildButtons();
-        sideGrid = new Grid { Width = 372, Background = Pal.B(Pal.Bg), RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto") };
+        sideGrid = new Grid { Width = 372, Background = Pal.B(Pal.Bg), RowDefinitions = new RowDefinitions("Auto,*,*,Auto") };
         Grid.SetRow(sideHead, 0);
         Grid.SetRow(side, 1);
         Grid.SetRow(settingsPanel, 2);
@@ -207,6 +210,7 @@ public sealed partial class MainWindow : Window
         sideGrid.Children.Add(settingsPanel);
         sideGrid.Children.Add(buttons);
         var sideDock = sideGrid;
+        ApplyTicketRows();
 
         // Ladder | splitter | right column. Drag the splitter to size the right column (saved).
         sideGrid.Width = double.NaN;
@@ -229,40 +233,69 @@ public sealed partial class MainWindow : Window
         return root;
     }
 
-    /// <summary>The ticket settings, stacked for the right column under the tape: size, stop, targets,
-    /// bracket, management, preview, scale, hotkeys, then the risk / warning / cost / result lines.</summary>
+    /// <summary>The ticket, flight-panel style: a READOUT of the numbers that matter in big type (with the cost /
+    /// warning / result lines), then SIZE · STOP · TARGETS · MANAGE · ENTRY cards.</summary>
     private Control BuildTicket()
     {
-        bracketBtn.IsCheckedChanged += (_, _) => { bracketBtn.Content = bracketBtn.IsChecked == true ? "BRACKET ON" : "BRACKET OFF"; SaveFields(); };
         foreach (var tb in new[] { sizeIn, slIn, atrIn, swingIn, bufIn, splitIn, beOff, trailR, setupIn, scaleCount, scaleSpan, scaleSkew }.Concat(tpIn))
             tb.TextChanged += (_, _) => SaveFields();
-        foreach (var cb in new[] { sizeMode, stopMode, trailBox, previewBox, scaleDir }) cb.SelectionChanged += (_, _) => { SaveFields(); BuildQuick(); };
-        foreach (var ck in new[] { beChk, guardChk, scaleChk }) ck.IsCheckedChanged += (_, _) => SaveFields();
+        foreach (var seg in new[] { sizeMode, stopMode, trailBox, previewBox, scaleDir }) seg.SelectionChanged += (_, _) => { SaveFields(); BuildQuick(); };
+        foreach (var ck in new[] { beChk, guardChk, scaleChk, bracketBtn }) ck.IsCheckedChanged += (_, _) => SaveFields();
 
-        Control R(params Control[] items)
+        static Control Row(params Control[] items)
         {
-            var p = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Margin = new Thickness(6, 2) };
-            foreach (var c in items) { c.Margin = new Thickness(0, 1, 6, 1); p.Children.Add(c); }
+            var p = new WrapPanel { Orientation = Orientation.Horizontal };
+            foreach (var c in items) { c.Margin = new Thickness(0, 0, 8, 6); p.Children.Add(c); }
             return p;
         }
-        var t = new StackPanel { Background = Pal.B(Pal.Panel) };
-        t.Children.Add(new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 1), Background = Pal.B(Pal.Panel), Height = 22,
-            Child = new TextBlock { Text = "TICKET", FontSize = 10, Foreground = Pal.B(Pal.Muted), Margin = new Thickness(6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center } });
-        t.Children.Add(R(Ui.Label("Size", Pal.Muted), sizeMode, sizeIn));
-        t.Children.Add(R(quick));
-        t.Children.Add(R(stopMode, slIn, atrIn, swingIn, bufIn, bracketBtn));
-        t.Children.Add(R(Ui.Label("TP", Pal.Muted), tpIn[0], tpIn[1], tpIn[2], Ui.Label("split", Pal.Muted), splitIn));
-        t.Children.Add(R(beChk, beOff, guardChk));
-        t.Children.Add(R(trailBox, Ui.Label("after R", Pal.Muted), trailR));
-        t.Children.Add(R(Ui.Label("setup", Pal.Muted), setupIn, previewBox));
-        t.Children.Add(R(scaleChk, scaleCount, scaleSpan, scaleSkew, scaleDir));
-        t.Children.Add(R(armBtn));
+        var t = new StackPanel { Spacing = 0, Margin = new Thickness(0, 4, 0, 4) };
+        t.Children.Add(Flight.Card("SIZE", new StackPanel { Spacing = 6, Children = { sizeMode, Row(Flight.Labeled("VALUE", sizeIn), quick) } }));
+        t.Children.Add(Flight.Card("STOP", new StackPanel { Spacing = 6, Children = {
+            stopMode,
+            Row(Flight.Labeled("TICKS", slIn), Flight.Labeled("ATR ×", atrIn), Flight.Labeled("MINUTES", swingIn), Flight.Labeled("BUFFER", bufIn), Flight.Labeled(" ", bracketBtn)) } }));
+        t.Children.Add(Flight.Card("TARGETS", Row(Flight.Labeled("TP1", tpIn[0]), Flight.Labeled("TP2", tpIn[1]), Flight.Labeled("TP3", tpIn[2]), Flight.Labeled("SPLIT %", splitIn))));
+        t.Children.Add(Flight.Card("MANAGE", new StackPanel { Spacing = 6, Children = {
+            Row(beChk, Flight.Labeled("OFFSET", beOff), guardChk),
+            Flight.Labeled("TRAIL", trailBox),
+            Row(Flight.Labeled("START AFTER R", trailR)) } }));
+        t.Children.Add(Flight.Card("ENTRY", new StackPanel { Spacing = 6, Children = {
+            Row(Flight.Labeled("SETUP", setupIn), Flight.Labeled(" ", armBtn)),
+            Flight.Labeled("PREVIEW", previewBox),
+            Row(scaleChk, Flight.Labeled("ORDERS", scaleCount), Flight.Labeled("SPAN", scaleSpan), Flight.Labeled("SKEW", scaleSkew)),
+            scaleDir } }));
+
+        // Readout: the numbers that matter, big.
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), RowDefinitions = new RowDefinitions("Auto,Auto") };
+        var tiles = new[] { ("CONTRACTS", "ct"), ("RISK", "risk"), ("WIN @TP1", "win"), ("R:R", "rr"), ("OF ROOM", "room"), ("LOSERS LEFT", "losers") };
+        for (var i = 0; i < tiles.Length; i++)
+        {
+            var v = new TextBlock { FontFamily = Pal.Mono, FontSize = 18, FontWeight = FontWeight.SemiBold, Foreground = Pal.B(Pal.Text), Text = "—" };
+            readout[tiles[i].Item2] = v;
+            var tile = new StackPanel { Margin = new Thickness(0, 2, 0, 4), Children = { new TextBlock { Text = tiles[i].Item1, FontFamily = Flight.Sans, FontSize = 9.5, LetterSpacing = 1, Foreground = Pal.B(Pal.Muted) }, v } };
+            Grid.SetColumn(tile, i % 3);
+            Grid.SetRow(tile, i / 3);
+            grid.Children.Add(tile);
+        }
+        var lines = new StackPanel { Spacing = 3 };
+        lines.Children.Add(grid);
         foreach (var line in new[] { riskLine, checkLine, costLine, lockLine, notice, resultBar })
         {
-            line.FontSize = 11;
-            t.Children.Add(Ui.Pad(line, 6, 1));
+            line.FontFamily = Flight.Sans;
+            line.FontSize = 11.5;
+            lines.Children.Add(line);
         }
-        return t;
+        t.Children.Insert(0, Flight.Card("READOUT", lines)); // the numbers first, always in view
+        ticketPanel = new ScrollViewer { Content = t, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, IsVisible = cfg.ShowTicket };
+        return ticketPanel;
+    }
+
+    /// <summary>Ticket shown: tape 40% / ticket 60% of the column (the ticket scrolls inside its share).
+    /// Hidden: the tape takes it all, the buttons stay.</summary>
+    private void ApplyTicketRows()
+    {
+        ticketPanel.IsVisible = cfg.ShowTicket;
+        sideGrid.RowDefinitions[1].Height = new GridLength(cfg.ShowTicket ? 0.8 : 1, GridUnitType.Star);
+        sideGrid.RowDefinitions[2].Height = cfg.ShowTicket ? new GridLength(1.2, GridUnitType.Star) : new GridLength(0);
     }
 
     /// <summary>Order buttons in three columns: BUY MKT · SELL MKT · FLATTEN, then REVERSE · CANCEL ALL, then
@@ -288,25 +321,42 @@ public sealed partial class MainWindow : Window
         return new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 0), Background = Pal.B(Pal.Panel), Child = g };
     }
 
-    /// <summary>Quick size buttons for the size mode: contracts, $ risk or % of room.</summary>
+    /// <summary>Quick size chips for the size mode: contracts, $ risk or % of room.</summary>
     private void BuildQuick()
     {
         quick.Children.Clear();
         var (vals, fmt) = cfg.SizeMode switch
         {
-            SizeMode.Contracts => (new double[] { 1, 2, 3, 5, 10 }, "{0} ct"),
+            SizeMode.Contracts => (new double[] { 1, 2, 3, 5, 10 }, "{0}"),
             SizeMode.RiskUsd => (new double[] { 50, 100, 250, 500 }, "${0}"),
             _ => (new double[] { 10, 25, 50, 100 }, "{0}%"),
         };
         foreach (var v in vals)
         {
-            var b = Ui.Btn(string.Format(CultureInfo.InvariantCulture, fmt, v), () => { sizeIn.Text = Ui.F(v); SaveFields(); });
-            b.Padding = new Thickness(5, 1);
+            var b = new Button
+            {
+                Content = string.Format(CultureInfo.InvariantCulture, fmt, v), FontFamily = Pal.Mono, FontSize = 13, Height = 30, MinWidth = 40, Padding = new Thickness(8, 0),
+                Margin = new Thickness(0, 14, 4, 0), CornerRadius = new CornerRadius(4), Background = Pal.B(Flight.Field), BorderBrush = Pal.B(Flight.CardEdge), BorderThickness = new Thickness(1),
+                Foreground = Pal.B(Ui.Num(sizeIn, -1) == v ? Flight.Accent : Pal.Text), HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            };
+            b.Click += (_, _) => { sizeIn.Text = Ui.F(v); SaveFields(); BuildQuick(); };
             quick.Children.Add(b);
         }
-        atrIn.IsVisible = cfg.StopMode == StopMode.Atr;
-        swingIn.IsVisible = bufIn.IsVisible = cfg.StopMode == StopMode.Swing;
-        slIn.IsVisible = cfg.StopMode == StopMode.Ticks;
+        // Show only the fields the chosen modes use (each sits in its labelled wrapper).
+        static void Show(Control c, bool v, int up = 1)
+        {
+            Control? x = c;
+            for (var i = 0; i < up && x != null; i++) x = x.Parent as Control;
+            if (x != null) x.IsVisible = v;
+        }
+        Show(atrIn, cfg.StopMode == StopMode.Atr);
+        Show(swingIn, cfg.StopMode == StopMode.Swing);
+        Show(bufIn, cfg.StopMode == StopMode.Swing);
+        Show(slIn, cfg.StopMode == StopMode.Ticks);
+        foreach (var x in new[] { scaleCount, scaleSpan, scaleSkew }) Show(x, cfg.ScaleOn);
+        scaleDir.IsVisible = cfg.ScaleOn;
+        Show(trailR, cfg.Trail == TrailMode.R, 2);
+        Show(beOff, cfg.BeAfterTp1);
     }
 
     private void LoadFields()
@@ -323,7 +373,6 @@ public sealed partial class MainWindow : Window
         for (var i = 0; i < 3; i++) tpIn[i].Text = cfg.StopMode == StopMode.Ticks ? (i < cfg.TpTicks.Length ? cfg.TpTicks[i] : 0).ToString(CultureInfo.InvariantCulture) : Ui.F(i < cfg.TpR.Length ? cfg.TpR[i] : 0);
         splitIn.Text = cfg.TpSplit;
         bracketBtn.IsChecked = cfg.BracketOn;
-        bracketBtn.Content = cfg.BracketOn ? "BRACKET ON" : "BRACKET OFF";
         beChk.IsChecked = cfg.BeAfterTp1;
         beOff.Text = cfg.BeOffsetTicks.ToString(CultureInfo.InvariantCulture);
         trailBox.SelectedIndex = (int)cfg.Trail;
@@ -373,6 +422,7 @@ public sealed partial class MainWindow : Window
         cfg.ScaleDir = (SkewDir)Math.Max(0, scaleDir.SelectedIndex);
         cfg.Save();
         if (prevStop != cfg.StopMode) LoadFields(); // targets switch between ticks and R
+        else BuildQuick();
     }
 
     private void OnSettingsSaved()

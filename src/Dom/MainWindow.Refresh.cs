@@ -26,6 +26,8 @@ public sealed partial class MainWindow
         RefreshTicket();
         if (s.OrderLog.Entries.Count != lastLogCount || s.Journal.Count != lastJournalCount) RefreshSide();
         if (now > noticeUntil) notice.Text = "";
+        // Status lines take no space when they have nothing to say.
+        foreach (var line in new[] { riskLine, checkLine, costLine, lockLine, notice, resultBar }) line.IsVisible = !string.IsNullOrEmpty(line.Text);
     }
 
     private void RefreshTop()
@@ -123,9 +125,16 @@ public sealed partial class MainWindow
         var be = CmeRisk.BreakEvenTicks(s.TickValue, cfg.FeePerSide);
         var why = tk.StopWhy ?? (r.BelowOne ? $" · ${r.RiskWanted:N0} buys less than 1 contract at {tk.StopTicks}t" : r.Capped ? $" · capped at your max {cfg.MaxContracts}" : "");
         var split = tk.Split.Ok ? (tk.Split.Legs.Count > 1 ? " · " + string.Join(" ", tk.Split.Legs.Select((l, i) => $"TP{i + 1} {l.Ticks}t×{l.Qty}")) : "") : " · " + tk.Split.Message;
-        riskLine.Text = $"= {r.Contracts} ct · SL {tk.StopTicks}t · ${r.DollarsPerTick:N2}/tick · risk ${r.Loss:N2} · win ${r.Win:N2} at TP1 · R:R {r.RR:N2} · fees ${r.Fees:N2} · " +
-                        $"{(double.IsInfinity(r.RoomUsed) ? "—" : Pct(r.RoomUsed))} of room · {(r.LosersLeft == int.MaxValue ? "—" : r.LosersLeft.ToString(CultureInfo.InvariantCulture))} losers left · break-even {be:0.0}t{split}{why}";
-        riskLine.Foreground = Pal.B(r.StopPastFail ? Pal.Neg : Pal.Text);
+        // Readout tiles: the numbers that matter, big; the details on the line under them.
+        void Tile(string k, string text, Color c) { if (readout.TryGetValue(k, out var tb)) { tb.Text = text; tb.Foreground = Pal.B(c); } }
+        Tile("ct", r.Contracts.ToString(CultureInfo.InvariantCulture), r.Contracts > 0 ? Pal.Text : Pal.Warn);
+        Tile("risk", $"${r.Loss:N0}", r.StopPastFail ? Pal.Neg : Pal.Ask);
+        Tile("win", $"${r.Win:N0}", Pal.Pos);
+        Tile("rr", r.RR.ToString("0.00", CultureInfo.InvariantCulture), r.RR >= 1.5 ? Pal.Pos : r.RR >= 1 ? Pal.Text : Pal.Warn);
+        Tile("room", double.IsInfinity(r.RoomUsed) ? "—" : Pct(r.RoomUsed), r.RoomUsed > 0.5 ? Pal.Neg : r.RoomUsed > 0.25 ? Pal.Warn : Pal.Text);
+        Tile("losers", r.LosersLeft == int.MaxValue ? "—" : r.LosersLeft.ToString(CultureInfo.InvariantCulture), r.LosersLeft <= 2 ? Pal.Neg : Pal.Text);
+        riskLine.Text = $"SL {tk.StopTicks}t · ${r.DollarsPerTick:N2}/tick · fees ${r.Fees:N2} · break-even {be:0.0}t{split}{why}";
+        riskLine.Foreground = Pal.B(r.StopPastFail ? Pal.Neg : Pal.Muted);
         if (r.StopPastFail) riskLine.Text += $" · STOP IS PAST THE FAIL LINE ({r.TicksToFail:0}t)";
 
         var ck = Cost.Checks(Checks(tk, null)).Where(c => c.Level != CheckLevel.Ok).ToList();
@@ -161,7 +170,6 @@ public sealed partial class MainWindow
             loading = false;
         }
         armBtn.Content = cfg.HotkeysArmed ? "HOTKEYS ARMED" : "HOTKEYS SAFE";
-        armBtn.Foreground = Pal.B(cfg.HotkeysArmed ? Pal.Warn : Pal.Text);
     }
 
     private void RefreshSide()

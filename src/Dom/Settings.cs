@@ -91,6 +91,8 @@ public sealed class Settings
     public double SideWidth { get; set; } = 372;
     public bool ShowTrend { get; set; } = true;
     public bool ShowLog { get; set; } = true;
+    /// <summary>The ticket settings under the tape; hidden = tape + order buttons only.</summary>
+    public bool ShowTicket { get; set; } = true;
     public bool ShowJournal { get; set; }
     public TrendConfig St1 { get; set; } = TrendConfig.DefaultT1;
     public TrendConfig St2 { get; set; } = TrendConfig.DefaultT2;

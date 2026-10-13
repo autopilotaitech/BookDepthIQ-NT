@@ -38,8 +38,11 @@ The ladder runs the full height on the left. The right column holds, from top to
 
 - **TAPE**, with **journal** and **log** buttons that swap the view (click again for the tape), plus
   **heat** and **ST** toggles.
-- **TICKET:** size, stop, targets, bracket, B/E, trail, stop guard, setup, preview, scale and
-  hotkeys, then the risk, warning, cost and result lines.
+- **TICKET** (hide it with the **ticket** button in the tape toolbar; hidden = tape and buttons only):
+  a **READOUT** of contracts · risk · win · R:R · % of room · losers left in big type, with the cost,
+  warning and result lines. Under it are cards with segmented controls and pill toggles: **SIZE**,
+  **STOP** (ticks / ATR / swing + BRACKET), **TARGETS** (TP1–3 + split), **MANAGE** (B/E after TP1,
+  stop guard, trail), and **ENTRY** (setup, hotkeys, preview, scale).
 - **Buttons** in three columns: **BUY MKT · SELL MKT · FLATTEN**, then **REVERSE · CANCEL ALL**,
   then **B/E · CLOSE HALF**.
 
