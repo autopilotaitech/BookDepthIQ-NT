@@ -42,11 +42,13 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock lockLine = Ui.Label("", Pal.Neg, bold: true, size: 11.5, wrap: true);
 
     // side
-    private readonly StackPanel tape = new();
-    private readonly StackPanel logList = new();
+    private TapeControl tapeView = null!;
+    private LogControl logView = null!;
+    private readonly TextBlock sideTitle = new() { FontSize = 10, Foreground = Pal.B(Pal.Muted), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+    private Grid sideGrid = null!;
     private readonly StackPanel journalList = new();
     private readonly ContentControl side = new();
-    private ScrollViewer? tapeScroll, journalScroll;
+    private ScrollViewer? journalScroll;
     private readonly TextBlock journalSum = Ui.Label("", Pal.Text, size: 11.5, wrap: true);
 
     // ticket
@@ -144,8 +146,6 @@ public sealed partial class MainWindow : Window
             Ui.Label("BookDepthIQ", Pal.Text, bold: true), instBox, Ui.Btn("Go", SwitchInstrument), acctBox, bridgePill, feedPill, trendPill, scalpPill, statePill,
             Ui.Btn("RISK", () => new RiskWindow(cfg, s, dd, ApplyRiskPlan).Show(this), "risk calculator for every CME contract; Use in DOM writes the plan into the ticket"),
             Ui.Btn("SETTINGS", () => new SettingsWindow(cfg, OnSettingsSaved).Show(this), "account rules, protect my day, indicators, SuperTrend, ladder columns, fees"),
-            Ui.Btn("journal", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.Save(); RefreshSide(); }),
-            Ui.Btn("log", () => { cfg.ShowLog = !cfg.ShowLog; cfg.Save(); RefreshSide(); }),
             Ui.Btn("KILL ⏻", Kill, "closes every position and cancels every order on this account (Ctrl+K). Never blocked.", Pal.Neg, Color.Parse("#3a1010")));
 
         var acctRow = Ui.Bar(acctLine, roomBar);
@@ -167,15 +167,47 @@ public sealed partial class MainWindow : Window
         top.Children.Add(new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 0, 1), Child = statRow });
         top.Children.Add(Ui.Pad(bracketLine));
 
-        // side panel: tape / journal + order log
-        var sideDock = new DockPanel { Width = 300, Background = Pal.B(Pal.Bg) };
-        var logHead = Ui.Row(Ui.Label("ORDER LOG", Pal.Muted, size: 10), Ui.Btn("copy", CopyLog, "copy the order log with context — paste it in a bug report"), Ui.Btn("clear", () => { s.OrderLog.Clear(); RefreshSide(); }));
-        var logScroll = new ScrollViewer { Content = logList, Height = 230 };
-        DockPanel.SetDock(logScroll, Dock.Bottom);
-        DockPanel.SetDock(logHead, Dock.Bottom);
-        sideDock.Children.Add(logScroll);
-        sideDock.Children.Add(logHead);
-        sideDock.Children.Add(side);
+        // side panel, as in the Vest panel: TAPE (or JOURNAL) header with its toggles, the tape, then the
+        // ORDER LOG in the bottom 40% with copy / clear.
+        tapeView = new TapeControl(s, cfg);
+        logView = new LogControl(s);
+        Control Mini(string text, Action a, string tip)
+        {
+            var b = Ui.Btn(text, a, tip);
+            b.Padding = new Thickness(6, 0);
+            b.Height = 18;
+            b.FontSize = 10;
+            b.Margin = new Thickness(4, 0, 0, 0);
+            return b;
+        }
+        var sideHead = new DockPanel { Background = Pal.B(Pal.Panel), Height = 24 };
+        var toggles = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Margin = new Thickness(0, 0, 4, 0) };
+        toggles.Children.Add(Mini("journal", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.Save(); RefreshSide(); }, "trade journal: every round trip with its setup, risk, result and R"));
+        toggles.Children.Add(Mini("heat", () => { cfg.Columns.Heat = !cfg.Columns.Heat; cfg.Save(); }, "heatmap + pull/stack column on the ladder"));
+        toggles.Children.Add(Mini("log", () => { cfg.ShowLog = !cfg.ShowLog; cfg.Save(); RefreshSide(); }, "show or hide the order log under the tape"));
+        toggles.Children.Add(Mini("ST", () => { cfg.ShowTrend = !cfg.ShowTrend; cfg.Save(); }, "SuperTrend lines on the ladder"));
+        DockPanel.SetDock(toggles, Dock.Right);
+        sideHead.Children.Add(toggles);
+        sideTitle.Margin = new Thickness(6, 0);
+        sideHead.Children.Add(sideTitle);
+        var logHead = new DockPanel { Background = Pal.B(Pal.Panel), Height = 24 };
+        var logBtns = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Margin = new Thickness(0, 0, 4, 0) };
+        logBtns.Children.Add(Mini("copy", CopyLog, "copy the whole order log with context — paste it in a bug report"));
+        logBtns.Children.Add(Mini("clear", () => { s.OrderLog.Clear(); logView.InvalidateVisual(); }, "clear the order log"));
+        DockPanel.SetDock(logBtns, Dock.Right);
+        logHead.Children.Add(logBtns);
+        logHead.Children.Add(new TextBlock { Text = "ORDER LOG", FontSize = 10, Foreground = Pal.B(Pal.Muted), Margin = new Thickness(6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
+        sideGrid = new Grid { Width = 280, Background = Pal.B(Pal.Bg), RowDefinitions = new RowDefinitions("Auto,*,Auto,0.66*") };
+        Grid.SetRow(sideHead, 0);
+        Grid.SetRow(side, 1);
+        var logHeadBorder = new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 1), Child = logHead };
+        Grid.SetRow(logHeadBorder, 2);
+        Grid.SetRow(logView, 3);
+        sideGrid.Children.Add(sideHead);
+        sideGrid.Children.Add(side);
+        sideGrid.Children.Add(logHeadBorder);
+        sideGrid.Children.Add(logView);
+        var sideDock = sideGrid;
 
         var middle = new DockPanel();
         var sideBorder = new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(1, 0, 0, 0), Child = sideDock };

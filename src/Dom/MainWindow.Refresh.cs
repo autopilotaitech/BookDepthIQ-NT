@@ -11,18 +11,20 @@ namespace BookDepthIQ.Dom;
 public sealed partial class MainWindow
 {
     private long lastRefresh;
-    private int lastLogCount = -1, lastJournalCount = -1, lastTapeTop;
+    private int lastLogCount = -1, lastJournalCount = -1;
 
     private void Tick()
     {
         Manage();
         ladder.InvalidateVisual();
+        tapeView.InvalidateVisual();
+        logView.InvalidateVisual();
         var now = Environment.TickCount64;
         if (now - lastRefresh < 200) return;
         lastRefresh = now;
         RefreshTop();
         RefreshTicket();
-        if (s.OrderLog.Entries.Count != lastLogCount || s.Journal.Count != lastJournalCount || (s.Tape.Count > 0 && s.Tape[0].GetHashCode() != lastTapeTop)) RefreshSide();
+        if (s.OrderLog.Entries.Count != lastLogCount || s.Journal.Count != lastJournalCount) RefreshSide();
         if (now > noticeUntil) notice.Text = "";
     }
 
@@ -166,13 +168,15 @@ public sealed partial class MainWindow
     {
         lastLogCount = s.OrderLog.Entries.Count;
         lastJournalCount = s.Journal.Count;
-        lastTapeTop = s.Tape.Count > 0 ? s.Tape[0].GetHashCode() : 0;
-        var ind = cfg.IndicatorsFor(s.Instrument);
+        sideTitle.Text = cfg.ShowJournal ? "JOURNAL" : "TAPE";
+        // The order log takes the bottom 40% (as in the Vest panel) or nothing when hidden.
+        sideGrid.RowDefinitions[2].Height = cfg.ShowLog ? GridLength.Auto : new GridLength(0);
+        sideGrid.RowDefinitions[3].Height = cfg.ShowLog ? new GridLength(0.66, GridUnitType.Star) : new GridLength(0);
         if (cfg.ShowJournal)
         {
             var st = Journal.Stats(s.Journal);
             journalSum.Text = $"{st.N} trades · {Pct(st.WinRate)} won · {LadderControl.Usd(st.TotalUsd)} net · avg {(st.AvgR is double r ? $"{r:+0.00;-0.00}R" : "—")} · fees ${st.FeesUsd:N2}" +
-                              $"{(st.AvgSlipTicks is double sl ? $" · slip avg {sl:+0.0;-0.0}t" : "")}\n" + string.Join("  ", st.BySetup.Select(x => $"{x.Setup} {x.N}: {LadderControl.Usd(x.TotalUsd)}"));
+                              $"{(st.AvgSlipTicks is double sl ? $" · slip avg {sl:+0.0;-0.0}t" : "")}" + Environment.NewLine + string.Join("  ", st.BySetup.Select(x => $"{x.Setup} {x.N}: {LadderControl.Usd(x.TotalUsd)}"));
             journalList.Children.Clear();
             journalList.Children.Add(Ui.Pad(journalSum, 4));
             journalList.Children.Add(Ui.Row(Ui.Btn("copy CSV", async () => { if (Clipboard is { } cb) await cb.SetTextAsync(Journal.Csv(s.Journal)); Notice("journal CSV copied"); }),
@@ -183,24 +187,6 @@ public sealed partial class MainWindow
             journalScroll ??= new ScrollViewer { Content = journalList };
             if (side.Content != journalScroll) side.Content = journalScroll;
         }
-        else
-        {
-            tape.Children.Clear();
-            tape.Children.Add(Ui.Label("TAPE", Pal.Muted, size: 10));
-            foreach (var t in s.Tape.Take(cfg.ShowLog ? 60 : 120))
-            {
-                var big = ind.BigOn && t.Size >= ind.BigMin;
-                var c = t.Side == 'b' ? Pal.Bid : t.Side == 's' ? Pal.Ask : Pal.Muted;
-                var row = Ui.Label($"{DateTimeOffset.FromUnixTimeMilliseconds(t.TimeMs).LocalDateTime:HH:mm:ss} {Px(t.Tick * s.TickSize),10} {(big ? (t.Side == 'b' ? "B " : "S ") : "  ")}{t.Size,5}", big ? Colors.White : c, bold: big, size: 11);
-                tape.Children.Add(big ? new Border { Background = Pal.B(c, t.Size >= 3 * ind.BigMin ? 0.55 : 0.3), Child = row } : row);
-            }
-            tapeScroll ??= new ScrollViewer { Content = tape };
-            if (side.Content != tapeScroll) side.Content = tapeScroll;
-        }
-        logList.Children.Clear();
-        if (cfg.ShowLog)
-            foreach (var l in Enumerable.Reverse(s.OrderLog.Entries).Take(80))
-                logList.Children.Add(Ui.Label($"{DateTimeOffset.FromUnixTimeMilliseconds(l.T).LocalDateTime:HH:mm:ss} {OrderLog.Mark(l.Status)} {l.Text}",
-                    l.Status switch { OrderLogStatus.Ok => Pal.Pos, OrderLogStatus.Click => Pal.Text, OrderLogStatus.Blocked => Pal.Warn, _ => Pal.Neg }, size: 11, wrap: true));
+        else if (side.Content != tapeView) side.Content = tapeView;
     }
 }
