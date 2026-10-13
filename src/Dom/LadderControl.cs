@@ -144,8 +144,10 @@ public sealed class LadderControl : Control
         {
             var t = top - r * g;
             var y = RowH + r * RowH;
-            if (prof.Val is long val && prof.Vah is long vah && t >= val && t <= vah && ColRect(Col.Price) is (double px0, double pw0))
-                ctx.FillRectangle(Pal.B(Color.Parse("#151b27")), new Rect(px0, y, pw0, RowH));
+            // Value area on the PRICE column: BookDepthIQ's faint magenta band between VAL and VAH.
+            var inVa = prof.TotalVol > 0 && prof.Val is long val && prof.Vah is long vah && t + g / 2.0 >= val && t + g / 2.0 <= vah + g;
+            if (inVa && ColRect(Col.Price) is (double px0, double pw0))
+                ctx.FillRectangle(Pal.B(Color.FromArgb(15, 232, 121, 249)), new Rect(px0, y, pw0, RowH));
             ctx.FillRectangle(Pal.B(Pal.RowLine), new Rect(0, y + RowH - 1, w, 1));
             if (hoverRow == t && hoverCol is Col hc && hc is Col.Buy or Col.Sold or Col.Bid or Col.Ask or Col.Bought or Col.Sell && ColRect(hc) is (double hx, double hw))
                 ctx.FillRectangle(Pal.B(Pal.Hover), new Rect(hx, y, hw, RowH - 1));
@@ -170,11 +172,10 @@ public sealed class LadderControl : Control
                     }
                     case Col.Price:
                     {
-                        var col = t == bestBid ? Pal.Bid : t == bestAsk ? Pal.Ask : t == prof.Poc ? Pal.Warn : Pal.Muted;
+                        var col = t == bestBid ? Pal.Bid : t == bestAsk ? Pal.Ask : Pal.Muted;
                         if (t == last) ctx.DrawRectangle(Pal.B(Color.Parse("#2a3142")), new Pen(Pal.B(Pal.Warn), 1.5), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
                         if (t == avgRow) ctx.DrawRectangle(null, new Pen(Pal.B(Pal.Warn), 1, new DashStyle(new double[] { 3, 2 }, 0)), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
                         Text(ctx, (t * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture), x, y, cw, RowH, t == last ? Colors.White : col, 11.5, TextAlignment.Center);
-                        if (t == prof.Poc) ctx.FillRectangle(Pal.B(Pal.Warn), new Rect(x + 1, y + 2, 2, RowH - 5));
                         break;
                     }
                     case Col.Sold when sold.TryGetValue(t, out var sv) && sv > 0:
@@ -200,21 +201,24 @@ public sealed class LadderControl : Control
                     case Col.Heat:
                         DrawHeat(ctx, t, g, x, y, cw, heatScale, ind);
                         break;
+                    // PROFILE — BookDepthIQ ladder.ts: neutral GREY volume histogram (Bookmap/Sierra convention).
+                    // POC brightest (near-white), value area (70%) mid-grey, outside VA dim-grey. Not buy/sell
+                    // coloured: buy/sell imbalance is the Δ column; a profile is total volume at price.
                     case Col.Profile when vol.TryGetValue(t, out var vv) && vv > 0:
                     {
-                        var full = (cw - 28) * vv / Math.Max(1, prof.MaxVol);
-                        var inVa = prof.Val is long v0 && prof.Vah is long v1 && t >= v0 && t <= v1;
-                        ctx.FillRectangle(Pal.B(t == prof.Poc ? Pal.Warn : Color.Parse("#8b95a8"), t == prof.Poc ? 0.75 : inVa ? 0.5 : 0.28), new Rect(x + 2, y + 3, full, RowH - 7));
-                        Text(ctx, Num(vv), x, y, cw - 3, RowH, Pal.Muted, 9.5, TextAlignment.Right);
+                        var wv = Math.Min(1, vv / Math.Max(1, prof.MaxVol)) * (cw - 2);
+                        var fill = t == prof.Poc ? Color.FromArgb(242, 228, 232, 240) : inVa ? Color.FromArgb(217, 150, 160, 178) : Color.FromArgb(128, 96, 106, 122);
+                        ctx.FillRectangle(new SolidColorBrush(fill), new Rect(x + 1, y + 0.5, wv, RowH - 1));
                         break;
                     }
+                    // Δ — BookDepthIQ ladder.ts: signed bar from the column centre, cyan for +, orange for −,
+                    // scaled to the largest |Δ| row.
                     case Col.Delta when delta.TryGetValue(t, out var dv) && dv != 0:
                     {
-                        var half = cw / 2 - 2;
-                        var dw = half * Math.Min(1, Math.Abs(dv) / Math.Max(1, prof.MaxAbsDelta));
-                        var dx = dv > 0 ? x + cw / 2 : x + cw / 2 - dw;
-                        ctx.FillRectangle(Pal.B(dv > 0 ? Pal.Bid : Pal.Ask, 0.45), new Rect(dx, y + 3, dw, RowH - 7));
-                        Text(ctx, (dv > 0 ? "+" : "") + Num(dv), x, y, cw - 2, RowH, dv > 0 ? Pal.Bid : Pal.Ask, 9.5, TextAlignment.Center);
+                        var cx = x + cw / 2;
+                        var dw = Math.Min(1, Math.Abs(dv) / Math.Max(1, prof.MaxAbsDelta)) * (cw / 2 - 1);
+                        var fill = dv >= 0 ? Color.FromArgb(204, 34, 211, 238) : Color.FromArgb(204, 251, 146, 60);
+                        ctx.FillRectangle(new SolidColorBrush(fill), new Rect(dv >= 0 ? cx : cx - dw, y + 0.5, dw, RowH - 1));
                         break;
                     }
                 }

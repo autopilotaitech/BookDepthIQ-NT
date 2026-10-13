@@ -61,7 +61,10 @@ BUY.
   by the side it was on. Yellow means a wall. **PULL/STACK** shows the net size pulled or added in
   the last minute. **ABS** means absorption: one side kept hitting a level for more than was showing,
   and it held.
-- **PROFILE / Δ:** session volume profile and delta per price.
+- **PROFILE / Δ:** drawn as BookDepthIQ's ladder draws them. The profile is a neutral grey volume
+  histogram (POC near-white, value area mid-grey, outside it dim grey), with the value area as a
+  faint magenta band on PRICE. Δ is a signed bar from the column centre, cyan for + and orange for −.
+  Both cover the session (the VWAP session window) and follow the ticks-per-row grouping.
 - **P&L:** what each price is worth to your open position.
 - **Lines:** VWAP with ±σ bands, ST1/ST2, the RTH opening range (NQ/ES, BookDepthIQ PAXOR),
   **NO CHASE** (ST1 ± 2 ATR), RANGE H/L in chop, your TP/SL legs with their $, **FAIL** (where the
