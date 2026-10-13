@@ -45,8 +45,9 @@ The ladder runs the full height on the left. The right column holds, from top to
 
 ## The ladder
 
-Columns (each can be turned off in **SETTINGS → Ladder**): **BUY | SOLD | BID | PRICE | ASK |
-BOUGHT | SELL | P&L | HEAT 5M · PULL/STACK | PROFILE | Δ**.
+Columns (each can be turned off in **SETTINGS → Ladder**): **HEAT 5M · PULL/STACK | BUY | SOLD |
+BID | PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ**. The heatmap sits at the far left, next to
+BUY.
 
 - **Click** the buy side (BUY, SOLD, BID) for a buy limit, the sell side (ASK, BOUGHT, SELL) for a
   sell limit. **Shift-click** places a stop. **Click** a working order to cancel it, **drag** it to

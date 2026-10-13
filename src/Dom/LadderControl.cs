@@ -11,8 +11,8 @@ namespace BookDepthIQ.Dom;
 public sealed record LadderLine(long Ticks, string Label, Color Color, bool Dashed = false, double Width = 1);
 
 /// <summary>
-/// The price ladder, drawn directly (no per-cell controls) — the Vest panel's columns: BUY | SOLD | BID |
-/// PRICE | ASK | BOUGHT | SELL | P&L | HEAT 5M · PULL/STACK | PROFILE | Δ, each switchable. Click the
+/// The price ladder, drawn directly (no per-cell controls): HEAT 5M · PULL/STACK | BUY | SOLD | BID |
+/// PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ, each switchable. Click the
 /// buy side (BUY, SOLD, BID) for a buy limit, the sell side (ASK, BOUGHT, SELL) for a sell limit,
 /// shift-click for a stop. Click a working order to cancel it, drag it to move it; drag a preview leg to
 /// set the stop or a target. Calm follow: the ladder re-centres only when price drifts a sixth of the
@@ -76,6 +76,8 @@ public sealed class LadderControl : Control
     {
         var c = cfg.Columns;
         var spec = new List<(Col, double)>();
+        // Heat + pull/stack at the far left, next to BUY (owner, 2026-10-13).
+        if (c.Heat) spec.Add((Col.Heat, 0.14));
         if (c.Orders) spec.Add((Col.Buy, 0.07));
         if (c.Footprint) spec.Add((Col.Sold, 0.07));
         spec.Add((Col.Bid, 0.11));
@@ -84,7 +86,6 @@ public sealed class LadderControl : Control
         if (c.Footprint) spec.Add((Col.Bought, 0.07));
         if (c.Orders) spec.Add((Col.Sell, 0.07));
         if (c.Pnl) spec.Add((Col.Pnl, 0.08));
-        if (c.Heat) spec.Add((Col.Heat, 0.14));
         if (c.Profile) spec.Add((Col.Profile, 0.12));
         if (c.Delta) spec.Add((Col.Delta, 0.06));
         var total = spec.Sum(x => x.Item2);
@@ -253,10 +254,12 @@ public sealed class LadderControl : Control
             DrawTag(ctx, l.Label, w - 4, y, l.Color, right: true);
         }
         double upY = RowH + 9, downY = Bounds.Height - 9;
+        // Off-screen markers sit from the BUY column, so they never cover the heatmap.
+        var pinX = cols.FirstOrDefault(c => c.Col != Col.Heat).X + 4;
         foreach (var (l, above) in offs.OrderBy(o => Math.Abs(Row(o.L.Ticks) - (o.Above ? top : bottom))).Take(10))
         {
             var dist = Math.Abs(Row(l.Ticks) - (above ? top : bottom)) / g;
-            DrawTag(ctx, $"{(above ? "▲" : "▼")} {l.Label} {(l.Ticks * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture)} · {dist}", 4, above ? upY : downY, l.Color, right: false);
+            DrawTag(ctx, $"{(above ? "▲" : "▼")} {l.Label} {(l.Ticks * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture)} · {dist}", pinX, above ? upY : downY, l.Color, right: false);
             if (above) upY += 15; else downY -= 15;
         }
 
