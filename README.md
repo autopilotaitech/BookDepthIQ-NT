@@ -25,22 +25,30 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-1. **Bridge:** copy `nt8/AddOns/BookDepthIQBridge.cs` to
+**Download** the latest `BookDepthIQ-DOM-x.y.z-win-x64.zip` from
+[Releases](https://github.com/autopilotaitech/BookDepthIQ-NT/releases) and unzip it.
+
+1. **Bridge (once, and after each update):** copy `NinjaTrader\BookDepthIQBridge.cs` to
    `Documents\NinjaTrader 8\bin\Custom\AddOns\`. In NinjaTrader open **New → NinjaScript Editor**
-   and press **F5**. It listens on `127.0.0.1:36971` only. After an update, copy it again and press F5.
-2. **DOM:** `dotnet run --project src/Dom` (needs the [.NET 8 SDK](https://dotnet.microsoft.com)).
-   The header shows **● NT** when it is connected, with the median time NinjaTrader takes to answer.
+   and press **F5**. It listens on `127.0.0.1:36971` only (this PC).
+2. **DOM:** run `BookDepthIQ-DOM.exe`. It is self-contained, so nothing else needs installing.
+   Windows may say "Windows protected your PC" because the exe is not code-signed: **More info →
+   Run anyway**. The header shows **● NT** when it is connected, with the median time NinjaTrader
+   takes to answer.
 3. Type the instrument (for example `NQ 12-26`) and press **Go**, then pick **Sim101**. The DOM
    loads up to 48 h of NinjaTrader tick history so SuperTrend, VWAP, the opening range and the
    profile are right from the start.
+
+**From source:** `dotnet run --project src/Dom` (needs the [.NET 8 SDK](https://dotnet.microsoft.com)).
 
 ## Layout
 
 The ladder runs the full height on the left. The right column holds, from top to bottom:
 
-- **TAPE**, with **journal** and **log** buttons that swap the view (click again for the tape), plus
-  **heat** and **ST** toggles.
-- **TICKET** (hide it with the **ticket** button in the tape toolbar; hidden = tape and buttons only):
+- **TAPE**, with **JOURNAL** and **LOG** chips that swap the view (click again for the tape), plus
+  **TICKET**, **HEAT** and **ST** toggles (lit = on). Text size: **SETTINGS → Tape & log**, or
+  **Ctrl+wheel** over the tape or log.
+- **TICKET** (hide it with the **TICKET** chip; hidden = tape and buttons only):
   a **READOUT** of contracts · risk · win · R:R · % of room · losers left in big type, with the cost,
   warning and result lines. Under it are cards with segmented controls and pill toggles: **SIZE**,
   **STOP** (ticks / ATR / swing + BRACKET), **TARGETS** (TP1–3 + split), **MANAGE** (B/E after TP1,
@@ -54,7 +62,7 @@ The ladder runs the full height on the left. The right column holds, from top to
 column any width. Double-click a divider to reset every column. Drag the bar between the ladder and
 the right column to size the right column. All of it is saved.
 
-Columns (each can be turned off in **SETTINGS → Ladder**): **HEAT 5M · PULL/STACK | BUY | SOLD |
+Columns (each can be turned off in **SETTINGS → Ladder**): **HEAT · PULL/STACK | BUY | SOLD |
 BID | PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ**. The heatmap sits at the far left, next to
 BUY.
 
@@ -66,7 +74,7 @@ BUY.
 - **BID/ASK:** depth bars. A **wall** (3× the average size on that side) shows yellow.
 - **SOLD/BOUGHT:** footprint. Diagonal **imbalances** light up, and stacked ones are brighter and
   drawn as **BUY/SELL STACK** lines.
-- **HEAT 5M:** resting size over the last 5 minutes in 10-second bins, time-averaged and coloured
+- **HEAT:** resting size over the heat window (5 minutes by default, in 10-second bins), time-averaged and coloured
   by the side it was on. Yellow means a wall. **PULL/STACK** shows the net size pulled or added in
   the last minute. **ABS** means absorption: one side kept hitting a level for more than was showing,
   and it held.
@@ -87,10 +95,11 @@ BUY.
   only. SuperTrend, VWAP, the opening range and the heatmap always use history, so they are ready at
   once.
 - **P&L:** what each price is worth to your open position.
-- **Lines:** VWAP with ±σ bands, ST1/ST2, the RTH opening range (NQ/ES, BookDepthIQ PAXOR),
+- **Lines:** VWAP with ±σ bands, ST1/ST2, nPOCs, GEX levels, the RTH opening range (NQ/ES,
+  BookDepthIQ PAXOR, coloured as in the Vest panel: OR H blue, OR L red, MID gold, EXT rungs dashed),
   **NO CHASE** (ST1 ± 2 ATR), RANGE H/L in chop, your TP/SL legs with their $, **FAIL** (where the
-  account fails at this size) and the preview. Lines off the screen are pinned to the top or bottom
-  with their distance.
+  account fails at this size) and the preview. Lines pass **behind** every number. Lines off the
+  screen are pinned at the right (Δ column), top or bottom, with their distance.
 - **Zoom on the PRICE column:** wheel over PRICE (or drag it up/down) zooms in and out. Row height
   first, then ticks per row (1 → 2 → 4 → 8 → 20 → 40 → 100). The price under the mouse stays put.
   **Double-click PRICE** (or **Home**) goes back to 1 tick per row, centred. **+/−** zoom around the
@@ -186,19 +195,20 @@ This runs the tests, then builds `dist\BookDepthIQ-DOM-1.0.0-win-x64.zip` (~37 M
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
+- `LICENSE.txt` and `DISCLAIMER.txt`.
 
 The exe is not code-signed, so Windows SmartScreen asks once ("More info › Run anyway").
 
 ## Settings and colours
 
-SETTINGS has a section rail on the left: Account, Fees & warnings, Protect my day, Ladder,
-Indicators, SuperTrend, Opening range, Colours. Each section is a set of cards with ON/OFF switches
+SETTINGS has a section rail on the left: Account, Fees & warnings, Protect my day, Ladder, Tape &
+log, Indicators (one set for every instrument), GEX, SuperTrend, Opening range, Colours. Each section is a set of cards with ON/OFF switches
 and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) discards.
 
 - **SETTINGS → Colours:** every colour the DOM draws can be changed:
   - surfaces, text and accent
   - bid/ask and profit/loss
-  - chart lines (VWAP, nPOC, opening range, SuperTrend, no-chase, stacks)
+  - chart lines (VWAP, nPOC, opening range, SuperTrend, no-chase, stacks) and GEX
   - profile, Δ and heat
   - order buttons
   - tape and log
@@ -220,7 +230,7 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 
 ```
 dotnet build                                   # Core, DOM, tests, fake bridge
-dotnet test                                    # 36 tests: risk, drawdown, SuperTrend, PAXOR, heat, footprint, trips …
+dotnet test                                    # 52 tests: risk, drawdown, SuperTrend, PAXOR, heat, footprint, nPOC, GEX, trips …
 BDIQ_PORT=36972 dotnet run --project tools/FakeBridge -- --position   # simulated NQ, never sends orders
 BDIQ_PORT=36972 dotnet run --project src/Dom   # the DOM against the fake (NinjaTrader is not touched)
 dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\Program Files\NinjaTrader 8\bin
@@ -229,4 +239,11 @@ dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\P
 The protocol is in [docs/PROTOCOL.md](docs/PROTOCOL.md) and the port plan in
 [docs/PORT-PLAN.md](docs/PORT-PLAN.md). Rules for changes are in [CLAUDE.md](CLAUDE.md).
 
-Not financial advice. Manual trading only.
+## License and disclaimer
+
+[MIT](LICENSE) © 2026 autopilotaitech.
+
+**Trading futures involves substantial risk of loss.** This is a tool, not financial advice, and it
+comes with no warranty. Test on Sim101 first. NinjaTrader is a trademark of NinjaTrader, LLC; this
+project is not affiliated with it. GEX uses Cboe's delayed quotes, which each copy fetches itself
+under Cboe's terms. Full text: [DISCLAIMER.md](DISCLAIMER.md).

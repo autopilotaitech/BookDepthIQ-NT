@@ -340,7 +340,10 @@ public sealed class LadderControl : Control
     private void DrawHeat(DrawingContext ctx, long t, int g, double x, double y, double cw, double p90, IndicatorCfg ind)
     {
         var h = s.Liquidity.Heat(t, g);
-        var cellW = (cw - 30) / h.Length;
+        // The PULL/STACK / ABS read needs ~30 px; a column dragged narrower shows the heat only, so the
+        // read never spills into the next column.
+        var readW = cw >= 60 ? 30 : 0;
+        var cellW = Math.Max(0, cw - readW) / h.Length;
         for (var i = 0; i < h.Length; i++)
         {
             var v = h[i];
@@ -350,6 +353,7 @@ public sealed class LadderControl : Control
             var c = Math.Abs(v) >= 3 * p90 / 2 ? Pal.HeatHot : v > 0 ? Pal.HeatBid : Pal.HeatAsk;
             ctx.FillRectangle(Pal.B(c, 0.15 + 0.75 * a), new Rect(x + 1 + i * cellW, y + 1, Math.Max(1, cellW - 0.5), RowH - 3));
         }
+        if (readW == 0) return;
         var f = s.Liquidity.FlowAt(t, g, Math.Max(1, ind.BigMin / 2));
         if (f.Absorb != null) Text(ctx, "ABS", x + cw - 29, y, 28, RowH, Pal.Warn, 9, TextAlignment.Right, bold: true);
         else if (f.Signal) Text(ctx, (f.Net > 0 ? "+" : "") + f.Net, x + cw - 29, y, 28, RowH, f.Net > 0 ? Pal.Pos : Pal.Neg, 9.5, TextAlignment.Right, bold: true);

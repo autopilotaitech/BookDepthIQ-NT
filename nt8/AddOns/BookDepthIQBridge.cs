@@ -1,3 +1,6 @@
+// Copyright (c) 2026 autopilotaitech. MIT License: https://github.com/autopilotaitech/BookDepthIQ-NT
+// Provided "as is", without warranty. Trading futures involves substantial risk of loss.
+//
 // BookDepthIQ-NT bridge: streams NinjaTrader 8 depth, prints, account, positions and orders to the
 // BookDepthIQ DOM app over 127.0.0.1, and executes the order commands the app sends from a user
 // click. It never decides to trade. Protocol: docs/PROTOCOL.md (one JSON object per line).

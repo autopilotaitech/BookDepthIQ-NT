@@ -10,6 +10,13 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets\depthiq.ico</ApplicationIcon>
+    <Product>BookDepthIQ DOM</Product>
+    <Company>autopilotaitech</Company>
+    <Authors>autopilotaitech</Authors>
+    <Copyright>Copyright (c) 2026 autopilotaitech. MIT License.</Copyright>
+    <Description>Standalone DOM for NinjaTrader 8</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/autopilotaitech/BookDepthIQ-NT</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />

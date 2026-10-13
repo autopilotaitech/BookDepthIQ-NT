@@ -2,6 +2,7 @@
 #   BookDepthIQ-DOM.exe            one self-contained file (no .NET install needed on the user's PC)
 #   NinjaTrader\BookDepthIQBridge.cs  the AddOn the user imports into NinjaTrader 8
 #   INSTALL.txt                    the steps
+#   LICENSE.txt, DISCLAIMER.txt    MIT license and the risk / third-party notice
 # Usage:  powershell -ExecutionPolicy Bypass -File tools\package.ps1 [-Version 1.0.0]
 param([string]$Version = "1.0.0")
 $ErrorActionPreference = "Stop"
@@ -20,6 +21,8 @@ dotnet publish (Join-Path $root "src\Dom") -c Release -r win-x64 --self-containe
 if ($LASTEXITCODE -ne 0) { throw "publish failed" }
 
 Copy-Item (Join-Path $root "nt8\AddOns\BookDepthIQBridge.cs") "$stage\NinjaTrader\"
+Copy-Item (Join-Path $root "LICENSE") "$stage\LICENSE.txt"
+Copy-Item (Join-Path $root "DISCLAIMER.md") "$stage\DISCLAIMER.txt"
 @"
 BookDepthIQ DOM $Version - install
 ====================================
@@ -42,6 +45,10 @@ BookDepthIQ DOM $Version - install
    - Test on Sim101 first.
 
 Settings are saved in %APPDATA%\BookDepthIQ-NT\.
+
+Trading futures involves substantial risk of loss. This is a tool, not financial advice, and it
+comes with no warranty (MIT license, LICENSE.txt). Read DISCLAIMER.txt.
+https://github.com/autopilotaitech/BookDepthIQ-NT
 "@ | Set-Content "$stage\INSTALL.txt" -Encoding utf8
 
 $zip = Join-Path $out "BookDepthIQ-DOM-$Version-win-x64.zip"
