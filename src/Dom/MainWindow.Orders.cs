@@ -375,8 +375,9 @@ public sealed partial class MainWindow
             case Key.Space: ladder.Recenter(); break;
             case Key.F: Flatten(); break;
             case Key.Escape: CancelAll(); break;
-            case Key.OemPlus or Key.Add: cfg.Group = LadderMath.StepGroup(cfg.Group, 1); cfg.Save(); break;
-            case Key.OemMinus or Key.Subtract: cfg.Group = LadderMath.StepGroup(cfg.Group, -1); cfg.Save(); break;
+            case Key.OemPlus or Key.Add: ladder.Zoom(1, ladder.Bounds.Height / 2); break;
+            case Key.OemMinus or Key.Subtract: ladder.Zoom(-1, ladder.Bounds.Height / 2); break;
+            case Key.Home: ladder.ResetZoom(); break;
             case Key.B or Key.S or Key.E or Key.R:
                 if (!cfg.HotkeysArmed)
                 {

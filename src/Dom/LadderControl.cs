@@ -16,7 +16,8 @@ public sealed record LadderLine(long Ticks, string Label, Color Color, bool Dash
 /// buy side (BUY, SOLD, BID) for a buy limit, the sell side (ASK, BOUGHT, SELL) for a sell limit,
 /// shift-click for a stop. Click a working order to cancel it, drag it to move it; drag a preview leg to
 /// set the stop or a target. Calm follow: the ladder re-centres only when price drifts a sixth of the
-/// screen (never while hovered unless price nears the edge). Wheel scrolls, Ctrl+wheel groups.
+/// screen (never while hovered unless price nears the edge). Zoom: wheel or drag on PRICE (anchored at the
+/// mouse), double-click PRICE resets; wheel elsewhere scrolls (Shift = a page) and holds the view 15 s.
 /// </summary>
 public sealed class LadderControl : Control
 {
@@ -41,7 +42,6 @@ public sealed class LadderControl : Control
     public event Action<WorkingOrder>? CancelRequested;
     public event Action<WorkingOrder, long>? MoveRequested;
     public event Action<int, long>? PreviewDropped;
-    public event Action<int>? GroupStep;
 
     public LadderControl(DomState state, Settings settings)
     {
@@ -65,7 +65,9 @@ public sealed class LadderControl : Control
         var mid = Mid;
         if (center is null || center.Value % G != 0) center = mid;
         var off = Math.Abs(mid - center.Value) / G;
-        var limit = pointerOver || dragOrder != null || dragPreview != null ? Rows / 2 - 3 : Math.Max(2, Rows / 6);
+        // After a manual scroll/zoom the view holds for 15 s, moving only if price is about to leave the screen.
+        var held = Environment.TickCount64 < holdUntil;
+        var limit = held ? Rows / 2 - 1 : pointerOver || dragOrder != null || dragPreview != null || zoomDragY != null ? Rows / 2 - 3 : Math.Max(2, Rows / 6);
         if (mid != 0 && off > limit) center = mid;
         return center.Value + Rows / 2 * G;
     }
@@ -259,6 +261,7 @@ public sealed class LadderControl : Control
         }
 
         foreach (var (_, x, _) in cols.Skip(1)) ctx.FillRectangle(Pal.B(Pal.Line), new Rect(x, 0, 1, Bounds.Height));
+        DrawZoomBadge(ctx);
     }
 
     /// <summary>90th percentile of |heat| on screen, so colours are relative to what is showing now.</summary>
@@ -348,8 +351,16 @@ public sealed class LadderControl : Control
     {
         var p = e.GetPosition(this);
         if (p.Y < RowH) { hoverRow = null; InvalidateVisual(); return; }
+        if (zoomDragY is double z)
+        {
+            // Drag on PRICE: every 22 px up zooms in one step, down zooms out.
+            var d = z - p.Y;
+            if (Math.Abs(d) >= 22) { Zoom(Math.Sign(d), p.Y); zoomDragY = p.Y; }
+            return;
+        }
         hoverRow = RowAt(p.Y);
         hoverCol = ColAt(p.X);
+        Cursor = hoverCol == Col.Price ? new Cursor(StandardCursorType.SizeNorthSouth) : new Cursor(StandardCursorType.Cross);
         if (dragOrder != null || dragPreview != null) dragTo = hoverRow;
         InvalidateVisual();
         base.OnPointerMoved(e);
@@ -362,6 +373,13 @@ public sealed class LadderControl : Control
         if (p.Y < RowH) return;
         var row = RowAt(p.Y);
         var col = ColAt(p.X);
+        if (col == Col.Price)
+        {
+            if (e.ClickCount >= 2) { zoomDragY = null; ResetZoom(); return; }
+            zoomDragY = p.Y;
+            e.Pointer.Capture(this);
+            return;
+        }
         if (OrderAt(row, col) is { } o) { dragOrder = o; dragTo = row; e.Pointer.Capture(this); return; }
         if (PreviewAt(row, col) is int k) { dragPreview = k; dragTo = row; e.Pointer.Capture(this); return; }
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
@@ -372,7 +390,12 @@ public sealed class LadderControl : Control
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        if (dragOrder != null)
+        if (zoomDragY != null)
+        {
+            zoomDragY = null;
+            e.Pointer.Capture(null);
+        }
+        else if (dragOrder != null)
         {
             var o = dragOrder;
             var to = dragTo;
@@ -397,9 +420,88 @@ public sealed class LadderControl : Control
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) GroupStep?.Invoke(e.Delta.Y > 0 ? -1 : 1);
-        else center = (center ?? Mid) + (long)Math.Round(e.Delta.Y * 3) * G;
+        var p = e.GetPosition(this);
+        var steps = Math.Sign(e.Delta.Y);
+        if (steps == 0) return;
+        // Over PRICE (or with Ctrl): zoom around the price under the mouse. Elsewhere: scroll;
+        // Shift scrolls a page.
+        if (ColAt(p.X) == Col.Price || e.KeyModifiers.HasFlag(KeyModifiers.Control)) Zoom(steps, p.Y);
+        else
+        {
+            var rows = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? Math.Max(1, Rows - 2) : 3;
+            center = (center ?? Mid) + steps * rows * G;
+            Hold();
+        }
         InvalidateVisual();
         e.Handled = true;
+    }
+
+    // ───────────── zoom: row height first, then ticks per row; the price under the mouse stays put ─────────────
+
+    /// <summary>Zoom levels, finest first: (row height px, ticks per row).</summary>
+    private static readonly (double H, int G)[] Levels =
+    {
+        (26, 1), (22, 1), (18, 1), (15, 1), (13, 1), (16, 2), (16, 4), (16, 8), (16, 20), (16, 40), (16, 100),
+    };
+    private const int DefaultLevel = 2;
+    private long holdUntil;
+    private double? zoomDragY;
+    private long badgeUntil;
+
+    private int LevelNow()
+    {
+        var best = 0;
+        var bestScore = double.MaxValue;
+        for (var i = 0; i < Levels.Length; i++)
+        {
+            var score = Math.Abs(Math.Log(Levels[i].G) - Math.Log(G)) * 100 + Math.Abs(Levels[i].H - RowH);
+            if (score < bestScore) { bestScore = score; best = i; }
+        }
+        return best;
+    }
+
+    /// <summary>A manual scroll or zoom holds the view for 15 s (unless price nears the edge).</summary>
+    private void Hold() => holdUntil = Environment.TickCount64 + 15_000;
+
+    /// <summary>dir > 0 zooms in (taller rows, fewer ticks per row), dir < 0 zooms out, anchored at y.</summary>
+    public void Zoom(int dir, double y)
+    {
+        var from = LevelNow();
+        var to = Math.Clamp(from - Math.Sign(dir), 0, Levels.Length - 1);
+        if (to == from) return;
+        y = Math.Clamp(y, RowH, Math.Max(RowH, Bounds.Height - 1));
+        var anchor = RowAt(y);
+        cfg.RowHeight = Levels[to].H;
+        cfg.Group = Levels[to].G;
+        // Put the anchor price back under the mouse at the new scale.
+        var k = (long)Math.Floor((y - RowH) / RowH);
+        var top = LadderMath.BucketOf(anchor, G) + k * G;
+        center = top - Rows / 2 * G;
+        Hold();
+        badgeUntil = Environment.TickCount64 + 1500;
+        cfg.Save();
+        InvalidateVisual();
+    }
+
+    /// <summary>Back to 1 tick per row at the default height, centred on price.</summary>
+    public void ResetZoom()
+    {
+        cfg.RowHeight = Levels[DefaultLevel].H;
+        cfg.Group = Levels[DefaultLevel].G;
+        holdUntil = 0;
+        badgeUntil = Environment.TickCount64 + 1500;
+        cfg.Save();
+        Recenter();
+    }
+
+    /// <summary>The zoom badge over the price column for 1.5 s after a zoom.</summary>
+    private void DrawZoomBadge(DrawingContext ctx)
+    {
+        if (Environment.TickCount64 > badgeUntil || ColRect(Col.Price) is not (double x, double w)) return;
+        var text = $"{G} tick{(G > 1 ? "s" : "")}/row · {RowH:0}px";
+        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, TfBold, 10.5, Pal.B(Pal.Warn));
+        var bx = x + (w - ft.Width) / 2 - 5;
+        ctx.DrawRectangle(Pal.B(Pal.Bg, 0.92), new Pen(Pal.B(Pal.Warn), 1), new Rect(bx, RowH + 4, ft.Width + 10, 18), 3, 3);
+        ctx.DrawText(ft, new Point(bx + 5, RowH + 4 + (18 - ft.Height) / 2));
     }
 }

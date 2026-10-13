@@ -55,8 +55,12 @@ BOUGHT | SELL | P&L | HEAT 5M · PULL/STACK | PROFILE | Δ**.
   **NO CHASE** (ST1 ± 2 ATR), RANGE H/L in chop, your TP/SL legs with their $, **FAIL** (where the
   account fails at this size) and the preview. Lines off the screen are pinned to the top or bottom
   with their distance.
-- **Wheel** scrolls, **Ctrl+wheel** or **+/−** groups ticks per row, **Space** re-centres. The ladder
-  holds still unless price drifts.
+- **Zoom on the PRICE column:** wheel over PRICE (or drag it up/down) zooms in and out. Row height
+  first, then ticks per row (1 → 2 → 4 → 8 → 20 → 40 → 100). The price under the mouse stays put.
+  **Double-click PRICE** (or **Home**) goes back to 1 tick per row, centred. **+/−** zoom around the
+  middle; a badge shows the scale.
+- **Wheel elsewhere** scrolls (Shift = a page) and holds the view for 15 s. **Space** re-centres.
+  Otherwise the ladder holds still unless price drifts.
 
 ## Header reads
 
