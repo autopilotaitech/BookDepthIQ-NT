@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window
     private LogControl logView = null!;
     private readonly TextBlock sideTitle = new() { FontSize = 10, Foreground = Pal.B(Pal.Muted), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
     private Grid sideGrid = null!;
+    private StackPanel logButtons = null!;
     private readonly StackPanel journalList = new();
     private readonly ContentControl side = new();
     private ScrollViewer? journalScroll;
@@ -57,19 +58,19 @@ public sealed partial class MainWindow : Window
     private readonly StackPanel quick = new() { Orientation = Orientation.Horizontal, Spacing = 3 };
     private readonly ComboBox stopMode = Ui.Combo(112, new[] { "SL ticks", "SL ATR", "SL swing" }, "stop distance: your ticks, ST1 ATR × mult, or past the swing high/low");
     private readonly TextBox slIn = Ui.Input(44, "stop ticks"), atrIn = Ui.Input(40, "ATR multiple"), swingIn = Ui.Input(36, "swing lookback, minutes"), bufIn = Ui.Input(32, "ticks past the swing");
-    private readonly TextBox[] tpIn = { Ui.Input(44, "TP1 ticks (R in ATR/swing mode)"), Ui.Input(44, "TP2 (0 = off)"), Ui.Input(44, "TP3 (0 = off)") };
-    private readonly TextBox splitIn = Ui.Input(76, "size split across the targets that are on, e.g. 50/30/20");
+    private readonly TextBox[] tpIn = { Ui.Input(42, "TP1 ticks (R in ATR/swing mode)"), Ui.Input(42, "TP2 (0 = off)"), Ui.Input(42, "TP3 (0 = off)") };
+    private readonly TextBox splitIn = Ui.Input(70, "size split across the targets that are on, e.g. 50/30/20");
     private readonly ToggleButton bracketBtn = new() { Content = "BRACKET ON", FontSize = 11, Height = 24 };
     private readonly CheckBox beChk = Ui.Check("B/E after TP1", "when TP1 fills, the panel moves your stops to entry ± offset (needs 2+ targets). Acts without a click; off by default.");
     private readonly TextBox beOff = Ui.Input(32, "B/E offset ticks (+ in your favour)");
     private readonly ComboBox trailBox = Ui.Combo(118, new[] { "trail off", "trail R", "trail ST1", "trail ST2" }, "trailing stop: after N R, one risk behind the best price; or ON the ST1/ST2 line. Moves only your way; acts without a click.");
     private readonly TextBox trailR = Ui.Input(36, "start trailing after this many R");
     private readonly CheckBox guardChk = Ui.Check("stop guard", "if a stop the panel saw on your position disappears, put it back at its last price");
-    private readonly TextBox setupIn = Ui.Input(90, "setup tag saved with the trade in the journal");
-    private readonly ComboBox previewBox = Ui.Combo(150, new[] { "preview off", "PREVIEW LONG", "PREVIEW SHORT" }, "draw the would-be stop and targets on the ladder while flat; drag them to set distances. Nothing is sent.");
+    private readonly TextBox setupIn = Ui.Input(86, "setup tag saved with the trade in the journal");
+    private readonly ComboBox previewBox = Ui.Combo(148, new[] { "preview off", "PREVIEW LONG", "PREVIEW SHORT" }, "draw the would-be stop and targets on the ladder while flat; drag them to set distances. Nothing is sent.");
     private readonly CheckBox scaleChk = Ui.Check("SCALE", "a ladder click sends several limits from that price away from the market (no brackets: press B/E or set a stop after)");
-    private readonly TextBox scaleCount = Ui.Input(30, "orders (2–10)"), scaleSpan = Ui.Input(36, "span ticks"), scaleSkew = Ui.Input(30, "size skew (1 = even)");
-    private readonly ComboBox scaleDir = Ui.Combo(104, new[] { "big start", "even", "big end" });
+    private readonly TextBox scaleCount = Ui.Input(28, "orders (2–10)"), scaleSpan = Ui.Input(32, "span ticks"), scaleSkew = Ui.Input(28, "size skew (1 = even)");
+    private readonly ComboBox scaleDir = Ui.Combo(88, new[] { "big start", "even", "big end" });
     private readonly TextBlock riskLine = Ui.Label("", Pal.Text, size: 11.5, wrap: true);
     private readonly TextBlock checkLine = Ui.Label("", Pal.Warn, size: 11.5, wrap: true);
     private readonly TextBlock costLine = Ui.Label("", Pal.Muted, size: 11.5, wrap: true);
@@ -166,8 +167,8 @@ public sealed partial class MainWindow : Window
         top.Children.Add(new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 0, 1), Child = statRow });
         top.Children.Add(Ui.Pad(bracketLine));
 
-        // side panel, as in the Vest panel: TAPE (or JOURNAL) header with its toggles, the tape, then the
-        // ORDER LOG in the bottom 40% with copy / clear.
+        // Right column (owner's layout, 2026-10-13): TAPE / JOURNAL / LOG view with its toggles, then the
+        // ticket settings, then the order buttons in three columns. The ladder runs the full height.
         tapeView = new TapeControl(s, cfg);
         logView = new LogControl(s);
         Control Mini(string text, Action a, string tip)
@@ -181,31 +182,30 @@ public sealed partial class MainWindow : Window
         }
         var sideHead = new DockPanel { Background = Pal.B(Pal.Panel), Height = 24 };
         var toggles = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Margin = new Thickness(0, 0, 4, 0) };
-        toggles.Children.Add(Mini("journal", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.Save(); RefreshSide(); }, "trade journal: every round trip with its setup, risk, result and R"));
+        logButtons = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+        logButtons.Children.Add(Mini("copy", CopyLog, "copy the whole order log with context — paste it in a bug report"));
+        logButtons.Children.Add(Mini("clear", () => { s.OrderLog.Clear(); logView.InvalidateVisual(); }, "clear the order log"));
+        toggles.Children.Add(logButtons);
+        toggles.Children.Add(Mini("journal", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.ShowLog = false; cfg.Save(); RefreshSide(); }, "trade journal: every round trip with its setup, risk, result and R (click again for the tape)"));
+        toggles.Children.Add(Mini("log", () => { cfg.ShowLog = !cfg.ShowLog; cfg.ShowJournal = false; cfg.Save(); RefreshSide(); }, "order log: every click, NinjaTrader's answer, rejections and fills (click again for the tape)"));
         toggles.Children.Add(Mini("heat", () => { cfg.Columns.Heat = !cfg.Columns.Heat; cfg.Save(); }, "heatmap + pull/stack column on the ladder"));
-        toggles.Children.Add(Mini("log", () => { cfg.ShowLog = !cfg.ShowLog; cfg.Save(); RefreshSide(); }, "show or hide the order log under the tape"));
         toggles.Children.Add(Mini("ST", () => { cfg.ShowTrend = !cfg.ShowTrend; cfg.Save(); }, "SuperTrend lines on the ladder"));
         DockPanel.SetDock(toggles, Dock.Right);
         sideHead.Children.Add(toggles);
         sideTitle.Margin = new Thickness(6, 0);
         sideHead.Children.Add(sideTitle);
-        var logHead = new DockPanel { Background = Pal.B(Pal.Panel), Height = 24 };
-        var logBtns = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Margin = new Thickness(0, 0, 4, 0) };
-        logBtns.Children.Add(Mini("copy", CopyLog, "copy the whole order log with context — paste it in a bug report"));
-        logBtns.Children.Add(Mini("clear", () => { s.OrderLog.Clear(); logView.InvalidateVisual(); }, "clear the order log"));
-        DockPanel.SetDock(logBtns, Dock.Right);
-        logHead.Children.Add(logBtns);
-        logHead.Children.Add(new TextBlock { Text = "ORDER LOG", FontSize = 10, Foreground = Pal.B(Pal.Muted), Margin = new Thickness(6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
-        sideGrid = new Grid { Width = 280, Background = Pal.B(Pal.Bg), RowDefinitions = new RowDefinitions("Auto,*,Auto,0.66*") };
+
+        var settingsPanel = BuildTicket();
+        var buttons = BuildButtons();
+        sideGrid = new Grid { Width = 372, Background = Pal.B(Pal.Bg), RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto") };
         Grid.SetRow(sideHead, 0);
         Grid.SetRow(side, 1);
-        var logHeadBorder = new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 1), Child = logHead };
-        Grid.SetRow(logHeadBorder, 2);
-        Grid.SetRow(logView, 3);
+        Grid.SetRow(settingsPanel, 2);
+        Grid.SetRow(buttons, 3);
         sideGrid.Children.Add(sideHead);
         sideGrid.Children.Add(side);
-        sideGrid.Children.Add(logHeadBorder);
-        sideGrid.Children.Add(logView);
+        sideGrid.Children.Add(settingsPanel);
+        sideGrid.Children.Add(buttons);
         var sideDock = sideGrid;
 
         var middle = new DockPanel();
@@ -214,17 +214,16 @@ public sealed partial class MainWindow : Window
         middle.Children.Add(sideBorder);
         middle.Children.Add(ladder);
 
-        var ticket = BuildTicket();
         var root = new DockPanel();
         DockPanel.SetDock(top, Dock.Top);
-        DockPanel.SetDock(ticket, Dock.Bottom);
         root.Children.Add(top);
-        root.Children.Add(ticket);
         root.Children.Add(middle);
         RefreshSide();
         return root;
     }
 
+    /// <summary>The ticket settings, stacked for the right column under the tape: size, stop, targets,
+    /// bracket, management, preview, scale, hotkeys, then the risk / warning / cost / result lines.</summary>
     private Control BuildTicket()
     {
         bracketBtn.IsCheckedChanged += (_, _) => { bracketBtn.Content = bracketBtn.IsChecked == true ? "BRACKET ON" : "BRACKET OFF"; SaveFields(); };
@@ -233,26 +232,53 @@ public sealed partial class MainWindow : Window
         foreach (var cb in new[] { sizeMode, stopMode, trailBox, previewBox, scaleDir }) cb.SelectionChanged += (_, _) => { SaveFields(); BuildQuick(); };
         foreach (var ck in new[] { beChk, guardChk, scaleChk }) ck.IsCheckedChanged += (_, _) => SaveFields();
 
+        Control R(params Control[] items)
+        {
+            var p = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Margin = new Thickness(6, 2) };
+            foreach (var c in items) { c.Margin = new Thickness(0, 1, 6, 1); p.Children.Add(c); }
+            return p;
+        }
         var t = new StackPanel { Background = Pal.B(Pal.Panel) };
-        t.Children.Add(Ui.Row(Ui.Label("Size", Pal.Muted), sizeMode, sizeIn, quick, stopMode, slIn, atrIn, swingIn, bufIn,
-            Ui.Label("TP", Pal.Muted), tpIn[0], tpIn[1], tpIn[2], Ui.Label("split", Pal.Muted), splitIn, bracketBtn));
-        t.Children.Add(Ui.Row(beChk, beOff, trailBox, trailR, guardChk, Ui.Label("setup", Pal.Muted), setupIn, previewBox, scaleChk, scaleCount, scaleSpan, scaleSkew, scaleDir, armBtn));
-        t.Children.Add(Ui.Pad(riskLine));
-        t.Children.Add(Ui.Pad(checkLine));
-        t.Children.Add(Ui.Pad(costLine));
-        t.Children.Add(Ui.Pad(lockLine));
-        t.Children.Add(Ui.Pad(notice));
-        t.Children.Add(Ui.Pad(resultBar));
-        var buttons = new UniformGrid { Columns = 7, Margin = new Thickness(6, 2, 6, 6) };
-        buttons.Children.Add(Ui.BigBtn("BUY MKT", Pal.BuyBtn, Pal.Bid, () => Market(true), "market buy with your size and bracket (B when hotkeys are armed)"));
-        buttons.Children.Add(Ui.BigBtn("SELL MKT", Pal.SellBtn, Pal.Ask, () => Market(false), "market sell with your size and bracket (S when armed)"));
-        buttons.Children.Add(Ui.BigBtn("B/E", Color.Parse("#1a2130"), Pal.Text, BreakEven, "move your stops to entry ± B/E offset (E when armed)"));
-        buttons.Children.Add(Ui.BigBtn("CLOSE HALF", Color.Parse("#1a2130"), Pal.Text, CloseHalf, "close half the position at market; bracket legs trimmed. Never blocked."));
-        buttons.Children.Add(Ui.BigBtn("REVERSE", Color.Parse("#1a2130"), Pal.Text, Reverse, "flip the position at market (R when armed)"));
-        buttons.Children.Add(Ui.BigBtn("CANCEL ALL", Color.Parse("#1a2130"), Pal.Text, CancelAll, "cancel every order on this instrument (Esc). Never blocked."));
-        buttons.Children.Add(Ui.BigBtn("FLATTEN", Color.Parse("#4a1414"), Pal.Neg, Flatten, "close the position and cancel its orders (F). Never blocked."));
-        t.Children.Add(buttons);
-        return new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 0), Child = t };
+        t.Children.Add(new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 1), Background = Pal.B(Pal.Panel), Height = 22,
+            Child = new TextBlock { Text = "TICKET", FontSize = 10, Foreground = Pal.B(Pal.Muted), Margin = new Thickness(6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center } });
+        t.Children.Add(R(Ui.Label("Size", Pal.Muted), sizeMode, sizeIn));
+        t.Children.Add(R(quick));
+        t.Children.Add(R(stopMode, slIn, atrIn, swingIn, bufIn, bracketBtn));
+        t.Children.Add(R(Ui.Label("TP", Pal.Muted), tpIn[0], tpIn[1], tpIn[2], Ui.Label("split", Pal.Muted), splitIn));
+        t.Children.Add(R(beChk, beOff, guardChk));
+        t.Children.Add(R(trailBox, Ui.Label("after R", Pal.Muted), trailR));
+        t.Children.Add(R(Ui.Label("setup", Pal.Muted), setupIn, previewBox));
+        t.Children.Add(R(scaleChk, scaleCount, scaleSpan, scaleSkew, scaleDir));
+        t.Children.Add(R(armBtn));
+        foreach (var line in new[] { riskLine, checkLine, costLine, lockLine, notice, resultBar })
+        {
+            line.FontSize = 11;
+            t.Children.Add(Ui.Pad(line, 6, 1));
+        }
+        return t;
+    }
+
+    /// <summary>Order buttons in three columns: BUY MKT · SELL MKT · FLATTEN, then REVERSE · CANCEL ALL, then
+    /// B/E · CLOSE HALF (the two-button rows split the width evenly).</summary>
+    private Control BuildButtons()
+    {
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,*,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto"), Margin = new Thickness(4, 4, 4, 6) };
+        void Add(Control b, int row, int col, int span)
+        {
+            Grid.SetRow(b, row);
+            Grid.SetColumn(b, col);
+            Grid.SetColumnSpan(b, span);
+            g.Children.Add(b);
+        }
+        var dark = Color.Parse("#1a2130");
+        Add(Ui.BigBtn("BUY MKT", Pal.BuyBtn, Pal.Bid, () => Market(true), "market buy with your size and bracket (B when hotkeys are armed)"), 0, 0, 2);
+        Add(Ui.BigBtn("SELL MKT", Pal.SellBtn, Pal.Ask, () => Market(false), "market sell with your size and bracket (S when armed)"), 0, 2, 2);
+        Add(Ui.BigBtn("FLATTEN", Color.Parse("#4a1414"), Pal.Neg, Flatten, "close the position and cancel its orders (F). Never blocked."), 0, 4, 2);
+        Add(Ui.BigBtn("REVERSE", dark, Pal.Text, Reverse, "flip the position at market (R when armed)"), 1, 0, 3);
+        Add(Ui.BigBtn("CANCEL ALL", dark, Pal.Text, CancelAll, "cancel every order on this instrument (Esc). Never blocked."), 1, 3, 3);
+        Add(Ui.BigBtn("B/E", dark, Pal.Text, BreakEven, "move your stops to entry ± B/E offset (E when armed)"), 2, 0, 3);
+        Add(Ui.BigBtn("CLOSE HALF", dark, Pal.Text, CloseHalf, "close half the position at market; bracket legs trimmed. Never blocked."), 2, 3, 3);
+        return new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 0), Background = Pal.B(Pal.Panel), Child = g };
     }
 
     /// <summary>Quick size buttons for the size mode: contracts, $ risk or % of room.</summary>

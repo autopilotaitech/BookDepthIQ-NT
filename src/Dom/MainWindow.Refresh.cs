@@ -168,11 +168,10 @@ public sealed partial class MainWindow
     {
         lastLogCount = s.OrderLog.Entries.Count;
         lastJournalCount = s.Journal.Count;
-        sideTitle.Text = cfg.ShowJournal ? "JOURNAL" : "TAPE";
-        // The order log takes the bottom 40% (as in the Vest panel) or nothing when hidden.
-        sideGrid.RowDefinitions[2].Height = cfg.ShowLog ? GridLength.Auto : new GridLength(0);
-        sideGrid.RowDefinitions[3].Height = cfg.ShowLog ? new GridLength(0.66, GridUnitType.Star) : new GridLength(0);
-        if (cfg.ShowJournal)
+        sideTitle.Text = cfg.ShowLog ? "LOG" : cfg.ShowJournal ? "JOURNAL" : "TAPE";
+        logButtons.IsVisible = cfg.ShowLog;
+        if (cfg.ShowLog) { if (side.Content != logView) side.Content = logView; }
+        else if (cfg.ShowJournal)
         {
             var st = Journal.Stats(s.Journal);
             journalSum.Text = $"{st.N} trades · {Pct(st.WinRate)} won · {LadderControl.Usd(st.TotalUsd)} net · avg {(st.AvgR is double r ? $"{r:+0.00;-0.00}R" : "—")} · fees ${st.FeesUsd:N2}" +

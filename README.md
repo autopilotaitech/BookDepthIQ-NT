@@ -32,6 +32,17 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
    loads up to 48 h of NinjaTrader tick history so SuperTrend, VWAP, the opening range and the
    profile are right from the start.
 
+## Layout
+
+The ladder runs the full height on the left. The right column holds, from top to bottom:
+
+- **TAPE**, with **journal** and **log** buttons that swap the view (click again for the tape), plus
+  **heat** and **ST** toggles.
+- **TICKET:** size, stop, targets, bracket, B/E, trail, stop guard, setup, preview, scale and
+  hotkeys, then the risk, warning, cost and result lines.
+- **Buttons** in three columns: **BUY MKT · SELL MKT · FLATTEN**, then **REVERSE · CANCEL ALL**,
+  then **B/E · CLOSE HALF**.
+
 ## The ladder
 
 Columns (each can be turned off in **SETTINGS → Ladder**): **BUY | SOLD | BID | PRICE | ASK |
