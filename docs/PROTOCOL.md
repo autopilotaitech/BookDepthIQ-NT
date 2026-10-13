@@ -17,6 +17,7 @@ connects. Loopback only: the bridge never listens on another interface.
 | `orders` | `acct`, `list: [{id, inst, action, type, qty, filled, limit, stop, state, oco, name}]` | any order update |
 | `exec` | `acct`, `inst`, `id`, `name` (order name), `side` (`b`/`s`), `qty`, `price`, `commission`, `fee`, `ms` | each execution on the streamed account |
 | `hist` | `inst`, `trades: [[ms, price, size, side]…]`, `done`, `err?` | answer to `hist`, in chunks of 5,000 |
+| `reject` | `name`, `inst`, `action`, `type`, `qty`, `error`, `msg` | NinjaTrader rejected an order (its own reason) |
 | `ack` | `cid`, `ok`, `msg` | answer to a command |
 | `log` | `msg` | bridge notices (connection, errors) |
 
@@ -38,5 +39,8 @@ connects. Loopback only: the bridge never listens on another interface.
 
 Brackets (like NT's ATM): each execution of an entry is allocated to its targets in order; each
 slice gets a TP limit (`BDIQ TP1`, `BDIQ TP2` …) and an SL stop (`BDIQ SL1` …) as one OCO pair,
-priced in ticks from that execution's fill, so a partial fill is protected at once. Nothing else is ever
-sent without a command from a click.
+priced in ticks from that execution's fill, so a partial fill is protected at once.
+
+The bridge never decides to trade. It executes what the app sends: a click, or a management feature
+the user turned on in the DOM (B/E after TP1, trailing stop, stop guard, weekend close, close at the
+daily loss limit) — none of which ever opens a position.

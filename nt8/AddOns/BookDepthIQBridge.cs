@@ -557,7 +557,17 @@ namespace NinjaTrader.NinjaScript.AddOns
 
             private void OnAccountItemUpdate(object sender, AccountItemEventArgs e) { SendAccount(); }
             private void OnPositionUpdate(object sender, PositionEventArgs e) { SendPositions(); }
-            private void OnOrderUpdate(object sender, OrderEventArgs e) { SendOrders(); }
+            private void OnOrderUpdate(object sender, OrderEventArgs e)
+            {
+                // A rejection says why, in the DOM's result bar and order log (NinjaTrader's own text).
+                if (e.OrderState == OrderState.Rejected && e.Order != null)
+                    Send(new Dictionary<string, object>
+                    {
+                        { "t", "reject" }, { "name", e.Order.Name ?? "" }, { "inst", e.Order.Instrument.FullName }, { "action", e.Order.OrderAction.ToString() },
+                        { "type", e.Order.OrderType.ToString() }, { "qty", e.Order.Quantity }, { "error", e.Error.ToString() }, { "msg", e.Comment ?? "" },
+                    });
+                SendOrders();
+            }
 
             private void OnExecutionUpdate(object sender, ExecutionEventArgs e)
             {

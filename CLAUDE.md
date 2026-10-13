@@ -11,10 +11,12 @@ The owner chose Avalonia (2026-10-13) — do not switch the UI to WPF or an in-N
 ## Trading safety — absolute
 
 1. **No order is sent without the owner's explicit go**, Sim101 included, by any test or script.
-2. **Manual only.** Every order comes from a user click in the DOM. No algo, no auto-entry, no
-   copier. The bridge never decides to trade: it only executes a command the app sends from a
-   click. Exceptions follow the Vest panel's owner-approved list and must be re-approved here
-   before they are built (brackets attached to an entry the user clicked are part of that entry).
+2. **Manual only.** Every entry comes from a user click in the DOM. No algo, no auto-entry, no
+   copier. The bridge never decides to trade: it only executes a command the app sends.
+   **Approved by the owner on 2026-10-13 ("port all of it")**: the Vest panel's management set,
+   each OFF until the user turns it on, none ever opening a position. That set is B/E after TP1,
+   trailing stop (R or ST1/ST2), stop guard, close at the daily loss limit, and close before the
+   weekend halt. Brackets attached to an entry the user clicked are part of that entry.
 3. **Brackets are the user's numbers** (ticks). No hard-coded TP/SL distances.
 4. **Flatten and cancel are never gated.**
 5. **No silent no-ops.** A click that can't send says why, in the result bar and the order log.

@@ -14,7 +14,6 @@ public sealed record WorkingOrder(string Id, string Inst, string Action, string 
     public bool IsStopLeg => Name.StartsWith("BDIQ SL", StringComparison.Ordinal) || (IsStop && Name != "BDIQ entry");
     public int Left => Qty - Filled;
 }
-public sealed record Exec(string Id, string Inst, string Name, bool Buy, int Qty, double Price, double Fees, long Ms);
 
 /// <summary>Everything the DOM shows, fed by bridge messages, with the Vest panel's analytics on top.
 /// All access on the UI thread.</summary>
@@ -64,6 +63,9 @@ public sealed class DomState
     public List<Exec> Execs { get; } = new();
     public List<JournalTrade> Journal { get; } = new();
     public OrderLog OrderLog { get; } = new();
+    /// <summary>Command id → when it was sent (TickCount64), for the answer time; the last answer times.</summary>
+    public Dictionary<string, long> Sent { get; } = new();
+    public List<long> AckMs { get; } = new();
     public string? LastResult { get; set; }
     public bool LastOk { get; set; } = true;
 
@@ -160,6 +162,7 @@ public sealed class DomState
                 Orders.Clear();
                 foreach (var o in m.GetProperty("list").EnumerateArray())
                     Orders.Add(new WorkingOrder(S(o, "id"), S(o, "inst"), S(o, "action"), S(o, "type"), (int)D(o, "qty", 0), (int)D(o, "filled", 0), D(o, "limit", 0), D(o, "stop", 0), S(o, "state"), S(o, "oco"), S(o, "name")));
+                NoteStops();
                 break;
             case "exec":
                 if (S(m, "acct") != Account) break;
@@ -169,10 +172,19 @@ public sealed class DomState
             {
                 var ok = m.TryGetProperty("ok", out var okEl) && okEl.ValueKind == JsonValueKind.True;
                 LastOk = ok;
-                LastResult = S(m, "msg");
+                var cid = S(m, "cid");
+                var ms = Sent.TryGetValue(cid, out var at) ? Environment.TickCount64 - at : (long?)null;
+                Sent.Remove(cid);
+                if (ms is long x) { AckMs.Add(x); if (AckMs.Count > 50) AckMs.RemoveAt(0); }
+                LastResult = S(m, "msg") + (ms is long y ? $" · {y} ms" : "");
                 Note(ok ? OrderLogStatus.Ok : OrderLogStatus.Refused, LastResult);
                 break;
             }
+            case "reject":
+                LastOk = false;
+                LastResult = $"REJECTED by NinjaTrader: {S(m, "action")} {S(m, "type")} {S(m, "qty")} {S(m, "inst")} ({S(m, "name")}) — {S(m, "error")} {S(m, "msg")}";
+                Note(OrderLogStatus.Refused, LastResult);
+                break;
             case "log":
                 Note(OrderLogStatus.Error, S(m, "msg"));
                 break;
@@ -229,65 +241,30 @@ public sealed class DomState
 
     // ───────────── executions → journal ─────────────
 
-    private sealed class OpenTrip
-    {
-        public string Inst = ""; public bool Long; public int Qty; public int MaxQty; public double EntryNotional; public double ExitNotional; public int ExitQty;
-        public double Fees; public long Open; public double? Stop; public double? RiskUsd; public string Setup = ""; public string StopMode = ""; public double? Expected;
-    }
-    private readonly Dictionary<string, OpenTrip> trips = new();
+    private readonly TripBuilder trips = new();
     /// <summary>What the last entry click expected (price), for slippage in the journal.</summary>
     public (double Price, long At, bool Long)? LastIntent { get; set; }
 
     private void OnExec(Exec e)
     {
-        if (Execs.Any(x => x.Id == e.Id && e.Id != "")) return;
         Execs.Add(e);
-        var pv = e.Inst == Instrument ? PointValue : CmeSpecs.Find(e.Inst)?.PointValue ?? PointValue;
-        if (!trips.TryGetValue(e.Inst, out var tr) || tr.Qty == 0)
-        {
-            tr = new OpenTrip
-            {
-                Inst = e.Inst, Long = e.Buy, Open = e.Ms, Setup = cfg.Setup, StopMode = cfg.StopMode.ToString(),
-                Expected = LastIntent is { } li && li.Long == e.Buy && NowMs() - li.At < 120_000 ? li.Price : null,
-            };
-            trips[e.Inst] = tr;
-        }
-        tr.Fees += e.Fees;
-        if (e.Buy == tr.Long)
-        {
-            tr.Qty += e.Qty;
-            tr.MaxQty = Math.Max(tr.MaxQty, tr.Qty);
-            tr.EntryNotional += e.Qty * e.Price;
-            var stop = Orders.FirstOrDefault(o => o.Inst == e.Inst && o.IsStopLeg);
-            if (tr.Stop is null && stop != null)
-            {
-                tr.Stop = stop.Price;
-                tr.RiskUsd = Math.Abs(tr.EntryNotional / tr.Qty - stop.Price) * tr.Qty * pv;
-            }
-            return;
-        }
-        var closeQty = Math.Min(e.Qty, tr.Qty);
-        tr.Qty -= closeQty;
-        tr.ExitQty += closeQty;
-        tr.ExitNotional += closeQty * e.Price;
-        if (tr.Qty > 0) return;
-        var entryQty = tr.MaxQty;
-        var avgEntry = tr.EntryNotional / Math.Max(1, entryQty);
-        var avgExit = tr.ExitNotional / Math.Max(1, tr.ExitQty);
-        var gross = (avgExit - avgEntry) * tr.ExitQty * pv * (tr.Long ? 1 : -1);
-        var row = new JournalTrade
-        {
-            Open = tr.Open, Close = e.Ms, Inst = e.Inst, Account = Account, Long = tr.Long, Qty = tr.ExitQty, Entry = avgEntry, Exit = avgExit,
-            Stop = tr.Stop, RiskUsd = tr.RiskUsd, Pnl = gross - tr.Fees, FeesUsd = tr.Fees, Setup = tr.Setup, StopMode = tr.StopMode, Expected = tr.Expected,
-            SlipTicks = tr.Expected is double ex ? Math.Round((avgEntry - ex) / TickSize * (tr.Long ? 1 : -1), 2) : null,
-        };
-        trips.Remove(e.Inst);
+        if (Execs.Count > 2000) Execs.RemoveRange(0, Execs.Count - 2000);
+        var row = trips.OnExec(e, Account,
+            (inst, isLong) => new TripContext(cfg.Setup, cfg.StopMode.ToString(),
+                LastIntent is { } li && li.Long == isLong && NowMs() - li.At < 120_000 ? li.Price : null,
+                Orders.Where(o => o.Inst == inst && o.IsStopLeg).Select(o => (double?)o.Price).FirstOrDefault()),
+            inst => inst == Instrument ? PointValue : CmeSpecs.Find(inst)?.PointValue ?? PointValue,
+            inst => inst == Instrument ? TickSize : CmeSpecs.Find(inst)?.TickSize ?? TickSize);
+        if (row is null) return;
         Journal.Add(row);
         SaveJournal();
         TradeClosed?.Invoke(row);
-        // A remainder past flat opens the other way (reversal).
-        var rest = e.Qty - closeQty;
-        if (rest > 0) OnExec(e with { Id = e.Id + "+r", Qty = rest, Fees = 0 });
+    }
+
+    /// <summary>Brackets attach a moment after the fill: record the stop on the open trip when it shows.</summary>
+    public void NoteStops()
+    {
+        foreach (var o in Orders.Where(o => o.IsStopLeg)) trips.SetStop(o.Inst, o.Price);
     }
 
     private static string JournalPath => Path.Combine(Settings.Dir, "journal.json");

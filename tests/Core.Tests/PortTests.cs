@@ -290,3 +290,40 @@ public class TargetsManageStructureTests
         Assert.Contains(Cost.Checks(new CheckInput { Contracts = 6, MaxContracts = 5 }), c => c.Level == CheckLevel.Warn);
     }
 }
+
+public class TripTests
+{
+    private static JournalTrade? Feed(TripBuilder b, Exec e, double? expected = null, double? stop = null) =>
+        b.OnExec(e, "Sim101", (_, _) => new TripContext("pb", "Ticks", expected, stop), _ => 20, _ => 0.25);
+
+    [Fact]
+    public void Long_two_out_in_two_pieces_fees_in()
+    {
+        var b = new TripBuilder();
+        Assert.Null(Feed(b, new Exec("1", "NQ 12-26", "BDIQ entry", true, 2, 21000.00, 4.18, 0), expected: 20999.75, stop: 20996.00));
+        Assert.Null(Feed(b, new Exec("2", "NQ 12-26", "BDIQ TP1", false, 1, 21008.00, 2.09, 1000)));
+        var t = Feed(b, new Exec("3", "NQ 12-26", "BDIQ SL2", false, 1, 20996.00, 2.09, 2000))!;
+        Assert.True(t.Long);
+        Assert.Equal(2, t.Qty);
+        Assert.Equal(21002.0, t.Exit);
+        Assert.Equal((21002.0 - 21000.0) * 2 * 20 - 8.36, t.Pnl, 6); // +80 gross − fees
+        Assert.Equal(4 * 2 * 20.0, t.RiskUsd); // 4 points to the stop × 2 ct × $20
+        Assert.Equal(1, t.SlipTicks); // filled one tick worse than expected
+    }
+
+    [Fact]
+    public void Duplicate_ids_are_ignored_and_a_reversal_opens_the_other_way()
+    {
+        var b = new TripBuilder();
+        Feed(b, new Exec("1", "ES 12-26", "", false, 1, 6000.00, 2, 0));
+        Assert.Null(Feed(b, new Exec("1", "ES 12-26", "", false, 1, 6000.00, 2, 0)));
+        var t = Feed(b, new Exec("2", "ES 12-26", "", true, 3, 5990.00, 6, 1000))!; // covers 1, opens long 2
+        Assert.False(t.Long);
+        Assert.Equal(1, t.Qty);
+        Assert.Equal((6000.0 - 5990.0) * 20 - (2 + 2), t.Pnl, 6); // short 10 points, fees 2 + a third of 6
+        var back = Feed(b, new Exec("3", "ES 12-26", "", false, 2, 5995.00, 4, 2000))!;
+        Assert.True(back.Long);
+        Assert.Equal(2, back.Qty);
+        Assert.Equal((5995.0 - 5990.0) * 2 * 20 - (4 + 4), back.Pnl, 6);
+    }
+}

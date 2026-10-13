@@ -27,7 +27,9 @@ public sealed partial class MainWindow
     {
         s.Note(OrderLogStatus.Click, $"{s.Account} {what} · {s.Instrument}");
         if (!s.Connected) return Refuse("not connected to NinjaTrader — is the BookDepthIQBridge AddOn compiled (F5) and NinjaTrader running?");
-        if (!bridge.Send(build(NextCid()))) return Refuse("the bridge connection dropped — reconnecting");
+        var cid = NextCid();
+        s.Sent[cid] = Environment.TickCount64;
+        if (!bridge.Send(build(cid))) { s.Sent.Remove(cid); return Refuse("the bridge connection dropped — reconnecting"); }
         return true;
     }
 

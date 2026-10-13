@@ -17,23 +17,29 @@ CME **contracts, ticks and tick value, with fees per side**.
   break-even ticks, stop-past-fail warning. Prop drawdown: static, trailing intraday, trailing EOD,
   lock, daily loss.
 
-## M2 — next, ported from the Vest panel
+## M2 — done (2026-10-13): everything from the Vest panel
 
 | Vest panel | Here |
 |---|---|
-| `ladderMath.ts` grouping, fit | price grouping (×2, ×4…) |
-| `liquidity.ts` heat, pull/stack, absorb | HEAT 5M column, PULL/STACK, ABSORB |
-| `footprint.ts` bought/sold, imbalances | SOLD / BOUGHT columns, imbalance marks |
-| `profile.ts` volume profile, POC/VA | POC · VA in the position strip |
-| `supertrend.ts` dual SuperTrend | ST1/ST2 lines and the scalp read (GO / wait / STRETCHED) |
-| `vwap.ts` VWAP + σ bands | VWAP lines |
-| `paxor.ts` opening range | RANGE lines |
-| `protect.ts` daily limits, cooldown | Protect my day |
-| B/E, trail, close half, TP2/TP3 | management row (each needs the owner's OK, as in the Vest panel) |
-| RISK calculator page | RISK window: every CME contract, risk map |
-| journal, order log copy | journal synced from NT executions |
+| `ladderMath.ts` grouping, off-screen markers, spread window | `Core/LadderMath.cs` |
+| `liquidity.ts` heat, pull/stack, absorb | `Core/Liquidity.cs` → HEAT 5M · PULL/STACK column |
+| `footprint.ts`, `profile.ts` | `Core/Footprint.cs` → SOLD/BOUGHT, imbalances, stacks, walls, PROFILE, Δ |
+| `cost.ts`, `checks.ts` | `Core/Cost.cs` → cost line, warnings (never block), FEED |
+| `supertrend.ts` (trend.rs) | `Core/SuperTrend.cs` → ST1/ST2 lines, SuperTrend pill |
+| `vwap.ts`, `indicators.ts` | `Core/Indicators.cs` → VWAP σ, per-instrument settings, stack zones |
+| `paxor.ts` | `Core/PaxOr.cs` → OR H/L/MID/EXT lines |
+| `targets.ts`, `manage.ts` | `Core/Targets.cs`, `Core/Manage.cs` → TP1–3 split, scale, B/E after TP1, trail R/ST, stop guard, weekend close |
+| `structure.ts` | `Core/Structure.cs` → market state, scalp read, swing stop, RANGE lines, journal stats/CSV |
+| `protect.ts`, `orderlog.ts` | `Core/Protect.cs` → protect my day, order log |
+| `riskcalc.ts` + RISK page | `Core/CmeRisk.cs`, `Core/Drawdown.cs`, `Dom/RiskWindow.cs` |
+| journal (LIVE: Vest history) | `Core/Trips.cs`: exact round trips from NT executions |
+| record + replay | NinjaTrader's Playback connection (the DOM works on Playback101) |
+| funding | not applicable to CME futures |
 
-## Rules carried over
+Tests: the Vest tests for each module, ported with the same cases and numbers (36).
 
-No silent no-ops, no second-click confirms, FLATTEN/CANCEL never gated, brackets are the user's
-numbers, and nothing sends an order without a click (see CLAUDE.md).
+## Next
+
+- First run inside NinjaTrader on Sim101 (the owner): check depth, history, brackets, B/E, trail.
+- Ladder colours and widths to taste once seen on real CME depth.
+

@@ -28,8 +28,9 @@ public sealed partial class MainWindow
 
     private void RefreshTop()
     {
-        Ui.SetPill(bridgePill, s.Connected ? "● NT" : "○ NT", s.Connected ? Pal.Pos : Pal.Warn,
-            s.Connected ? "connected to the BookDepthIQBridge AddOn in NinjaTrader" : $"waiting for the NinjaTrader bridge on 127.0.0.1:{Protocol.Port} — copy nt8/AddOns/BookDepthIQBridge.cs into NinjaTrader and press F5");
+        var ack = Cost.Percentiles(s.AckMs);
+        Ui.SetPill(bridgePill, s.Connected ? (ack is { } a ? $"● NT {a.P50} ms" : "● NT") : "○ NT", s.Connected ? Pal.Pos : Pal.Warn,
+            s.Connected ? $"connected to the BookDepthIQBridge AddOn in NinjaTrader{(ack is { } a2 ? $" · answer time median {a2.P50} ms, p95 {a2.P95} ms (last {s.AckMs.Count} commands)" : "")}" : $"waiting for the NinjaTrader bridge on 127.0.0.1:{Protocol.Port} — copy nt8/AddOns/BookDepthIQBridge.cs into NinjaTrader and press F5");
         var age = s.FeedAgeMs;
         var health = Cost.FeedHealth(age == long.MaxValue ? null : age, s.Connected);
         Ui.SetPill(feedPill, health == "live" ? $"FEED {Math.Min(age, 9999)} ms" : health.ToUpperInvariant(), health == "live" ? Pal.Pos : health == "slow" ? Pal.Warn : Pal.Neg, "time since NinjaTrader's last book or print");
