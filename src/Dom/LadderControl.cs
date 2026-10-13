@@ -80,17 +80,18 @@ public sealed class LadderControl : Control
         var c = cfg.Columns;
         var spec = new List<(Col, double)>();
         // Heat + pull/stack at the far left, next to BUY (owner, 2026-10-13).
-        if (c.Heat) spec.Add((Col.Heat, 0.14));
-        if (c.Orders) spec.Add((Col.Buy, 0.07));
-        if (c.Footprint) spec.Add((Col.Sold, 0.07));
-        spec.Add((Col.Bid, 0.11));
-        spec.Add((Col.Price, 0.10));
-        spec.Add((Col.Ask, 0.11));
-        if (c.Footprint) spec.Add((Col.Bought, 0.07));
-        if (c.Orders) spec.Add((Col.Sell, 0.07));
-        if (c.Pnl) spec.Add((Col.Pnl, 0.08));
-        if (c.Profile) spec.Add((Col.Profile, 0.12));
-        if (c.Delta) spec.Add((Col.Delta, 0.06));
+        void Add(Col col, double dflt) => spec.Add((col, cfg.ColWidths.TryGetValue(col.ToString(), out var w) && w > 0 ? w : dflt));
+        if (c.Heat) Add(Col.Heat, 0.14);
+        if (c.Orders) Add(Col.Buy, 0.07);
+        if (c.Footprint) Add(Col.Sold, 0.07);
+        Add(Col.Bid, 0.11);
+        Add(Col.Price, 0.10);
+        Add(Col.Ask, 0.11);
+        if (c.Footprint) Add(Col.Bought, 0.07);
+        if (c.Orders) Add(Col.Sell, 0.07);
+        if (c.Pnl) Add(Col.Pnl, 0.08);
+        if (c.Profile) Add(Col.Profile, 0.12);
+        if (c.Delta) Add(Col.Delta, 0.06);
         var total = spec.Sum(x => x.Item2);
         var x0 = 0.0;
         cols = spec.Select(t => { var w = t.Item2 / total * Bounds.Width; var r = (t.Item1, x0, w); x0 += w; return r; }).ToArray();
@@ -364,7 +365,14 @@ public sealed class LadderControl : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         var p = e.GetPosition(this);
-        if (p.Y < RowH) { hoverRow = null; InvalidateVisual(); return; }
+        if (resizeAt != null) { ResizeTo(p.X); return; }
+        if (p.Y < RowH)
+        {
+            hoverRow = null;
+            Cursor = DividerAt(p.X) != null ? new Cursor(StandardCursorType.SizeWestEast) : new Cursor(StandardCursorType.Arrow);
+            InvalidateVisual();
+            return;
+        }
         if (zoomDragY is double z)
         {
             // Drag on PRICE: every 22 px up zooms in one step, down zooms out.
@@ -384,7 +392,23 @@ public sealed class LadderControl : Control
     {
         Focus();
         var p = e.GetPosition(this);
-        if (p.Y < RowH) return;
+        if (p.Y < RowH)
+        {
+            if (DividerAt(p.X) is int d)
+            {
+                if (e.ClickCount >= 2)
+                {
+                    // Double-click a divider: every column back to its default width.
+                    cfg.ColWidths.Clear();
+                    cfg.Save();
+                    InvalidateVisual();
+                    return;
+                }
+                resizeAt = d;
+                e.Pointer.Capture(this);
+            }
+            return;
+        }
         var row = RowAt(p.Y);
         var col = ColAt(p.X);
         if (col == Col.Price)
@@ -404,7 +428,13 @@ public sealed class LadderControl : Control
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        if (zoomDragY != null)
+        if (resizeAt != null)
+        {
+            resizeAt = null;
+            e.Pointer.Capture(null);
+            cfg.Save();
+        }
+        else if (zoomDragY != null)
         {
             zoomDragY = null;
             e.Pointer.Capture(null);
@@ -459,6 +489,31 @@ public sealed class LadderControl : Control
     };
     private const int DefaultLevel = 2;
     private long holdUntil;
+    // ── column resize: drag a divider in the header row; double-click resets all widths ──
+    private int? resizeAt;          // index of the column left of the divider being dragged
+
+    /// <summary>Divider (index of the column to its left) within 5 px of x, in the header row.</summary>
+    private int? DividerAt(double x)
+    {
+        for (var i = 0; i < cols.Length - 1; i++)
+            if (Math.Abs(cols[i].X + cols[i].W - x) <= 5) return i;
+        return null;
+    }
+
+    private void ResizeTo(double x)
+    {
+        if (resizeAt is not int i || Bounds.Width <= 0) return;
+        var a = cols[i];
+        var b = cols[i + 1];
+        var min = 18.0;
+        var newA = Math.Clamp(x - a.X, min, a.W + b.W - min);
+        var newB = a.W + b.W - newA;
+        // Store as weights relative to the ladder width, so sizes hold when the window changes.
+        cfg.ColWidths[a.Col.ToString()] = newA / Bounds.Width;
+        cfg.ColWidths[b.Col.ToString()] = newB / Bounds.Width;
+        foreach (var k in cols) if (!cfg.ColWidths.ContainsKey(k.Col.ToString())) cfg.ColWidths[k.Col.ToString()] = k.W / Bounds.Width;
+        InvalidateVisual();
+    }
     private double? zoomDragY;
     private long badgeUntil;
 

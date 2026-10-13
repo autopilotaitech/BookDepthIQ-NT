@@ -45,6 +45,10 @@ The ladder runs the full height on the left. The right column holds, from top to
 
 ## The ladder
 
+**Resize anything:** drag a divider in the ladder's header row (the cursor turns ↔) to make any
+column any width. Double-click a divider to reset every column. Drag the bar between the ladder and
+the right column to size the right column. All of it is saved.
+
 Columns (each can be turned off in **SETTINGS → Ladder**): **HEAT 5M · PULL/STACK | BUY | SOLD |
 BID | PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ**. The heatmap sits at the far left, next to
 BUY.

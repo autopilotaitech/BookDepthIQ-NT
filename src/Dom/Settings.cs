@@ -85,6 +85,10 @@ public sealed class Settings
     public int Group { get; set; } = 1;
     public double RowHeight { get; set; } = 18;
     public Columns Columns { get; set; } = new();
+    /// <summary>Ladder column widths (relative weights, by column name), set by dragging the header dividers.</summary>
+    public Dictionary<string, double> ColWidths { get; set; } = new();
+    /// <summary>Width of the right column (tape, ticket, buttons) in px, set by dragging its edge.</summary>
+    public double SideWidth { get; set; } = 372;
     public bool ShowTrend { get; set; } = true;
     public bool ShowLog { get; set; } = true;
     public bool ShowJournal { get; set; }

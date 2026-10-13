@@ -208,11 +208,18 @@ public sealed partial class MainWindow : Window
         sideGrid.Children.Add(buttons);
         var sideDock = sideGrid;
 
-        var middle = new DockPanel();
-        var sideBorder = new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(1, 0, 0, 0), Child = sideDock };
-        DockPanel.SetDock(sideBorder, Dock.Right);
-        middle.Children.Add(sideBorder);
+        // Ladder | splitter | right column. Drag the splitter to size the right column (saved).
+        sideGrid.Width = double.NaN;
+        var middle = new Grid { ColumnDefinitions = new ColumnDefinitions($"*,5,{Math.Clamp(cfg.SideWidth, 240, 900).ToString(CultureInfo.InvariantCulture)}") };
+        var splitter = new GridSplitter { Background = Pal.B(Pal.Line), ResizeDirection = GridResizeDirection.Columns };
+        ToolTip.SetTip(splitter, "drag to size the right column");
+        Grid.SetColumn(ladder, 0);
+        Grid.SetColumn(splitter, 1);
+        Grid.SetColumn(sideDock, 2);
         middle.Children.Add(ladder);
+        middle.Children.Add(splitter);
+        middle.Children.Add(sideDock);
+        splitter.DragCompleted += (_, _) => { cfg.SideWidth = middle.ColumnDefinitions[2].ActualWidth; cfg.Save(); };
 
         var root = new DockPanel();
         DockPanel.SetDock(top, Dock.Top);
