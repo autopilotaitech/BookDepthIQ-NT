@@ -11,7 +11,7 @@ using BookDepthIQ.Core;
 namespace BookDepthIQ.Dom;
 
 /// <summary>The DOM window — the Vest panel's layout: header (instrument, account, health, SuperTrend and
-/// scalp read, RISK, settings, KILL), account and position strips, bracket bar, ladder with tape / journal /
+/// scalp read, settings, KILL), account and position strips, bracket bar, ladder with tape / journal /
 /// order log, and the ticket with CME risk. Built in code so the compiler checks every control.</summary>
 public sealed partial class MainWindow : Window
 {
@@ -174,12 +174,11 @@ public sealed partial class MainWindow : Window
         reads.Children.Add(scalpPill);
         reads.Children.Add(statePill);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        right.Children.Add(Flight.HeadBtn("RISK", () => new RiskWindow(cfg, s, dd, ApplyRiskPlan).Show(this), "risk calculator for every CME contract; Use in DOM writes the plan into the ticket"));
         right.Children.Add(Flight.HeadBtn("SETTINGS", () => new SettingsWindow(cfg, OnSettingsSaved).Show(this), "account rules, protect my day, indicators, SuperTrend, ladder columns, fees"));
         right.Children.Add(new Border { Width = 10 });
         right.Children.Add(Flight.HeadBtn("KILL ⏻", Kill, "closes every position and cancels every order on this account (Ctrl+K). Never blocked.", danger: true));
         var headGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(8, 6) };
-        // The reads take the space between; on a narrow window they clip instead of running under RISK.
+        // The reads take the space between; on a narrow window they clip instead of running under SETTINGS.
         var readsCell = new Border { ClipToBounds = true, Child = reads };
         Grid.SetColumn(readsCell, 1);
         Grid.SetColumn(right, 2);
@@ -496,19 +495,6 @@ public sealed partial class MainWindow : Window
         trail.Clear();
         be.Clear();
         ladder.Recenter();
-    }
-
-    /// <summary>RISK → Use in DOM: size rule, stop and target into the ticket.</summary>
-    private void ApplyRiskPlan(SizeMode mode, double input, int stopTicks, int tpTicks)
-    {
-        cfg.SizeMode = mode;
-        cfg.SizeInput = input;
-        cfg.StopMode = StopMode.Ticks;
-        cfg.SlTicks = stopTicks;
-        cfg.TpTicks = new[] { tpTicks, 0, 0 };
-        cfg.Save();
-        LoadFields();
-        Notice($"RISK plan in the ticket: {sizeMode.SelectedItem} {Ui.F(input)}, SL {stopTicks}t, TP {tpTicks}t");
     }
 
     private void Notice(string text, int ms = 6000)

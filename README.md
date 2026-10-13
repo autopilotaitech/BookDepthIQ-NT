@@ -10,7 +10,7 @@ value, with commissions**, and against **your prop firm's drawdown rules**.
 ```
 ┌──────────────── NinjaTrader 8 ────────────────┐                ┌──────── BookDepthIQ DOM (Avalonia) ────────┐
 │ your connection (Rithmic / CQG / NT Brokerage)│                │ ladder · reads · tape · journal · order log │
-│ BookDepthIQBridge AddOn: depth, prints,       │── 127.0.0.1 ──▶│ CME risk ticket · RISK · settings           │
+│ BookDepthIQBridge AddOn: depth, prints,       │── 127.0.0.1 ──▶│ CME risk ticket · settings                  │
 │   history, account, positions, orders, fills  │◀── commands ───│ every order = your click                    │
 └───────────────────────────────────────────────┘                └─────────────────────────────────────────────┘
 ```
@@ -155,14 +155,6 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 - Pick a swatch or type `#rrggbb`. **↺** resets one colour. Presets: Default, Midnight, Graphite and
   High contrast.
 - Colours change live while you pick. CANCEL puts them back.
-
-## RISK window
-
-**RISK** lists every CME contract (NQ, MNQ, ES, MES, YM, MYM, RTY, M2K, GC, MGC, SI, SIL, HG, CL,
-MCL, NG, 6E, ZB, ZN). For your account or a custom plan, each row shows the tick size, $/tick,
-contracts for your rule, $ lost at the stop and won at the target with fees, % of room and ticks to
-fail. It also draws a risk map for the market on screen. **reset** returns to your account and the
-ticket's numbers. **Use in DOM** writes the plan into the ticket. It never sends an order.
 
 ## Journal and order log
 

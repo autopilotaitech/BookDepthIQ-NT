@@ -31,7 +31,7 @@ CME **contracts, ticks and tick value, with fees per side**.
 | `targets.ts`, `manage.ts` | `Core/Targets.cs`, `Core/Manage.cs` → TP1–3 split, scale, B/E after TP1, trail R/ST, stop guard, weekend close |
 | `structure.ts` | `Core/Structure.cs` → market state, scalp read, swing stop, RANGE lines, journal stats/CSV |
 | `protect.ts`, `orderlog.ts` | `Core/Protect.cs` → protect my day, order log |
-| `riskcalc.ts` + RISK page | `Core/CmeRisk.cs`, `Core/Drawdown.cs`, `Dom/RiskWindow.cs` |
+| `riskcalc.ts` (RISK page dropped 2026-10-13, owner: not needed) | `Core/CmeRisk.cs`, `Core/Drawdown.cs` (ticket sizing) |
 | journal (LIVE: Vest history) | `Core/Trips.cs`: exact round trips from NT executions |
 | record + replay | NinjaTrader's Playback connection (the DOM works on Playback101) |
 | funding | not applicable to CME futures |
