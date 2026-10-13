@@ -60,6 +60,9 @@ public sealed class SettingsWindow : Window
             ("Volume PROFILE", Bool(c.Columns.Profile, b => c.Columns.Profile = b)),
             ("Δ delta column", Bool(c.Columns.Delta, b => c.Columns.Delta = b)),
             ("SuperTrend lines", Bool(c.ShowTrend, b => c.ShowTrend = b)),
+            ("Heat · pull/stack window", Pick(new[] { "5 min", "15 min", "30 min", "60 min" }, Array.IndexOf(new[] { 5, 15, 30, 60 }, c.HeatMinutes) is var hi && hi >= 0 ? hi : 0, i => c.HeatMinutes = new[] { 5, 15, 30, 60 }[i])),
+            ("Naked POC lines (nPOC)", Bool(c.NpocOn, b => c.NpocOn = b, "each period's POC as a line until price trades there again")),
+            ("nPOC period", Pick(new[] { "5 min", "15 min", "30 min", "60 min" }, Array.IndexOf(new[] { 5, 15, 30, 60 }, c.NpocMinutes) is var ni && ni >= 0 ? ni : 1, i => c.NpocMinutes = new[] { 5, 15, 30, 60 }[i])),
             ("History to load, hours (1–48)", Num(c.HistoryHours, v => c.HistoryHours = Math.Clamp((int)v, 1, 48))))));
         tabs.Items.Add(Tab($"Indicators ({CmeSpecs.RootOf(c.Instrument)})", Grid(
             ("VWAP + σ bands", Bool(ind.VwapOn, b => ind = ind with { VwapOn = b })),

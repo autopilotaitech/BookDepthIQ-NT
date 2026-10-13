@@ -181,9 +181,9 @@ public class LiquidityFootprintTests
         var l = new LiquidityTracker();
         Book B(long bid, long ask) => new(bid > 0 ? new BookSide(new long[] { 100 }, new[] { bid }) : BookSide.Empty, ask > 0 ? new BookSide(new long[] { 100 }, new[] { ask }) : BookSide.Empty, 0);
         l.OnBook(B(10, 0), 0);
-        l.OnBook(B(0, 4), LiquidityTracker.BinMs / 2);
-        l.OnBook(B(0, 4), LiquidityTracker.BinMs);
-        l.OnBook(B(0, 4), 2 * LiquidityTracker.BinMs);
+        l.OnBook(B(0, 4), LiquidityTracker.DefaultBinMs / 2);
+        l.OnBook(B(0, 4), LiquidityTracker.DefaultBinMs);
+        l.OnBook(B(0, 4), 2 * LiquidityTracker.DefaultBinMs);
         Assert.Equal(new double[] { 3, -4, -4 }, l.Heat(100));
     }
 
@@ -325,5 +325,46 @@ public class TripTests
         Assert.True(back.Long);
         Assert.Equal(2, back.Qty);
         Assert.Equal((5995.0 - 5990.0) * 2 * 20 - (4 + 4), back.Pnl, 6);
+    }
+}
+
+public class NakedPocTests
+{
+    private const long M = 60_000;
+
+    [Fact]
+    public void Each_period_poc_becomes_naked_until_traded_again()
+    {
+        var n = new NakedPocTracker(15);
+        // period 0: most volume at 100
+        n.OnPrint(0, 100, 5); n.OnPrint(M, 101, 2); n.OnPrint(2 * M, 100, 3); n.OnPrint(3 * M, 102, 1);
+        Assert.Empty(n.Levels); // period still open
+        // period 1 (15–30 min): trades away from 100; POC 105
+        n.OnPrint(15 * M, 105, 4); n.OnPrint(16 * M, 106, 1);
+        Assert.Equal(new long[] { 100 }, n.Levels.Select(l => l.Ticks));
+        // period 2 starts: 105 closes as naked; then price trades 100 -> that nPOC is filled
+        n.OnPrint(30 * M, 103, 1);
+        Assert.Equal(new long[] { 100, 105 }, n.Levels.Select(l => l.Ticks));
+        n.OnPrint(31 * M, 100, 1);
+        Assert.Equal(new long[] { 105 }, n.Levels.Select(l => l.Ticks));
+    }
+
+    [Fact]
+    public void Prints_inside_its_own_period_do_not_fill_it_and_ties_go_to_the_vwap()
+    {
+        var n = new NakedPocTracker(5);
+        n.OnPrint(0, 100, 2); n.OnPrint(1, 104, 2); n.OnPrint(2, 102, 1); n.OnPrint(3, 103, 1); // tie 100 / 104, vwap 102.2
+        n.OnPrint(5 * M, 110, 1);
+        Assert.Single(n.Levels);
+        Assert.Equal(104, n.Levels[0].Ticks);
+    }
+
+    [Fact]
+    public void Heat_window_options_scale_bins_and_flow()
+    {
+        var l = new LiquidityTracker(60 * M);
+        Assert.Equal(2 * M, l.BinMs);
+        Assert.Equal(12 * M, l.FlowWindowMs);
+        Assert.Equal(M, new LiquidityTracker().FlowWindowMs); // default 5 min: pull/stack over 1 min, as before
     }
 }

@@ -44,7 +44,9 @@ public sealed class DomState
     public string HistoryNote { get; private set; } = "";
 
     // ── analytics (ported from the Vest panel) ──
-    public LiquidityTracker Liquidity { get; } = new();
+    public LiquidityTracker Liquidity { get; private set; } = new();
+    /// <summary>Naked POCs: every period's POC until price trades there again (history + live).</summary>
+    public NakedPocTracker Npoc { get; private set; } = new();
     public Dictionary<long, double> Bought { get; } = new();
     public Dictionary<long, double> Sold { get; } = new();
     /// <summary>Session volume and delta per tick (VWAP session window).</summary>
@@ -109,7 +111,9 @@ public sealed class DomState
     /// <summary>Settings that change the analytics (ST configs, OR, VWAP session) rebuild them from history.</summary>
     public void ResetAnalytics()
     {
-        Liquidity.Reset(); Bought.Clear(); Sold.Clear(); Vol.Clear(); Delta.Clear(); CumDelta = 0;
+        Liquidity = new LiquidityTracker(Math.Clamp(cfg.HeatMinutes, 5, 60) * 60_000L);
+        Npoc = new NakedPocTracker(Math.Clamp(cfg.NpocMinutes, 1, 240));
+        Bought.Clear(); Sold.Clear(); Vol.Clear(); Delta.Clear(); CumDelta = 0;
         Trend = new DualTrend(cfg.St1, cfg.St2);
         TrendSnap = Trend.Snapshot();
         Bars.Clear(); Vwap.Reset(); vwapWindow = null; Or = null;
@@ -233,6 +237,8 @@ public sealed class DomState
         var snap = Trend.OnTrade(ms, t, size, side != 's');
         if (snap != null) TrendSnap = snap;
         Bars.Add(ms, t);
+        // Naked POCs see every print, history and live.
+        Npoc.OnPrint(ms, t, size);
         // Profile, Δ and footprint: live prints from the profile start (setting), plus history before the
         // first live print when "use history" is on — so nothing is counted twice.
         var ind = cfg.IndicatorsFor(Instrument);

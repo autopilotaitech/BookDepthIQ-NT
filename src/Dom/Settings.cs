@@ -90,6 +90,12 @@ public sealed class Settings
     /// <summary>Width of the right column (tape, ticket, buttons) in px, set by dragging its edge.</summary>
     public double SideWidth { get; set; } = 372;
     public bool ShowTrend { get; set; } = true;
+    /// <summary>Heat · pull/stack window in minutes: 5, 15, 30 or 60.</summary>
+    public int HeatMinutes { get; set; } = 5;
+    /// <summary>Naked POC lines: each period's POC, drawn until price trades there again.</summary>
+    public bool NpocOn { get; set; } = true;
+    /// <summary>nPOC period in minutes: 5, 15, 30 or 60.</summary>
+    public int NpocMinutes { get; set; } = 15;
     public bool ShowLog { get; set; } = true;
     /// <summary>The ticket settings under the tape; hidden = tape + order buttons only.</summary>
     public bool ShowTicket { get; set; } = true;

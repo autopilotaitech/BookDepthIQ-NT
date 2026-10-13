@@ -324,6 +324,10 @@ public sealed partial class MainWindow
                 o.Add(new LadderLine((long)Math.Round(line + (up ? 1 : -1) * Structure.ScalpNearAtr * atr), up ? "NO CHASE above (ST1 +2 ATR)" : "NO CHASE below (ST1 −2 ATR)", Pal.Warn, true));
             }
         }
+        // Naked POCs: each finished period's POC, until price trades there again.
+        if (cfg.NpocOn)
+            foreach (var n in s.Npoc.Levels)
+                o.Add(new LadderLine(n.Ticks, $"nPOC {DateTimeOffset.FromUnixTimeMilliseconds(n.PeriodStartMs).LocalDateTime:HH:mm}", Color.Parse("#f472b6"), true, 1.5));
         if (s.Or is { } or)
             foreach (var l in or.Levels()) o.Add(new LadderLine(l.Ticks, l.Label + (or.Forming(DomState.NowMs()) ? " (forming)" : ""), Color.Parse("#eab308"), true));
         if (ind.FpOn && ind.FpLines)

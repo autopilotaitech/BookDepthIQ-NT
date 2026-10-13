@@ -68,6 +68,12 @@ BUY.
   by the side it was on. Yellow means a wall. **PULL/STACK** shows the net size pulled or added in
   the last minute. **ABS** means absorption: one side kept hitting a level for more than was showing,
   and it held.
+- **Heat window:** SETTINGS → Ladder → 5 / 15 / 30 / 60 min. That's 30 slices across the window, with
+  pull/stack and absorb over a fifth of it (1 min at 5 min, as before).
+- **nPOC (naked POC):** each period (5 / 15 / 30 / 60 min, SETTINGS → Ladder) gets its own volume POC,
+  like the POC of one footprint bar. When the period closes it is drawn as a pink dashed **nPOC HH:MM**
+  line, but **only while it is naked**. Once price trades back at it, the auction there is finished
+  and the line is gone. Built from history plus live, so earlier periods' nPOCs show at once.
 - **PROFILE / Δ:** drawn as BookDepthIQ's ladder draws them. The profile is a neutral grey volume
   histogram (POC near-white, value area mid-grey, outside it dim grey), with the value area as a
   faint magenta band on PRICE. Δ is a signed bar from the column centre, cyan for + and orange for −.

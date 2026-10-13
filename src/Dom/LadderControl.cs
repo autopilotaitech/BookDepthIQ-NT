@@ -119,7 +119,7 @@ public sealed class LadderControl : Control
 
         ctx.FillRectangle(Pal.B(Pal.Panel), new Rect(0, 0, w, RowH));
         foreach (var (c, x, cw) in cols)
-            Text(ctx, Heads[(int)c] + (c == Col.Price && g > 1 ? $" ×{g}" : ""), x, 0, cw, RowH, Pal.Muted, 9.5, TextAlignment.Center);
+            Text(ctx, c == Col.Heat ? $"HEAT {cfg.HeatMinutes}M · PULL/STACK" : Heads[(int)c] + (c == Col.Price && g > 1 ? $" ×{g}" : ""), x, 0, cw, RowH, Pal.Muted, 9.5, TextAlignment.Center);
 
         var book = s.Book;
         var bids = LadderMath.Aggregate(book.Bids.Ticks, book.Bids.Sizes, g);

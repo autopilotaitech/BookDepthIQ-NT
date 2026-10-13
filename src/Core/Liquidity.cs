@@ -9,9 +9,21 @@ public sealed record FlowRead(long Net, long Pulled, long Stacked, long Traded, 
 
 public sealed class LiquidityTracker
 {
-    public const long BinMs = 10_000;
-    public const int Bins = 30; // 5 minutes
-    public const long FlowWindowMs = 60_000;
+    /// <summary>Heat bins across the window (30 slices whatever the window: 10 s at 5 min, 2 min at 60 min).</summary>
+    public const int Bins = 30;
+    public const long DefaultBinMs = 10_000;
+    /// <summary>Heat window (ms), one bin's length, and the pull/stack / absorb window (a fifth of the heat
+    /// window: 1 min at 5 min, as before; 12 min at 60 min).</summary>
+    public long WindowMs { get; }
+    public long BinMs { get; }
+    public long FlowWindowMs { get; }
+
+    public LiquidityTracker(long windowMs = Bins * DefaultBinMs)
+    {
+        WindowMs = Math.Max(Bins * 1000L, windowMs);
+        BinMs = WindowMs / Bins;
+        FlowWindowMs = WindowMs / 5;
+    }
     /// <summary>Outermost book levels per side left out of pull/stack (they flicker in and out of view).</summary>
     public const int EdgeLevels = 3;
 
