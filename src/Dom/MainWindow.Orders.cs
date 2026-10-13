@@ -351,8 +351,21 @@ public sealed partial class MainWindow
             if (gc.ShowMagnet && gv.Set.Magnet is double mg) o.Add(new LadderLine(T(mg), "MAGNET", C(Pal.GexMagnet), true, w * 1.2));
             if (gv.Set.Flip is double fl) o.Add(new LadderLine(T(fl), "γ FLIP", C(Pal.GexFlip), false, w * 1.6));
         }
+        // Opening range, coloured as the Vest panel (BookDepthIQ PAXOR): OR H blue and OR L red, solid
+        // 3 px; MID gold 2 px; EXT rungs dashed 2 px in their side's colour; H/L dashed while forming.
         if (s.Or is { } or)
-            foreach (var l in or.Levels()) o.Add(new LadderLine(l.Ticks, l.Label + (or.Forming(DomState.NowMs()) ? " (forming)" : ""), Pal.Or, true));
+        {
+            var forming = or.Forming(DomState.NowMs());
+            foreach (var l in or.Levels())
+                o.Add(l.Kind switch
+                {
+                    OrKind.High => new LadderLine(l.Ticks, l.Label + (forming ? " forming" : ""), Pal.OrHigh, forming, 3),
+                    OrKind.Low => new LadderLine(l.Ticks, l.Label + (forming ? " forming" : ""), Pal.OrLow, forming, 3),
+                    OrKind.Mid => new LadderLine(l.Ticks, l.Label, Pal.OrMid, forming, 2),
+                    OrKind.Upper => new LadderLine(l.Ticks, l.Label, Pal.OrHigh, true, 2),
+                    _ => new LadderLine(l.Ticks, l.Label, Pal.OrLow, true, 2),
+                });
+        }
         if (ind.FpOn && ind.FpLines)
         {
             var maxFp = Math.Max(1, s.Bought.Values.Concat(s.Sold.Values).DefaultIfEmpty(0).Max());

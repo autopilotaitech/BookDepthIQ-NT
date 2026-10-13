@@ -204,11 +204,9 @@ public sealed class SettingsWindow : Window
                 Row("Min row volume", "% of the busiest row", Num(ind.FpMinPct, v => ind = ind with { FpMinPct = v })),
                 Row("Stack", "rows in a row", Num(ind.FpStack, v => ind = ind with { FpStack = (int)v })),
                 Row("Stack zones as lines", null, Bool(ind.FpLines, b => ind = ind with { FpLines = b }))),
-            Card("TAPE · OPENING RANGE",
+            Card("BIG TRADES",
                 Row("Big trades on the tape", null, Bool(ind.BigOn, b => ind = ind with { BigOn = b })),
-                Row("Big trade", "≥ contracts", Num(ind.BigMin, v => ind = ind with { BigMin = (long)v })),
-                Row("RTH opening range", "NQ / ES", Bool(ind.OrOn, b => ind = ind with { OrOn = b })),
-                Row("OR mid line", null, Bool(ind.OrMid, b => ind = ind with { OrMid = b }))))));
+                Row("Big trade", "≥ contracts", Num(ind.BigMin, v => ind = ind with { BigMin = (long)v }))))));
         apply.Add(() => c.SetIndicators(c.Instrument, ind));
 
         var gx = c.Gex;
@@ -227,17 +225,27 @@ public sealed class SettingsWindow : Window
         sections.Add(("SuperTrend","ST1 is the slow line, ST2 the fast one. The scalp read is built on ST1.", Cards(
             Trend("ST1", c.St1, t => c.St1 = t), Trend("ST2", c.St2, t => c.St2 = t))));
 
+        // Every OR setting in one place. One ON switch and one MID switch (they used to be split between
+        // here and Indicators); defaults are the Vest panel's (BookDepthIQ PAXOR RTH).
         var or = c.PaxOr;
-        sections.Add(("Opening range", "BookDepthIQ PAXOR: OR = high/low of the first seconds after the bell; EXT rungs every step beyond it.", Cards(
-            Card("PAXOR",
-                Row("Enabled", null, Bool(or.Enabled, b => or = or with { Enabled = b })),
-                Row("Bell", "HH:MM:SS", Text(or.StartTime, v => or = or with { StartTime = v }, 110)),
-                Row("Window", "seconds", Num(or.DurationSec, v => or = or with { DurationSec = (int)v })),
-                Row("Time zone", "IANA name", Text(or.Timezone, v => or = or with { Timezone = v }))),
-            Card("EXT STEPS",
-                Row("NQ step", "points", Num(or.NqLevelPoints, v => or = or with { NqLevelPoints = v })),
-                Row("ES step", "points", Num(or.EsLevelPoints, v => or = or with { EsLevelPoints = v }))))));
-        apply.Add(() => c.PaxOr = or);
+        var orInd = c.IndicatorsFor(c.Instrument);
+        bool orOn = or.Enabled && orInd.OrOn, orMid = or.ShowMid || orInd.OrMid;
+        sections.Add(("Opening range", "BookDepthIQ PAXOR, as in the Vest panel: OR = high/low of the first seconds after the bell, kept until the next weekday bell; EXT rungs every step beyond it (NQ/MNQ and ES/MES).", Cards(
+            Card("OPENING RANGE",
+                Row("Opening range on the ladder", "OR H (blue), OR L (red), dashed while forming", Bool(orOn, b => orOn = b)),
+                Row("Mid line", "OR MID (gold)", Bool(orMid, b => orMid = b))),
+            Card("WINDOW",
+                Row("Bell", "HH:MM:SS (default 08:30:00)", Text(or.StartTime, v => or = or with { StartTime = v }, 110)),
+                Row("Window", "seconds after the bell (default 30)", Num(or.DurationSec, v => or = or with { DurationSec = Math.Max(1, (int)v) })),
+                Row("Time zone", "IANA name (default America/Chicago)", Text(or.Timezone, v => or = or with { Timezone = v }))),
+            Card("EXT RUNGS",
+                Row("NQ / MNQ step", "points (default 65)", Num(or.NqLevelPoints, v => or = or with { NqLevelPoints = v })),
+                Row("ES / MES step", "points (default 15)", Num(or.EsLevelPoints, v => or = or with { EsLevelPoints = v }))))));
+        apply.Add(() =>
+        {
+            c.PaxOr = or with { Enabled = orOn, ShowMid = orMid };
+            c.SetIndicators(c.Instrument, c.IndicatorsFor(c.Instrument) with { OrOn = orOn, OrMid = orMid });
+        });
 
         sections.Add(("Colours", "Every colour the DOM draws. Changes show live; SAVE keeps them, CANCEL puts them back.", ColoursBody()));
     }

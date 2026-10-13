@@ -39,7 +39,9 @@ public static class Pal
 
         new("vwap", "Chart lines", "VWAP + σ bands", Color.Parse("#a78bfa")),
         new("npoc", "Chart lines", "Naked POC", Color.Parse("#f472b6")),
-        new("or", "Chart lines", "Opening range", Color.Parse("#eab308")),
+        new("orHigh", "Chart lines", "OR high + EXT up", Color.Parse("#00bfff")),
+        new("orLow", "Chart lines", "OR low + EXT down", Color.Parse("#ff4500")),
+        new("orMid", "Chart lines", "OR mid", Color.Parse("#ffd700")),
         new("stUp", "Chart lines", "SuperTrend up", Color.Parse("#34d399")),
         new("stDn", "Chart lines", "SuperTrend down", Color.Parse("#f87171")),
         new("noChase", "Chart lines", "No-chase line", Color.Parse("#fbbf24")),
@@ -181,7 +183,9 @@ public static class Pal
     public static Color Hover => Get("hover");
     public static Color Vwap => Get("vwap");
     public static Color Npoc => Get("npoc");
-    public static Color Or => Get("or");
+    public static Color OrHigh => Get("orHigh");
+    public static Color OrLow => Get("orLow");
+    public static Color OrMid => Get("orMid");
     public static Color StUp => Get("stUp");
     public static Color StDn => Get("stDn");
     public static Color NoChase => Get("noChase");
