@@ -34,6 +34,11 @@ namespace NinjaTrader.NinjaScript.AddOns
         // One bridge per NinjaTrader process, whatever number of AddOn instances NT creates.
         private static readonly object Gate = new object();
         private static BridgeServer server;
+        /// <summary>The AddOn instance that started the server; its Terminated (recompile, NT exit) stops it.</summary>
+        private static BookDepthIQBridge owner;
+        /// <summary>AppDomain slot shared by every compiled copy of this AddOn: the running bridge's stop
+        /// action. After an F5 the new copy calls it, so the old listener frees the port.</summary>
+        private const string StopSlot = "BookDepthIQ.Bridge.Stop";
 
         protected override void OnStateChange()
         {
@@ -48,14 +53,30 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     if (server == null)
                     {
+                        // An older compiled copy may still hold the port: ask it to stop first.
+                        var old = AppDomain.CurrentDomain.GetData(StopSlot) as Action;
+                        if (old != null) { try { old(); } catch { } }
                         server = new BridgeServer();
+                        owner = this;
+                        AppDomain.CurrentDomain.SetData(StopSlot, (Action)StopServer);
                         server.Start();
                     }
                 }
             }
             else if (State == State.Terminated)
             {
-                // NT terminates AddOn clones often; the server lives until NinjaTrader exits.
+                // NT terminates AddOn clones often; only the instance that started the server stops it.
+                if (owner == this) StopServer();
+            }
+        }
+
+        private static void StopServer()
+        {
+            lock (Gate)
+            {
+                if (server != null) server.Stop();
+                server = null;
+                owner = null;
             }
         }
 
@@ -90,25 +111,60 @@ namespace NinjaTrader.NinjaScript.AddOns
             private readonly ConcurrentDictionary<Order, Bracket> brackets = new ConcurrentDictionary<Order, Bracket>();
             private int ocoSeq;
 
+            private volatile bool stopped;
+
             public void Start()
             {
-                listener = new TcpListener(IPAddress.Loopback, Port);
-                listener.Start();
                 new Thread(AcceptLoop) { IsBackground = true, Name = "BDIQ bridge accept" }.Start();
                 new Thread(WriteLoop) { IsBackground = true, Name = "BDIQ bridge write" }.Start();
                 bookTimer = new Timer(_ => FlushBook(), null, BookMs, BookMs);
-                Log("BookDepthIQ bridge listening on 127.0.0.1:" + Port);
             }
 
             // ───────────── socket ─────────────
 
+            /// <summary>Stops listening and drops the DOM connection (recompile or NinjaTrader exit).</summary>
+            public void Stop()
+            {
+                stopped = true;
+                try { if (listener != null) listener.Stop(); } catch { }
+                lock (clientGate) { if (client != null) try { client.Close(); } catch { } client = null; }
+                if (bookTimer != null) bookTimer.Dispose();
+                outbox.CompleteAdding();
+                var inst = instrument;
+                var d = depth;
+                var md = marketData;
+                if (inst != null) inst.Dispatcher.InvokeAsync(() => { if (d != null) d.Update -= OnDepth; if (md != null) md.Update -= OnMarketData; });
+                var a = account;
+                if (a != null)
+                {
+                    a.OrderUpdate -= OnOrderUpdate;
+                    a.ExecutionUpdate -= OnExecutionUpdate;
+                    a.PositionUpdate -= OnPositionUpdate;
+                    a.AccountItemUpdate -= OnAccountItemUpdate;
+                }
+                Log("BookDepthIQ bridge stopped");
+            }
+
             private void AcceptLoop()
             {
-                while (true)
+                // Bind, retrying every 2 s while another program (or an older copy) holds the port.
+                var warned = false;
+                while (!stopped)
+                {
+                    try { listener = new TcpListener(IPAddress.Loopback, Port); listener.Start(); break; }
+                    catch (Exception e)
+                    {
+                        if (!warned) { Log("BookDepthIQ bridge: port " + Port + " busy (" + e.Message + ") — retrying; restart NinjaTrader once if this persists"); warned = true; }
+                        Thread.Sleep(2000);
+                    }
+                }
+                if (stopped) return;
+                Log("BookDepthIQ bridge listening on 127.0.0.1:" + Port);
+                while (!stopped)
                 {
                     TcpClient c;
                     try { c = listener.AcceptTcpClient(); }
-                    catch (Exception e) { Log("bridge accept stopped: " + e.Message); return; }
+                    catch (Exception e) { if (!stopped) Log("bridge accept stopped: " + e.Message); return; }
                     c.NoDelay = true;
                     lock (clientGate)
                     {
@@ -145,6 +201,8 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 foreach (var line in outbox.GetConsumingEnumerable())
                 {
+                    if (stopped) return;
+                {
                     TcpClient c;
                     lock (clientGate) c = client;
                     if (c == null) continue;
@@ -155,13 +213,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                     }
                     catch (Exception) { lock (clientGate) { if (client == c) client = null; } }
                 }
+                }
             }
 
             private void Send(Dictionary<string, object> m)
             {
                 bool connected;
                 lock (clientGate) connected = client != null;
-                if (connected) outbox.TryAdd(json.Serialize(m));
+                if (connected && !stopped && !outbox.IsAddingCompleted) { try { outbox.TryAdd(json.Serialize(m)); } catch (InvalidOperationException) { } }
             }
 
             private void Ack(string cid, bool ok, string msg)
