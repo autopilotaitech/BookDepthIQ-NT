@@ -24,6 +24,7 @@ public sealed partial class MainWindow
         lastRefresh = now;
         RefreshTop();
         RefreshTicket();
+        foreach (var p in chipPaint) p();
         if (s.OrderLog.Entries.Count != lastLogCount || s.Journal.Count != lastJournalCount) RefreshSide();
         if (now > noticeUntil) notice.Text = "";
         // Status lines take no space when they have nothing to say.

@@ -125,11 +125,22 @@ public sealed class Settings
     public TrendConfig St2 { get; set; } = TrendConfig.DefaultT2;
     public PaxOrCfg PaxOr { get; set; } = new();
     public GexCfg Gex { get; set; } = new();
-    /// <summary>Per-instrument indicator settings (key: instrument root, e.g. NQ).</summary>
+    /// <summary>Legacy: per-instrument indicator settings from older files, read once by MigrateIndicators.</summary>
     public Dictionary<string, IndicatorCfg> Indicators { get; set; } = new();
 
-    public IndicatorCfg IndicatorsFor(string inst) => Indicators.TryGetValue(CmeSpecs.RootOf(inst), out var c) ? c : new IndicatorCfg();
-    public void SetIndicators(string inst, IndicatorCfg c) => Indicators[CmeSpecs.RootOf(inst)] = c;
+    /// <summary>The indicator settings: ONE set for every instrument (owner, 2026-10-13).</summary>
+    public IndicatorCfg? Ind { get; set; }
+    public IndicatorCfg IndicatorsFor(string inst) => Ind ??= new IndicatorCfg();
+    public void SetIndicators(string inst, IndicatorCfg c) => Ind = c;
+
+    /// <summary>Older files kept indicators per instrument root; adopt the current instrument's set (else
+    /// any) as the one set, then drop the per-instrument map.</summary>
+    private void MigrateIndicators()
+    {
+        if (Ind == null && Indicators.Count > 0)
+            Ind = Indicators.TryGetValue(CmeSpecs.RootOf(Instrument), out var mine) ? mine : Indicators.Values.First();
+        Indicators.Clear();
+    }
 
     public DrawdownRules Rules => new(Start, MaxDrawdown, DrawdownKind, LockAt, DailyLoss);
     public DayLimits Limits => new(DayLossUsd, DayMaxTrades, CooldownSec);
@@ -144,6 +155,7 @@ public sealed class Settings
         try { s = File.Exists(FilePath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), Opts) ?? new() : new(); }
         catch { s = new(); }
         Pal.Apply(s.Colors);
+        s.MigrateIndicators();
         return s;
     }
 

@@ -188,8 +188,7 @@ public sealed class SettingsWindow : Window
                 Row("Order log text", "px, 8–22 (default 11)", Num(c.LogFont, v => c.LogFont = Settings.ClampFont(v)))))));
 
         var ind = c.IndicatorsFor(c.Instrument);
-        var root = CmeSpecs.RootOf(c.Instrument);
-        sections.Add(($"Indicators · {root}", $"Saved per instrument: these apply to {root}.", Cards(
+        sections.Add(("Indicators", "VWAP, profile, footprint, big trades and the opening range — one set for every instrument.", Cards(
             Card("VWAP",
                 Row("VWAP + σ bands", null, Bool(ind.VwapOn, b => ind = ind with { VwapOn = b })),
                 Row("Session start", "HH:MM", Text(ind.VwapStart, v => ind = ind with { VwapStart = v }, 90)),

@@ -26,7 +26,7 @@ CME **contracts, ticks and tick value, with fees per side**.
 | `footprint.ts`, `profile.ts` | `Core/Footprint.cs` → SOLD/BOUGHT, imbalances, stacks, walls, PROFILE, Δ |
 | `cost.ts`, `checks.ts` | `Core/Cost.cs` → cost line, warnings (never block), FEED |
 | `supertrend.ts` (trend.rs) | `Core/SuperTrend.cs` → ST1/ST2 lines, SuperTrend pill |
-| `vwap.ts`, `indicators.ts` | `Core/Indicators.cs` → VWAP σ, per-instrument settings, stack zones |
+| `vwap.ts`, `indicators.ts` | `Core/Indicators.cs` → VWAP σ, one indicator set for every instrument (owner, 2026-10-13), stack zones |
 | `paxor.ts` | `Core/PaxOr.cs` → OR H/L/MID/EXT lines |
 | `targets.ts`, `manage.ts` | `Core/Targets.cs`, `Core/Manage.cs` → TP1–3 split, scale, B/E after TP1, trail R/ST, stop guard, weekend close |
 | `structure.ts` | `Core/Structure.cs` → market state, scalp read, swing stop, RANGE lines, journal stats/CSV |

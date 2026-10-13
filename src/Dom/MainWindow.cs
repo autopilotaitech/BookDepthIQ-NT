@@ -48,6 +48,8 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock sideTitle = new() { FontSize = 10, Foreground = Pal.B(Pal.Muted), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
     private Grid sideGrid = null!;
     private StackPanel logButtons = null!;
+    /// <summary>Repaints the toolbar chips' on/off state (after a click, a settings save, or a refresh).</summary>
+    private readonly List<Action> chipPaint = new();
     private ScrollViewer ticketPanel = null!;
     private Control bracketPad = null!;
     private Control roomTile = null!;
@@ -228,29 +230,51 @@ public sealed partial class MainWindow : Window
         // ticket settings, then the order buttons in three columns. The ladder runs the full height.
         tapeView = new TapeControl(s, cfg);
         logView = new LogControl(s, cfg);
-        Control Mini(string text, Action a, string tip)
+        // Toolbar, flight-panel style: small-caps sans chips, outline when off, accent-filled when on.
+        // View chips (JOURNAL / LOG) and ladder toggles (TICKET / HEAT / ST) are two groups.
+        Button Chip(string text, Action a, string tip, Func<bool>? on = null)
         {
-            var b = Ui.Btn(text, a, tip);
-            b.Padding = new Thickness(6, 0);
-            b.Height = 18;
-            b.FontSize = 10;
-            b.Margin = new Thickness(4, 0, 0, 0);
+            var b = new Button
+            {
+                Content = new TextBlock { Text = text, LetterSpacing = 0.8 }, FontFamily = Flight.Sans, FontSize = 10.5, FontWeight = FontWeight.SemiBold,
+                Height = 22, MinHeight = 22, Padding = new Thickness(8, 0), Margin = new Thickness(4, 0, 0, 0), CornerRadius = new CornerRadius(4),
+                BorderThickness = new Thickness(1), VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            };
+            void Paint()
+            {
+                var lit = on?.Invoke() == true;
+                b.Background = lit ? Pal.B(Pal.SegOn) : Brushes.Transparent;
+                b.BorderBrush = Pal.B(lit ? Pal.Accent : Pal.Edge);
+                b.Foreground = Pal.B(lit ? Pal.Accent : Pal.Muted);
+            }
+            ToolTip.SetTip(b, tip);
+            b.Click += (_, _) => { a(); foreach (var p in chipPaint) p(); };
+            chipPaint.Add(Paint);
+            Paint();
             return b;
         }
-        var sideHead = new DockPanel { Background = Pal.B(Pal.Panel), Height = 24 };
-        var toggles = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Margin = new Thickness(0, 0, 4, 0) };
+        var sideHead = new DockPanel { Background = Pal.B(Pal.Panel), Height = 30 };
+        var toggles = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
         logButtons = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
-        logButtons.Children.Add(Mini("copy", CopyLog, "copy the whole order log with context — paste it in a bug report"));
-        logButtons.Children.Add(Mini("clear", () => { s.OrderLog.Clear(); logView.InvalidateVisual(); }, "clear the order log"));
+        logButtons.Children.Add(Chip("COPY", CopyLog, "copy the whole order log with context — paste it in a bug report"));
+        logButtons.Children.Add(Chip("CLEAR", () => { s.OrderLog.Clear(); logView.InvalidateVisual(); }, "clear the order log"));
+        logButtons.Children.Add(new Border { Width = 1, Height = 14, Background = Pal.B(Pal.Edge), Margin = new Thickness(8, 0, 4, 0) });
         toggles.Children.Add(logButtons);
-        toggles.Children.Add(Mini("journal", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.ShowLog = false; cfg.Save(); RefreshSide(); }, "trade journal: every round trip with its setup, risk, result and R (click again for the tape)"));
-        toggles.Children.Add(Mini("log", () => { cfg.ShowLog = !cfg.ShowLog; cfg.ShowJournal = false; cfg.Save(); RefreshSide(); }, "order log: every click, NinjaTrader's answer, rejections and fills (click again for the tape)"));
-        toggles.Children.Add(Mini("ticket", () => { cfg.ShowTicket = !cfg.ShowTicket; cfg.Save(); ApplyTicketRows(); }, "show or hide the ticket settings (hidden = tape and buttons only)"));
-        toggles.Children.Add(Mini("heat", () => { cfg.Columns.Heat = !cfg.Columns.Heat; cfg.Save(); }, "heatmap + pull/stack column on the ladder"));
-        toggles.Children.Add(Mini("ST", () => { cfg.ShowTrend = !cfg.ShowTrend; cfg.Save(); }, "SuperTrend lines on the ladder"));
+        toggles.Children.Add(Chip("JOURNAL", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.ShowLog = false; cfg.Save(); RefreshSide(); }, "trade journal: every round trip with its setup, risk, result and R (click again for the tape)", () => cfg.ShowJournal));
+        toggles.Children.Add(Chip("LOG", () => { cfg.ShowLog = !cfg.ShowLog; cfg.ShowJournal = false; cfg.Save(); RefreshSide(); }, "order log: every click, NinjaTrader's answer, rejections and fills (click again for the tape)", () => cfg.ShowLog));
+        toggles.Children.Add(new Border { Width = 1, Height = 14, Background = Pal.B(Pal.Edge), Margin = new Thickness(8, 0, 4, 0) });
+        toggles.Children.Add(Chip("TICKET", () => { cfg.ShowTicket = !cfg.ShowTicket; cfg.Save(); ApplyTicketRows(); }, "show or hide the ticket settings (hidden = tape and buttons only)", () => cfg.ShowTicket));
+        toggles.Children.Add(Chip("HEAT", () => { cfg.Columns.Heat = !cfg.Columns.Heat; cfg.Save(); }, "heatmap + pull/stack column on the ladder", () => cfg.Columns.Heat));
+        toggles.Children.Add(Chip("ST", () => { cfg.ShowTrend = !cfg.ShowTrend; cfg.Save(); }, "SuperTrend lines on the ladder", () => cfg.ShowTrend));
         DockPanel.SetDock(toggles, Dock.Right);
         sideHead.Children.Add(toggles);
-        sideTitle.Margin = new Thickness(6, 0);
+        sideTitle.Margin = new Thickness(12, 0);
+        sideTitle.FontFamily = Flight.Sans;
+        sideTitle.FontSize = 10.5;
+        sideTitle.FontWeight = FontWeight.Bold;
+        sideTitle.LetterSpacing = 1.6;
+        sideTitle.Foreground = Pal.B(Pal.Accent);
+        sideTitle.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         sideHead.Children.Add(sideTitle);
 
         var settingsPanel = BuildTicket();
