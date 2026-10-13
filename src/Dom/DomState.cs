@@ -56,6 +56,17 @@ public sealed class DomState
     public MinuteBars Bars { get; } = new();
     public Vwap Vwap { get; } = new();
     private (long From, long To)? vwapWindow;
+    private string profileDay = "";
+    private long dayHour = -1;
+    private string dayLabel = "";
+
+    /// <summary>CME trading day of a print (cached per hour: the label only changes on the hour).</summary>
+    private string DayOf(long ms)
+    {
+        var h = ms / 3_600_000;
+        if (h != dayHour) { dayHour = h; dayLabel = Protect.TradingDay(ms); }
+        return dayLabel;
+    }
     public PaxOr? Or { get; private set; }
     public SpreadWindow Spread { get; } = new();
 
@@ -89,7 +100,7 @@ public sealed class DomState
         Liquidity.Reset(); Bought.Clear(); Sold.Clear(); Vol.Clear(); Delta.Clear(); CumDelta = 0;
         Trend = new DualTrend(cfg.St1, cfg.St2);
         TrendSnap = Trend.Snapshot();
-        Bars.Clear(); Vwap.Reset(); vwapWindow = null; Or = null;
+        Bars.Clear(); Vwap.Reset(); vwapWindow = null; Or = null; profileDay = "";
         Tape.Clear(); LastTick = null; HistoryLoaded = false; HistoryNote = "";
     }
 
@@ -211,22 +222,29 @@ public sealed class DomState
         var snap = Trend.OnTrade(ms, t, size, side != 's');
         if (snap != null) TrendSnap = snap;
         Bars.Add(ms, t);
-        // VWAP + profile inside the session window
+        // Profile, delta and footprint: every print, by tick, for the CME trading day (17:00 Chicago).
+        var day = DayOf(ms);
+        if (day != profileDay)
+        {
+            profileDay = day;
+            Vol.Clear(); Delta.Clear(); CumDelta = 0; Bought.Clear(); Sold.Clear();
+            if (side == 'b') Bought[t] = size; else if (side == 's') Sold[t] = size;
+        }
+        Vol[t] = (Vol.TryGetValue(t, out var v) ? v : 0) + size;
+        var sd = side == 'b' ? size : side == 's' ? -size : 0;
+        Delta[t] = (Delta.TryGetValue(t, out var d) ? d : 0) + sd;
+        CumDelta += sd;
+        // VWAP inside its session window
         var ind = cfg.IndicatorsFor(Instrument);
         var w = Session.Window(ms, ind.VwapStart, ind.VwapEnd, ind.VwapTz);
         if (w is { } win && (vwapWindow is null || win.From != vwapWindow.Value.From))
         {
             vwapWindow = win;
             Vwap.Reset();
-            Vol.Clear(); Delta.Clear(); CumDelta = 0;
         }
         if (vwapWindow is { } vw && ms >= vw.From && ms <= vw.To)
         {
             Vwap.Add(t, size);
-            Vol[t] = (Vol.TryGetValue(t, out var v) ? v : 0) + size;
-            var sd = side == 'b' ? size : side == 's' ? -size : 0;
-            Delta[t] = (Delta.TryGetValue(t, out var d) ? d : 0) + sd;
-            CumDelta += sd;
         }
         // RTH opening range (NQ / ES)
         var root = PaxOr.OrRoot(Instrument);

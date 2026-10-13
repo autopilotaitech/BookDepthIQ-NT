@@ -38,6 +38,9 @@ public sealed class LadderControl : Control
     /// <summary>Preview legs while flat: (kind −1 = SL / 0..2 = TPn, ticks, buy side?, label).</summary>
     public Func<IReadOnlyList<(int Kind, long Ticks, bool Buy, string Label)>> PreviewLegs { get; set; } = () => Array.Empty<(int, long, bool, string)>();
 
+    /// <summary>The profile of the rows on screen (POC / VA for the position strip), in row ticks.</summary>
+    public Profile VisibleProfile { get; private set; } = Profile.Empty;
+
     public event Action<bool, long, bool>? PlaceRequested;
     public event Action<WorkingOrder>? CancelRequested;
     public event Action<WorkingOrder, long>? MoveRequested;
@@ -127,9 +130,13 @@ public sealed class LadderControl : Control
         foreach (var v in asks.Values) maxSize = Math.Max(maxSize, v);
         var bought = Grouped(s.Bought, g);
         var sold = Grouped(s.Sold, g);
-        var vol = Grouped(s.Vol, g);
-        var delta = Grouped(s.Delta, g);
+        // Visible-range profile: POC, value area and the bar scale come from the rows on screen only, so
+        // they follow scrolling and zoom; Δ scales to the visible rows too. Both update on every print.
+        var bottomRow = top - (rows - 1) * g;
+        var vol = Grouped(s.Vol, g).Where(kv => kv.Key >= bottomRow && kv.Key <= top).ToDictionary(kv => kv.Key, kv => kv.Value);
+        var delta = Grouped(s.Delta, g).Where(kv => kv.Key >= bottomRow && kv.Key <= top).ToDictionary(kv => kv.Key, kv => kv.Value);
         var prof = Footprint.BuildProfile(vol, delta);
+        VisibleProfile = prof;
         var maxFp = Math.Max(1, bought.Values.Concat(sold.Values).DefaultIfEmpty(0).Max());
         var imb = ind.FpOn ? Footprint.Find(bought, sold, g, ind.FpRatio, maxFp * ind.FpMinPct / 100.0, ind.FpStack) : Imbalances.Empty;
         var heatScale = HeatScale(top, rows, g);

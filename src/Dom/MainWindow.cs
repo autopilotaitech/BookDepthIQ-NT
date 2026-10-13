@@ -153,7 +153,7 @@ public sealed partial class MainWindow : Window
         foreach (var (k, tip) in new[]
         {
             ("POSITION", ""), ("AVG", ""), ("FAIL PRICE", "price where your account hits its floor at this size"), ("OPEN P&L", ""), ("TO FLOOR", "ticks against you before the account fails"),
-            ("POC · VA", "session volume profile: point of control and value area"), ("CUM Δ", "session delta: aggressive buys − sells"), ("ST1 · ST2", "dual SuperTrend lines (60 s / 15 s)"),
+            ("POC · VA", "visible-range volume profile: point of control and value area of the rows on screen"), ("CUM Δ", "session delta: aggressive buys − sells"), ("ST1 · ST2", "dual SuperTrend lines (60 s / 15 s)"),
             ("VWAP", "session VWAP and how many σ price is from it"), ("BID / ASK LIQ", "share of resting size on each side (top 10 levels)"), ("REALIZED", "NinjaTrader realized P&L"), ("TODAY", "journal: trades and net $ today"),
         })
         {

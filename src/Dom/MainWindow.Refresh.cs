@@ -83,7 +83,7 @@ public sealed partial class MainWindow
         Set("OPEN P&L", q == 0 ? "$0.00" : LadderControl.Usd(s.OpenPnl), s.OpenPnl >= 0 ? Pal.Pos : Pal.Neg);
         var ttf = q != 0 && s.TickValue > 0 ? room / (Math.Abs(q) * s.TickValue) : double.PositiveInfinity;
         Set("TO FLOOR", double.IsInfinity(ttf) ? "—" : $"{ttf:0} t", ttf < 20 ? Pal.Neg : Pal.Text);
-        var prof = Footprint.BuildProfile(s.Vol, s.Delta);
+        var prof = ladder.VisibleProfile;
         Set("POC · VA", prof.Poc is long poc ? $"{Px(poc * s.TickSize)} · {Px((prof.Val ?? poc) * s.TickSize)}–{Px((prof.Vah ?? poc) * s.TickSize)}" : "—", Pal.Warn);
         Set("CUM Δ", (s.CumDelta >= 0 ? "+" : "") + s.CumDelta.ToString("0", CultureInfo.InvariantCulture), s.CumDelta >= 0 ? Pal.Bid : Pal.Ask);
         string Line(TrendSnapshot t) => t.LineTicks is long l ? $"{(t.Dir == TrendDir.Up ? "▲" : "▼")} {Px(l * s.TickSize)}" : "—";
