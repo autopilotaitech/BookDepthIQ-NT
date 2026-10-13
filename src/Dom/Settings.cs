@@ -100,6 +100,11 @@ public sealed class Settings
     /// <summary>The ticket settings under the tape; hidden = tape + order buttons only.</summary>
     public bool ShowTicket { get; set; } = true;
     public bool ShowJournal { get; set; }
+    /// <summary>Tape and order-log text size, px (rows scale with it). Ctrl+wheel over either changes it.</summary>
+    public double TapeFont { get; set; } = DefaultTapeFont;
+    public double LogFont { get; set; } = 11;
+    public const double DefaultTapeFont = 11.5;
+    public static double ClampFont(double v) => Math.Clamp(Math.Round(v * 2) / 2, 8, 22);
     /// <summary>Colour scheme: token → #rrggbb, only where it differs from the default (Pal.Tokens).</summary>
     public Dictionary<string, string> Colors { get; set; } = new();
     public TrendConfig St1 { get; set; } = TrendConfig.DefaultT1;

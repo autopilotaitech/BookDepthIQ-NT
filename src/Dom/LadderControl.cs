@@ -148,18 +148,42 @@ public sealed class LadderControl : Control
         long? bestAsk = book.BestAsk is long ba ? Row(ba) : null;
         long? last = s.LastTick is long lt ? Row(lt) : null;
 
+        bool InVa(long t) => prof.TotalVol > 0 && prof.Val is long val && prof.Vah is long vah && t + g / 2.0 >= val && t + g / 2.0 <= vah + g;
+
+        // Z-order, back to front: row backgrounds → indicator LINES → bars, numbers, orders → line TAGS
+        // and off-screen pins. A line never covers a price or a size.
         for (var r = 0; r < rows; r++)
         {
             var t = top - r * g;
             var y = RowH + r * RowH;
             // Value area on the PRICE column: BookDepthIQ's faint magenta band between VAL and VAH.
-            var inVa = prof.TotalVol > 0 && prof.Val is long val && prof.Vah is long vah && t + g / 2.0 >= val && t + g / 2.0 <= vah + g;
-            if (inVa && ColRect(Col.Price) is (double px0, double pw0))
+            if (InVa(t) && ColRect(Col.Price) is (double px0, double pw0))
                 ctx.FillRectangle(Pal.B(Pal.VaBand, 15 / 255.0), new Rect(px0, y, pw0, RowH));
             ctx.FillRectangle(Pal.B(Pal.RowLine), new Rect(0, y + RowH - 1, w, 1));
             if (hoverRow == t && hoverCol is Col hc && hc is Col.Buy or Col.Sold or Col.Bid or Col.Ask or Col.Bought or Col.Sell && ColRect(hc) is (double hx, double hw))
                 ctx.FillRectangle(Pal.B(Pal.Hover), new Rect(hx, y, hw, RowH - 1));
+        }
 
+        var bottom = top - (rows - 1) * g;
+        var lines = Lines();
+        var onScreen = new List<(LadderLine L, double Y)>();
+        var offs = new List<(LadderLine L, bool Above)>();
+        var lineRows = new HashSet<long>();
+        foreach (var l in lines)
+        {
+            var row = Row(l.Ticks);
+            if (row > top || row < bottom) { offs.Add((l, row > top)); continue; }
+            var ly = YOf(row, top) + RowH / 2;
+            ctx.DrawLine(new Pen(Pal.B(l.Color, 0.85), l.Width, l.Dashed ? new DashStyle(new double[] { 5, 3 }, 0) : null), new Point(0, ly), new Point(w, ly));
+            onScreen.Add((l, ly));
+            lineRows.Add(row);
+        }
+
+        for (var r = 0; r < rows; r++)
+        {
+            var t = top - r * g;
+            var y = RowH + r * RowH;
+            var inVa = InVa(t);
             foreach (var (c, x, cw) in cols)
             {
                 switch (c)
@@ -181,6 +205,12 @@ public sealed class LadderControl : Control
                     case Col.Price:
                     {
                         var col = t == bestBid ? Pal.Bid : t == bestAsk ? Pal.Ask : Pal.Muted;
+                        // A line through this price: clear a backing behind the number so it reads cleanly.
+                        if (lineRows.Contains(t) && t != last)
+                        {
+                            ctx.FillRectangle(Pal.B(Pal.Bg), new Rect(x + cw * 0.12, y + 1, cw * 0.76, RowH - 2));
+                            if (inVa) ctx.FillRectangle(Pal.B(Pal.VaBand, 15 / 255.0), new Rect(x + cw * 0.12, y + 1, cw * 0.76, RowH - 2));
+                        }
                         if (t == last) ctx.DrawRectangle(Pal.B(Pal.LastBox), new Pen(Pal.B(Pal.Warn), 1.5), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
                         if (t == avgRow) ctx.DrawRectangle(null, new Pen(Pal.B(Pal.Warn), 1, new DashStyle(new double[] { 3, 2 }, 0)), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
                         Text(ctx, (t * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture), x, y, cw, RowH, t == last ? Colors.White : col, 11.5, TextAlignment.Center);
@@ -255,24 +285,25 @@ public sealed class LadderControl : Control
             }
         }
 
-        var bottom = top - (rows - 1) * g;
-        var offs = new List<(LadderLine L, bool Above)>();
-        foreach (var l in Lines())
-        {
-            var row = Row(l.Ticks);
-            if (row > top || row < bottom) { offs.Add((l, row > top)); continue; }
-            var y = YOf(row, top) + RowH / 2;
-            ctx.DrawLine(new Pen(Pal.B(l.Color, 0.85), l.Width, l.Dashed ? new DashStyle(new double[] { 5, 3 }, 0) : null), new Point(0, y), new Point(w, y));
-            DrawTag(ctx, l.Label, w - 4, y, l.Color, right: true);
-        }
+        // Off-screen markers: right-aligned in the Δ column (the far right), top for above, bottom for
+        // below, nearest first — never over BUY or the heatmap. On-screen tags that would land inside a
+        // pin stack step left of it.
+        var pinRight = (ColRect(Col.Delta) is (double dcx, double dcw) ? dcx + dcw : w) - 4;
         double upY = RowH + 9, downY = Bounds.Height - 9;
-        // Off-screen markers sit from the BUY column, so they never cover the heatmap.
-        var pinX = cols.FirstOrDefault(c => c.Col != Col.Heat).X + 4;
+        double upLeft = pinRight, downLeft = pinRight;
         foreach (var (l, above) in offs.OrderBy(o => Math.Abs(Row(o.L.Ticks) - (o.Above ? top : bottom))).Take(10))
         {
             var dist = Math.Abs(Row(l.Ticks) - (above ? top : bottom)) / g;
-            DrawTag(ctx, $"{(above ? "▲" : "▼")} {l.Label} {(l.Ticks * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture)} · {dist}", pinX, above ? upY : downY, l.Color, right: false);
-            if (above) upY += 15; else downY -= 15;
+            var left = DrawTag(ctx, $"{(above ? "▲" : "▼")} {l.Label} {(l.Ticks * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture)} · {dist}", pinRight, above ? upY : downY, l.Color, right: true);
+            if (above) { upLeft = Math.Min(upLeft, left); upY += 15; } else { downLeft = Math.Min(downLeft, left); downY -= 15; }
+        }
+        var placed = new List<(double Y, double Left)>();
+        foreach (var (l, ly) in onScreen)
+        {
+            var x = ly <= upY - 8 ? upLeft - 4 : ly >= downY + 8 ? downLeft - 4 : w - 4;
+            // Two tags on (nearly) the same row sit side by side, never on top of each other.
+            foreach (var (py, pl) in placed) if (Math.Abs(py - ly) < 14) x = Math.Min(x, pl - 4);
+            placed.Add((ly, DrawTag(ctx, l.Label, x, ly, l.Color, right: true)));
         }
 
         foreach (var (_, x, _) in cols.Skip(1)) ctx.FillRectangle(Pal.B(Pal.Line), new Rect(x, 0, 1, Bounds.Height));
@@ -326,12 +357,14 @@ public sealed class LadderControl : Control
         ctx.DrawText(ft, new Point(x, y + (h - ft.Height) / 2));
     }
 
-    private static void DrawTag(DrawingContext ctx, string text, double x, double y, Color c, bool right)
+    /// <summary>A boxed label; returns its left edge.</summary>
+    private static double DrawTag(DrawingContext ctx, string text, double x, double y, Color c, bool right)
     {
         var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Tf, 9.5, Pal.B(c));
         var bx = right ? x - ft.Width - 6 : x;
         ctx.DrawRectangle(Pal.B(Pal.Bg, 0.92), new Pen(Pal.B(c, 0.8), 1), new Rect(bx, y - 7, ft.Width + 6, 14), 2, 2);
         ctx.DrawText(ft, new Point(bx + 3, y - ft.Height / 2));
+        return bx;
     }
 
     private static string Num(double v) => Math.Abs(v) >= 10000 ? (v / 1000).ToString("0.#k", CultureInfo.InvariantCulture) : v.ToString("0", CultureInfo.InvariantCulture);

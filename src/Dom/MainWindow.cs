@@ -223,7 +223,7 @@ public sealed partial class MainWindow : Window
         // Right column (owner's layout, 2026-10-13): TAPE / JOURNAL / LOG view with its toggles, then the
         // ticket settings, then the order buttons in three columns. The ladder runs the full height.
         tapeView = new TapeControl(s, cfg);
-        logView = new LogControl(s);
+        logView = new LogControl(s, cfg);
         Control Mini(string text, Action a, string tip)
         {
             var b = Ui.Btn(text, a, tip);

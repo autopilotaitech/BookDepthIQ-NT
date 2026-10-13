@@ -39,13 +39,15 @@ public sealed class TapeControl : Control
         double y = 0;
         var c1 = w * 1 / 2.8; // grid 1fr 1fr 0.8fr
         var c2 = w * 2 / 2.8;
+        // Text size is the user's (Settings › Tape & log, or Ctrl+wheel here); rows scale with it.
+        var scale = cfg.TapeFont / Settings.DefaultTapeFont;
         foreach (var t in s.Tape.Skip(scroll))
         {
             if (y > Bounds.Height) break;
             if (!firstSeen.ContainsKey(t)) firstSeen[t] = scroll == 0 ? now : 0;
             var big = ind.BigOn && t.Size >= ind.BigMin;
             var huge = big && t.Size >= 3 * ind.BigMin;
-            var h = huge ? 24 : big ? 20 : 16;
+            var h = Math.Round((huge ? 24 : big ? 20 : 16) * scale);
             var side = t.Side == 'b' ? 1 : t.Side == 's' ? -1 : 0;
             var col = side > 0 ? Pal.Bid : side < 0 ? Pal.Ask : Pal.Muted;
             if (big && side != 0)
@@ -59,7 +61,7 @@ public sealed class TapeControl : Control
                 ctx.DrawRectangle(Pal.B(tint, 0.55), null, new Rect(w - 6 - barW, y + 2, barW, h - 4), 2, 2);
                 col = Colors.White;
             }
-            var size = huge ? 14 : big ? 13 : 11.5;
+            var size = (huge ? 14 : big ? 13 : 11.5) * scale;
             var bold = big;
             Text(ctx, DateTimeOffset.FromUnixTimeMilliseconds(t.TimeMs).LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture), 6, y, c1 - 6, h, col, size, TextAlignment.Left, bold);
             Text(ctx, (t.Tick * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture), c1, y, c2 - c1, h, col, size, TextAlignment.Left, bold);
@@ -73,6 +75,14 @@ public sealed class TapeControl : Control
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            cfg.TapeFont = Settings.ClampFont(cfg.TapeFont + Math.Sign(e.Delta.Y) * 0.5);
+            cfg.Save();
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
         scroll = Math.Clamp(scroll - (int)Math.Round(e.Delta.Y * 3), 0, Math.Max(0, s.Tape.Count - 5));
         InvalidateVisual();
         e.Handled = true;
@@ -99,11 +109,13 @@ public sealed class LogControl : Control
     private static Color Blocked => Pal.LogBlocked;
     private static Color Bad => Pal.LogBad;
     private readonly DomState s;
+    private readonly Settings cfg;
     private int scroll;
 
-    public LogControl(DomState state)
+    public LogControl(DomState state, Settings settings)
     {
         s = state;
+        cfg = settings;
         ClipToBounds = true;
     }
 
@@ -132,7 +144,7 @@ public sealed class LogControl : Control
         {
             if (y > Bounds.Height) break;
             var line = $"{DateTimeOffset.FromUnixTimeMilliseconds(t).LocalDateTime:HH:mm:ss}  {text}";
-            var ft = new FormattedText(line, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, bold ? TfBold : Tf, 11, Pal.B(c)) { MaxTextWidth = Math.Max(1, w - 12) };
+            var ft = new FormattedText(line, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, bold ? TfBold : Tf, cfg.LogFont, Pal.B(c)) { MaxTextWidth = Math.Max(1, w - 12) };
             ctx.DrawText(ft, new Point(6, y + 1));
             y += ft.Height + 2;
         }
@@ -142,6 +154,14 @@ public sealed class LogControl : Control
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            cfg.LogFont = Settings.ClampFont(cfg.LogFont + Math.Sign(e.Delta.Y) * 0.5);
+            cfg.Save();
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
         scroll = Math.Clamp(scroll - (int)Math.Round(e.Delta.Y * 3), 0, Math.Max(0, s.OrderLog.Entries.Count + s.Execs.Count - 3));
         InvalidateVisual();
         e.Handled = true;

@@ -181,6 +181,11 @@ public sealed class SettingsWindow : Window
                 Row("SuperTrend lines", "ST1 / ST2 and the no-chase line", Bool(c.ShowTrend, b => c.ShowTrend = b)),
                 Row("History to load", "hours, 1–48", Num(c.HistoryHours, v => c.HistoryHours = Math.Clamp((int)v, 1, 48)))))));
 
+        sections.Add(("Tape & log", "Text size for the tape and the order log; rows grow with it. Ctrl+wheel over either changes it on the fly.", Cards(
+            Card("SIZE",
+                Row("Tape text", "px, 8–22 (default 11.5)", Num(c.TapeFont, v => c.TapeFont = Settings.ClampFont(v))),
+                Row("Order log text", "px, 8–22 (default 11)", Num(c.LogFont, v => c.LogFont = Settings.ClampFont(v)))))));
+
         var ind = c.IndicatorsFor(c.Instrument);
         var root = CmeSpecs.RootOf(c.Instrument);
         sections.Add(($"Indicators · {root}", $"Saved per instrument: these apply to {root}.", Cards(
