@@ -48,6 +48,8 @@ public sealed partial class MainWindow : Window
     private Grid sideGrid = null!;
     private StackPanel logButtons = null!;
     private ScrollViewer ticketPanel = null!;
+    private Control bracketPad = null!;
+    private Control roomTile = null!;
     private readonly StackPanel journalList = new();
     private readonly ContentControl side = new();
     private ScrollViewer? journalScroll;
@@ -184,6 +186,7 @@ public sealed partial class MainWindow : Window
         roomBar.Height = 4;
         roomBar.Margin = new Thickness(0, 3, 0, 0);
         ((StackPanel)roomStat.Item1).Children.Add(roomBar);
+        roomTile = roomStat.Item1;
         var band = new WrapPanel { Margin = new Thickness(0, 2) };
         band.Children.Add(Flight.Group("POSITION",
             St("POSITION", null, 70).Item1, St("AVG", null, 80).Item1, St("OPEN P&L", null, 90).Item1,
@@ -204,8 +207,9 @@ public sealed partial class MainWindow : Window
         var top = new StackPanel();
         top.Children.Add(header);
         top.Children.Add(new Border { Background = Pal.B(Pal.Bg), BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 0, 1), Child = band });
-        top.Children.Add(Ui.Pad(acctLine, 12, 2));
-        top.Children.Add(Ui.Pad(bracketLine, 12, 3));
+        // The bracket bar only in a trade; account details live in the ROOM tile's tooltip (no extra row).
+        bracketPad = Ui.Pad(bracketLine, 12, 3);
+        top.Children.Add(bracketPad);
 
         // Right column (owner's layout, 2026-10-13): TAPE / JOURNAL / LOG view with its toggles, then the
         // ticket settings, then the order buttons in three columns. The ladder runs the full height.

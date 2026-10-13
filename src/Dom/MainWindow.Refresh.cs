@@ -37,7 +37,8 @@ public sealed partial class MainWindow
             s.Connected ? $"connected to the BookDepthIQBridge AddOn in NinjaTrader{(ack is { } a2 ? $" · answer time median {a2.P50} ms, p95 {a2.P95} ms (last {s.AckMs.Count} commands)" : "")}" : $"waiting for the NinjaTrader bridge on 127.0.0.1:{Protocol.Port} — copy nt8/AddOns/BookDepthIQBridge.cs into NinjaTrader and press F5");
         var age = s.FeedAgeMs;
         var health = Cost.FeedHealth(age == long.MaxValue ? null : age, s.Connected);
-        Ui.SetPill(feedPill, health == "live" ? $"FEED {Math.Min(age, 9999)} ms" : health.ToUpperInvariant(), health == "live" ? Pal.Pos : health == "slow" ? Pal.Warn : Pal.Neg, "time since NinjaTrader's last book or print");
+        Ui.SetPill(feedPill, (health == "live" ? $"FEED {Math.Min(age, 9999)} ms" : health.ToUpperInvariant()) + (s.HistoryLoaded || !s.Connected ? "" : " · history…"),
+            health == "live" ? Pal.Pos : health == "slow" ? Pal.Warn : Pal.Neg, "time since NinjaTrader's last book or print" + (s.HistoryNote != "" ? " · " + s.HistoryNote : ""));
 
         var snap = s.TrendSnap;
         var stText = snap.State switch { CombinedState.StrongLong => "▲▲ STRONG LONG", CombinedState.WeakLong => "▲ LONG", CombinedState.StrongShort => "▼▼ STRONG SHORT", CombinedState.WeakShort => "▼ SHORT", _ => "CHOP" };
@@ -75,9 +76,8 @@ public sealed partial class MainWindow
         Set("EQUITY", $"${eq:N0}", Pal.Text);
         Set("ROOM", $"${room:N0}", room <= 0 ? Pal.Neg : Pal.Text);
         Set("TODAY", $"{LadderControl.Usd(dayPnl)} · {day.Trades}", dayPnl >= 0 ? Pal.Pos : Pal.Neg);
-        acctLine.Text = $"{s.Account} · floor ${dd.Floor:N2} ({cfg.DrawdownKind}){(s.TrailDd != 0 ? $" · NT trailing DD ${s.TrailDd:N2}" : "")} · {s.Instrument} tick {s.TickSize} = ${s.TickValue:N2}" +
-                        $"{(s.HistoryLoaded ? "" : " · loading history…")}{(s.HistoryNote != "" ? " · " + s.HistoryNote : "")}";
-        acctLine.Foreground = Pal.B(Pal.Muted);
+        ToolTip.SetTip(roomTile, $"{s.Account} · floor ${dd.Floor:N2} ({cfg.DrawdownKind}) · room = equity − floor (or today's limit if tighter)" +
+                                 $"{(s.TrailDd != 0 ? $" · NT trailing DD ${s.TrailDd:N2}" : "")} · {s.Instrument} tick {s.TickSize} = ${s.TickValue:N2}");
         roomBar.Value = cfg.MaxDrawdown > 0 ? Math.Clamp(room / cfg.MaxDrawdown, 0, 1) : 0;
         roomBar.Foreground = Pal.B(roomBar.Value > 0.5 ? Pal.Pos : roomBar.Value > 0.25 ? Pal.Warn : Pal.Neg);
 
@@ -101,6 +101,7 @@ public sealed partial class MainWindow
         Set("REALIZED", LadderControl.Usd(s.Realized), s.Realized >= 0 ? Pal.Pos : Pal.Neg);
 
         // bracket bar in a trade
+        bracketPad.IsVisible = q != 0;
         if (q == 0) bracketLine.Text = "";
         else
         {
