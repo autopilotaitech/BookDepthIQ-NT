@@ -7,6 +7,19 @@ using Avalonia.Media;
 
 namespace BookDepthIQ.Dom;
 
+/// <summary>The DepthIQ mark (BookDepthIQ/DepthIQ-Marketing/brand-assets): window icon and header logo.</summary>
+public static class Brand
+{
+    private const string Base = "avares://BookDepthIQ-DOM/Assets/";
+    public static WindowIcon Icon() => new(Avalonia.Platform.AssetLoader.Open(new Uri(Base + "depthiq.ico")));
+    private static Avalonia.Media.Imaging.Bitmap? mark;
+    public static Image Mark(double size) => new()
+    {
+        Source = mark ??= new Avalonia.Media.Imaging.Bitmap(Avalonia.Platform.AssetLoader.Open(new Uri(Base + "depthiq-mark.png"))),
+        Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center,
+    };
+}
+
 /// <summary>Small builders so every window looks the same (the Vest panel's dark, mono, dense style).</summary>
 public static class Ui
 {

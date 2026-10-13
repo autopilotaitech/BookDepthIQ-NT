@@ -86,6 +86,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         Title = "BookDepthIQ DOM — NinjaTrader";
+        Icon = Brand.Icon();
         Width = 1380;
         Height = 900;
         Background = Pal.B(Pal.Bg);
@@ -163,6 +164,7 @@ public sealed partial class MainWindow : Window
         foreach (var b in new[] { bridgePill, feedPill }) Flight.Badge(b);
         foreach (var b in new[] { trendPill, scalpPill, statePill }) Flight.Badge(b, big: true);
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        left.Children.Add(Brand.Mark(24));
         left.Children.Add(new TextBlock { Text = "BOOKDEPTHIQ", FontFamily = Flight.Sans, FontSize = 12, FontWeight = FontWeight.Bold, LetterSpacing = 2, Foreground = Pal.B(Flight.Accent), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 8, 0) });
         left.Children.Add(instBox);
         left.Children.Add(Flight.HeadBtn("GO", SwitchInstrument, "load this instrument"));

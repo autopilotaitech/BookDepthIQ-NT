@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/depthiq-logo.png" alt="DepthIQ" width="420"></p>
+
 # BookDepthIQ-NT
 
 A modern standalone pop-out **DOM for NinjaTrader 8**, built with **Avalonia** (.NET 8). It is a full

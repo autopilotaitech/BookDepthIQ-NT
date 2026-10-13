@@ -36,6 +36,7 @@ public sealed class SettingsWindow : Window
         saved = onSaved;
         colorsAtOpen = Pal.Overrides();
         Title = "BookDepthIQ DOM — settings";
+        Icon = Brand.Icon();
         Width = 920;
         Height = 700;
         MinWidth = 720;
