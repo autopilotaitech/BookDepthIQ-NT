@@ -139,6 +139,23 @@ BUY.
   position): **B/E after TP1**, **trailing stop** (after N R, or on ST1/ST2), **stop guard** (puts a
   vanished stop back), and the two closes above.
 
+## Settings and colours
+
+SETTINGS has a section rail on the left: Account, Fees & warnings, Protect my day, Ladder,
+Indicators, SuperTrend, Opening range, Colours. Each section is a set of cards with ON/OFF switches
+and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) discards.
+
+- **SETTINGS → Colours:** every colour the DOM draws can be changed:
+  - surfaces, text and accent
+  - bid/ask and profit/loss
+  - chart lines (VWAP, nPOC, opening range, SuperTrend, no-chase, stacks)
+  - profile, Δ and heat
+  - order buttons
+  - tape and log
+- Pick a swatch or type `#rrggbb`. **↺** resets one colour. Presets: Default, Midnight, Graphite and
+  High contrast.
+- Colours change live while you pick. CANCEL puts them back.
+
 ## RISK window
 
 **RISK** lists every CME contract (NQ, MNQ, ES, MES, YM, MYM, RTY, M2K, GC, MGC, SI, SIL, HG, CL,

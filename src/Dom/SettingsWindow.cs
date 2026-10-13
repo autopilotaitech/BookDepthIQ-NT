@@ -1,181 +1,403 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using BookDepthIQ.Core;
 
 namespace BookDepthIQ.Dom;
 
-/// <summary>Every user setting in one window: account rules, fees and warnings, protect my day, ladder and
-/// columns, indicators (per instrument), SuperTrend and the opening range. Save applies and rebuilds the
-/// analytics from NinjaTrader's history.</summary>
+/// <summary>
+/// Every user setting in one window, flight-panel style: a section rail on the left, one section at a
+/// time on the right as cards of rows (name and a one-line hint on the left, the control on the right),
+/// SAVE / CANCEL fixed at the bottom. Colours preview live; Cancel (or closing) puts them back. Save
+/// applies everything and rebuilds the analytics from NinjaTrader's history.
+/// </summary>
 public sealed class SettingsWindow : Window
 {
     private readonly Settings c;
     private readonly Action saved;
     private readonly List<Action> apply = new();
+    private readonly Dictionary<string, string> colorsAtOpen;
+    private bool done;
 
-    public SettingsWindow(Settings cfg, Action onSaved)
+    private readonly List<(string Name, string Blurb, Control Body)> sections = new();
+    private readonly List<Button> nav = new();
+    private readonly ContentControl body = new();
+    private readonly TextBlock title = new() { FontFamily = Flight.Sans, FontSize = 20, FontWeight = FontWeight.SemiBold };
+    private readonly TextBlock blurb = new() { FontFamily = Flight.Sans, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
+    private readonly List<Action> refreshSwatches = new();
+
+    public SettingsWindow(Settings cfg, Action onSaved, string? open = null)
     {
         c = cfg;
         saved = onSaved;
+        colorsAtOpen = Pal.Overrides();
         Title = "BookDepthIQ DOM — settings";
-        Width = 760;
-        Height = 620;
+        Width = 920;
+        Height = 700;
+        MinWidth = 720;
+        MinHeight = 480;
         Background = Pal.B(Pal.Bg);
-        FontFamily = Pal.Mono;
-        FontSize = 12;
+        FontFamily = Flight.Sans;
+        FontSize = 12.5;
+        title.Foreground = Pal.B(Pal.Text);
+        blurb.Foreground = Pal.B(Pal.Muted);
 
-        var ind = c.IndicatorsFor(c.Instrument);
-        var tabs = new TabControl { Padding = new Thickness(6) };
-        tabs.Items.Add(Tab("Account", Grid(
-            ("Start balance $", Num(c.Start, v => c.Start = v)),
-            ("Max drawdown $", Num(c.MaxDrawdown, v => c.MaxDrawdown = v)),
-            ("Drawdown type", Pick(new[] { "static", "trailing intraday", "trailing EOD" }, (int)c.DrawdownKind, i => c.DrawdownKind = (DrawdownKind)i)),
-            ("Stops trailing at $ (0 = never)", Num(c.LockAt, v => c.LockAt = v)),
-            ("Prop daily loss $ (0 = none)", Num(c.DailyLoss, v => c.DailyLoss = v)),
-            ("Reset trailing peak", Ui.Btn("reset to start", () => { c.Peaks.Remove(c.Account); }, "forget the highest equity seen on this account")),
-            ("", Ui.Label("Your prop firm's numbers. Room = equity − floor (or today's limit if tighter).", Pal.Muted, size: 11, wrap: true)))));
-        tabs.Items.Add(Tab("Fees & warnings", Grid(
-            ("Fee per contract per side $", Num(c.FeePerSide, v => c.FeePerSide = v)),
-            ("Max contracts (0 = none)", Num(c.MaxContracts, v => c.MaxContracts = (int)v)),
-            ("Warn at size × your normal", Num(c.SizeMult, v => c.SizeMult = v)),
-            ("Warn when this far, ticks (0 = 4 × ATR)", Num(c.FarTicks, v => c.FarTicks = (int)v)),
-            ("", Ui.Label("Warnings never block: one click always sends, the warning shows in the ticket and order log.", Pal.Muted, size: 11, wrap: true)))));
-        tabs.Items.Add(Tab("Protect my day", Grid(
-            ("Daily loss limit $ (0 = off)", Num(c.DayLossUsd, v => c.DayLossUsd = v)),
-            ("Max trades a day (0 = off)", Num(c.DayMaxTrades, v => c.DayMaxTrades = (int)v)),
-            ("Cooldown after a loss, s (0 = off)", Num(c.CooldownSec, v => c.CooldownSec = (int)v)),
-            ("Close everything at the limit", Bool(c.CloseAtDayLimit, b => c.CloseAtDayLimit = b, "acts without a click once the daily loss limit is hit")),
-            ("Close before the weekend halt", Bool(c.WeekendClose, b => c.WeekendClose = b, "Friday, 5 minutes before the close time below (Chicago)")),
-            ("Friday close (Chicago)", Text(c.WeekendCloseTime, v => c.WeekendCloseTime = v)),
-            ("", Ui.Label("Limits apply to NEW entries only. FLATTEN, CANCEL, CLOSE HALF, B/E and KILL always work. The day starts 17:00 Chicago.", Pal.Muted, size: 11, wrap: true)))));
-        tabs.Items.Add(Tab("Ladder", Grid(
-            ("Row height px", Num(c.RowHeight, v => c.RowHeight = v)),
-            ("Ticks per row", Pick(LadderMath.GroupSteps.Select(x => x.ToString(CultureInfo.InvariantCulture)).ToArray(), Math.Max(0, Array.IndexOf(LadderMath.GroupSteps, c.Group)), i => c.Group = LadderMath.GroupSteps[i])),
-            ("BUY / SELL order columns", Bool(c.Columns.Orders, b => c.Columns.Orders = b)),
-            ("SOLD / BOUGHT footprint", Bool(c.Columns.Footprint, b => c.Columns.Footprint = b)),
-            ("P&L column", Bool(c.Columns.Pnl, b => c.Columns.Pnl = b)),
-            ("HEAT 5M · PULL/STACK", Bool(c.Columns.Heat, b => c.Columns.Heat = b)),
-            ("Volume PROFILE", Bool(c.Columns.Profile, b => c.Columns.Profile = b)),
-            ("Δ delta column", Bool(c.Columns.Delta, b => c.Columns.Delta = b)),
-            ("SuperTrend lines", Bool(c.ShowTrend, b => c.ShowTrend = b)),
-            ("Heat · pull/stack window", Pick(new[] { "5 min", "15 min", "30 min", "60 min" }, Array.IndexOf(new[] { 5, 15, 30, 60 }, c.HeatMinutes) is var hi && hi >= 0 ? hi : 0, i => c.HeatMinutes = new[] { 5, 15, 30, 60 }[i])),
-            ("Naked POC lines (nPOC)", Bool(c.NpocOn, b => c.NpocOn = b, "each period's POC as a line until price trades there again")),
-            ("nPOC period", Pick(new[] { "5 min", "15 min", "30 min", "60 min" }, Array.IndexOf(new[] { 5, 15, 30, 60 }, c.NpocMinutes) is var ni && ni >= 0 ? ni : 1, i => c.NpocMinutes = new[] { 5, 15, 30, 60 }[i])),
-            ("History to load, hours (1–48)", Num(c.HistoryHours, v => c.HistoryHours = Math.Clamp((int)v, 1, 48))))));
-        tabs.Items.Add(Tab($"Indicators ({CmeSpecs.RootOf(c.Instrument)})", Grid(
-            ("VWAP + σ bands", Bool(ind.VwapOn, b => ind = ind with { VwapOn = b })),
-            ("VWAP session start", Text(ind.VwapStart, v => ind = ind with { VwapStart = v })),
-            ("VWAP session end", Text(ind.VwapEnd, v => ind = ind with { VwapEnd = v })),
-            ("VWAP time zone", Text(ind.VwapTz, v => ind = ind with { VwapTz = v })),
-            ("Bands σ (e.g. 1, 2)", Text(string.Join(", ", ind.VwapBands.Select(Ui.F)), v => ind = ind with { VwapBands = IndicatorCfg.ParseBands(v) })),
-            ("Profile · Δ · footprint start (HH:MM, blank = DOM open)", Text(ind.ProfileStart, v => ind = ind with { ProfileStart = v })),
-            ("Profile uses history from the start", Bool(ind.ProfileHistory, b => ind = ind with { ProfileHistory = b }, "off = live prints only; on = backfill from the start time with NinjaTrader's history (History hours must reach back that far)")),
-            ("Footprint imbalances", Bool(ind.FpOn, b => ind = ind with { FpOn = b })),
-            ("Imbalance ratio (3 = 3:1)", Num(ind.FpRatio, v => ind = ind with { FpRatio = v })),
-            ("Min row volume, % of busiest", Num(ind.FpMinPct, v => ind = ind with { FpMinPct = v })),
-            ("Stack: rows in a row", Num(ind.FpStack, v => ind = ind with { FpStack = (int)v })),
-            ("Stack zones as lines", Bool(ind.FpLines, b => ind = ind with { FpLines = b })),
-            ("Big trades on the tape", Bool(ind.BigOn, b => ind = ind with { BigOn = b })),
-            ("Big trade ≥ contracts", Num(ind.BigMin, v => ind = ind with { BigMin = (long)v })),
-            ("RTH opening range (NQ/ES)", Bool(ind.OrOn, b => ind = ind with { OrOn = b })),
-            ("OR mid line", Bool(ind.OrMid, b => ind = ind with { OrMid = b })))));
-        apply.Add(() => c.SetIndicators(c.Instrument, ind));
-        tabs.Items.Add(Tab("SuperTrend", new StackPanel { Children = { Trend("ST1", c.St1, t => c.St1 = t), Trend("ST2", c.St2, t => c.St2 = t) } }));
-        var or = c.PaxOr;
-        tabs.Items.Add(Tab("Opening range", Grid(
-            ("Enabled", Bool(or.Enabled, b => or = or with { Enabled = b })),
-            ("Bell (HH:MM:SS)", Text(or.StartTime, v => or = or with { StartTime = v })),
-            ("Window seconds", Num(or.DurationSec, v => or = or with { DurationSec = (int)v })),
-            ("Time zone", Text(or.Timezone, v => or = or with { Timezone = v })),
-            ("NQ EXT step, points", Num(or.NqLevelPoints, v => or = or with { NqLevelPoints = v })),
-            ("ES EXT step, points", Num(or.EsLevelPoints, v => or = or with { EsLevelPoints = v })),
-            ("", Ui.Label("BookDepthIQ PAXOR: OR = high/low of the first 30 s after the bell; EXT rungs every step beyond it.", Pal.Muted, size: 11, wrap: true)))));
-        apply.Add(() => c.PaxOr = or);
+        BuildSections();
 
-        var buttons = Ui.Row(Ui.Btn("Save", Save, "save and rebuild the indicators from history"), Ui.Btn("Cancel", Close));
-        var dock = new DockPanel();
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        dock.Children.Add(buttons);
-        dock.Children.Add(tabs);
-        Content = dock;
+        // Rail
+        var rail = new StackPanel { Spacing = 2, Margin = new Thickness(10, 16, 10, 10) };
+        rail.Children.Add(new TextBlock { Text = "SETTINGS", FontSize = 11, FontWeight = FontWeight.Bold, LetterSpacing = 2, Foreground = Pal.B(Pal.Accent), Margin = new Thickness(12, 0, 0, 14) });
+        for (var i = 0; i < sections.Count; i++)
+        {
+            var k = i;
+            var b = new Button
+            {
+                Content = new TextBlock { Text = sections[i].Name.ToUpperInvariant(), LetterSpacing = 0.8 }, FontSize = 11.5, FontWeight = FontWeight.SemiBold, Height = 34,
+                HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left, VerticalContentAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(12, 0), CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(3, 0, 0, 0),
+            };
+            b.Click += (_, _) => Show(k);
+            nav.Add(b);
+            rail.Children.Add(b);
+        }
+        var railBox = new Border { Width = 200, Background = Pal.B(Pal.Panel), BorderBrush = Pal.B(Pal.Edge), BorderThickness = new Thickness(0, 0, 1, 0), Child = rail };
+
+        // Footer
+        var hint = new TextBlock { Text = "Esc cancels · Ctrl+S saves · colours preview live", FontSize = 11, Foreground = Pal.B(Pal.Muted), VerticalAlignment = VerticalAlignment.Center };
+        var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        btns.Children.Add(Flight.HeadBtn("CANCEL", Close));
+        btns.Children.Add(Flight.Primary("SAVE", Save, "save and rebuild the indicators from history"));
+        var foot = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(24, 10, 18, 10) };
+        Grid.SetColumn(btns, 1);
+        foot.Children.Add(hint);
+        foot.Children.Add(btns);
+        var footBox = new Border { Background = Pal.B(Pal.Panel), BorderBrush = Pal.B(Pal.Edge), BorderThickness = new Thickness(0, 1, 0, 0), Child = foot };
+
+        // Section header + body
+        var head = new StackPanel { Margin = new Thickness(24, 18, 24, 8) };
+        head.Children.Add(title);
+        head.Children.Add(blurb);
+        var scroll = new ScrollViewer { Content = body, Padding = new Thickness(16, 0, 16, 16) };
+        var main = new DockPanel();
+        DockPanel.SetDock(head, Dock.Top);
+        main.Children.Add(head);
+        main.Children.Add(scroll);
+
+        var root = new DockPanel();
+        DockPanel.SetDock(footBox, Dock.Bottom);
+        DockPanel.SetDock(railBox, Dock.Left);
+        root.Children.Add(footBox);
+        root.Children.Add(railBox);
+        root.Children.Add(main);
+        Content = root;
+
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) { Close(); e.Handled = true; }
+            else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control)) { Save(); e.Handled = true; }
+        };
+        Closing += (_, _) => { if (!done) Pal.Apply(colorsAtOpen); };
+
+        var start = open == null ? 0 : sections.FindIndex(x => x.Name.Equals(open, StringComparison.OrdinalIgnoreCase));
+        Show(Math.Max(0, start));
+    }
+
+    private void Show(int i)
+    {
+        body.Content = sections[i].Body;
+        title.Text = sections[i].Name;
+        blurb.Text = sections[i].Blurb;
+        for (var k = 0; k < nav.Count; k++)
+        {
+            var on = k == i;
+            nav[k].Background = Pal.B(on ? Pal.SegOn : Colors.Transparent);
+            nav[k].Foreground = Pal.B(on ? Pal.Accent : Pal.Muted);
+            nav[k].BorderBrush = on ? Pal.B(Pal.Accent) : Brushes.Transparent;
+        }
     }
 
     private void Save()
     {
         foreach (var a in apply) a();
+        c.Colors = Pal.Overrides();
         c.Save();
+        done = true;
         saved();
         Close();
     }
 
-    private static TabItem Tab(string header, Control content) => new() { Header = header, FontSize = 12, Content = new ScrollViewer { Content = content } };
+    // ───────────── sections ─────────────
 
-    private static Control Grid(params (string Label, Control Field)[] rows)
+    private void BuildSections()
     {
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("260,*"), Margin = new Thickness(8) };
+        sections.Add(("Account", "Your prop firm's numbers. ROOM = equity − floor, or today's limit if that is tighter.", Cards(
+            Card("RULES",
+                Row("Start balance", "$ the account started with", Num(c.Start, v => c.Start = v)),
+                Row("Max drawdown", "$ from the peak (or start) to the floor", Num(c.MaxDrawdown, v => c.MaxDrawdown = v)),
+                Row("Drawdown type", "how the floor moves", Seg(new[] { "Static", "Intraday", "EOD" }, (int)c.DrawdownKind, i => c.DrawdownKind = (DrawdownKind)i)),
+                Row("Stops trailing at", "$ equity where the floor locks (0 = never)", Num(c.LockAt, v => c.LockAt = v)),
+                Row("Prop daily loss", "$ the firm allows a day (0 = none)", Num(c.DailyLoss, v => c.DailyLoss = v))),
+            Card("TRAILING PEAK",
+                Row("Reset peak", "forget the highest equity seen on this account", Flight.HeadBtn("RESET", () => c.Peaks.Remove(c.Account)))))));
+
+        sections.Add(("Fees & warnings", "Warnings never block: one click always sends; the warning shows in the ticket and the order log.", Cards(
+            Card("FEES",
+                Row("Fee per contract per side", "$ commission + exchange + NFA, your broker's", Num(c.FeePerSide, v => c.FeePerSide = v))),
+            Card("WARNINGS",
+                Row("Max contracts", "warn above this size (0 = none)", Num(c.MaxContracts, v => c.MaxContracts = (int)v)),
+                Row("Size × your normal", "warn when an entry is this many times your usual size", Num(c.SizeMult, v => c.SizeMult = v)),
+                Row("Far from market, ticks", "warn when a limit is this far away (0 = 4 × ATR)", Num(c.FarTicks, v => c.FarTicks = (int)v))))));
+
+        sections.Add(("Protect my day", "Limits apply to NEW entries only. FLATTEN, CANCEL, CLOSE HALF, B/E and KILL always work. The day starts 17:00 Chicago.", Cards(
+            Card("LIMITS",
+                Row("Daily loss limit", "$ (0 = off)", Num(c.DayLossUsd, v => c.DayLossUsd = v)),
+                Row("Max trades a day", "0 = off", Num(c.DayMaxTrades, v => c.DayMaxTrades = (int)v)),
+                Row("Cooldown after a loss", "seconds (0 = off)", Num(c.CooldownSec, v => c.CooldownSec = (int)v))),
+            Card("AUTO-CLOSE · ACTS WITHOUT A CLICK",
+                Row("Close everything at the limit", "once the daily loss limit is hit", Bool(c.CloseAtDayLimit, b => c.CloseAtDayLimit = b)),
+                Row("Close before the weekend halt", "Friday, 5 minutes before the close time", Bool(c.WeekendClose, b => c.WeekendClose = b)),
+                Row("Friday close", "HH:MM Chicago", Text(c.WeekendCloseTime, v => c.WeekendCloseTime = v, 90))))));
+
+        sections.Add(("Ladder", "Rows, columns and what the ladder tracks. Drag a column header divider to resize; double-click resets.", Cards(
+            Card("ROWS",
+                Row("Row height", "px", Num(c.RowHeight, v => c.RowHeight = v)),
+                Row("Ticks per row", "group the ladder", Seg(LadderMath.GroupSteps.Select(x => x.ToString(CultureInfo.InvariantCulture)).ToArray(), Math.Max(0, Array.IndexOf(LadderMath.GroupSteps, c.Group)), i => c.Group = LadderMath.GroupSteps[i]))),
+            Card("COLUMNS",
+                Row("BUY / SELL order columns", null, Bool(c.Columns.Orders, b => c.Columns.Orders = b)),
+                Row("SOLD / BOUGHT footprint", null, Bool(c.Columns.Footprint, b => c.Columns.Footprint = b)),
+                Row("P&L", "open P&L at each price", Bool(c.Columns.Pnl, b => c.Columns.Pnl = b)),
+                Row("Heat · pull/stack", "resting size over time, far left", Bool(c.Columns.Heat, b => c.Columns.Heat = b)),
+                Row("Volume profile", "visible range", Bool(c.Columns.Profile, b => c.Columns.Profile = b)),
+                Row("Δ delta", "aggressive buys − sells per price", Bool(c.Columns.Delta, b => c.Columns.Delta = b))),
+            Card("HEAT · nPOC",
+                Row("Heat · pull/stack window", "how far back the heatmap reaches", Seg(new[] { "5M", "15M", "30M", "60M" }, Idx(new[] { 5, 15, 30, 60 }, c.HeatMinutes, 0), i => c.HeatMinutes = new[] { 5, 15, 30, 60 }[i])),
+                Row("Naked POC lines", "each period's POC until price trades there again", Bool(c.NpocOn, b => c.NpocOn = b)),
+                Row("nPOC period", null, Seg(new[] { "5M", "15M", "30M", "60M" }, Idx(new[] { 5, 15, 30, 60 }, c.NpocMinutes, 1), i => c.NpocMinutes = new[] { 5, 15, 30, 60 }[i]))),
+            Card("LINES · DATA",
+                Row("SuperTrend lines", "ST1 / ST2 and the no-chase line", Bool(c.ShowTrend, b => c.ShowTrend = b)),
+                Row("History to load", "hours, 1–48", Num(c.HistoryHours, v => c.HistoryHours = Math.Clamp((int)v, 1, 48)))))));
+
+        var ind = c.IndicatorsFor(c.Instrument);
+        var root = CmeSpecs.RootOf(c.Instrument);
+        sections.Add(($"Indicators · {root}", $"Saved per instrument: these apply to {root}.", Cards(
+            Card("VWAP",
+                Row("VWAP + σ bands", null, Bool(ind.VwapOn, b => ind = ind with { VwapOn = b })),
+                Row("Session start", "HH:MM", Text(ind.VwapStart, v => ind = ind with { VwapStart = v }, 90)),
+                Row("Session end", "HH:MM", Text(ind.VwapEnd, v => ind = ind with { VwapEnd = v }, 90)),
+                Row("Time zone", "IANA name, e.g. America/Chicago", Text(ind.VwapTz, v => ind = ind with { VwapTz = v })),
+                Row("Bands", "σ, comma separated (e.g. 1, 2)", Text(string.Join(", ", ind.VwapBands.Select(Ui.F)), v => ind = ind with { VwapBands = IndicatorCfg.ParseBands(v) }, 110))),
+            Card("PROFILE · Δ · FOOTPRINT",
+                Row("Start time", "HH:MM; blank = when the DOM opened", Text(ind.ProfileStart, v => ind = ind with { ProfileStart = v }, 90)),
+                Row("Backfill from history", "off = live prints only; on = NinjaTrader's history from the start time", Bool(ind.ProfileHistory, b => ind = ind with { ProfileHistory = b }))),
+            Card("FOOTPRINT IMBALANCES",
+                Row("Imbalances", null, Bool(ind.FpOn, b => ind = ind with { FpOn = b })),
+                Row("Ratio", "3 = 3:1", Num(ind.FpRatio, v => ind = ind with { FpRatio = v })),
+                Row("Min row volume", "% of the busiest row", Num(ind.FpMinPct, v => ind = ind with { FpMinPct = v })),
+                Row("Stack", "rows in a row", Num(ind.FpStack, v => ind = ind with { FpStack = (int)v })),
+                Row("Stack zones as lines", null, Bool(ind.FpLines, b => ind = ind with { FpLines = b }))),
+            Card("TAPE · OPENING RANGE",
+                Row("Big trades on the tape", null, Bool(ind.BigOn, b => ind = ind with { BigOn = b })),
+                Row("Big trade", "≥ contracts", Num(ind.BigMin, v => ind = ind with { BigMin = (long)v })),
+                Row("RTH opening range", "NQ / ES", Bool(ind.OrOn, b => ind = ind with { OrOn = b })),
+                Row("OR mid line", null, Bool(ind.OrMid, b => ind = ind with { OrMid = b }))))));
+        apply.Add(() => c.SetIndicators(c.Instrument, ind));
+
+        sections.Add(("SuperTrend", "ST1 is the slow line, ST2 the fast one. The scalp read is built on ST1.", Cards(
+            Trend("ST1", c.St1, t => c.St1 = t), Trend("ST2", c.St2, t => c.St2 = t))));
+
+        var or = c.PaxOr;
+        sections.Add(("Opening range", "BookDepthIQ PAXOR: OR = high/low of the first seconds after the bell; EXT rungs every step beyond it.", Cards(
+            Card("PAXOR",
+                Row("Enabled", null, Bool(or.Enabled, b => or = or with { Enabled = b })),
+                Row("Bell", "HH:MM:SS", Text(or.StartTime, v => or = or with { StartTime = v }, 110)),
+                Row("Window", "seconds", Num(or.DurationSec, v => or = or with { DurationSec = (int)v })),
+                Row("Time zone", "IANA name", Text(or.Timezone, v => or = or with { Timezone = v }))),
+            Card("EXT STEPS",
+                Row("NQ step", "points", Num(or.NqLevelPoints, v => or = or with { NqLevelPoints = v })),
+                Row("ES step", "points", Num(or.EsLevelPoints, v => or = or with { EsLevelPoints = v }))))));
+        apply.Add(() => c.PaxOr = or);
+
+        sections.Add(("Colours", "Every colour the DOM draws. Changes show live; SAVE keeps them, CANCEL puts them back.", ColoursBody()));
+    }
+
+    private Control ColoursBody()
+    {
+        var presets = new Seg(Pal.Presets.Select(p => p.Name.ToUpperInvariant()).ToArray()) { Width = 440 };
+        presets.SelectedIndex = Math.Max(0, Array.FindIndex(Pal.Presets, p => SameColours(p.Colors, Pal.Overrides())));
+        presets.SelectionChanged += (_, _) => { Pal.Apply(Pal.Presets[presets.SelectedIndex].Colors); Repaint(); };
+        var cards = new List<Control>
+        {
+            Card("SCHEME",
+                Row("Preset", "a starting point; tune any colour below", presets),
+                Row("Reset all", "back to the default colours", Flight.HeadBtn("RESET", () => { Pal.Apply(new Dictionary<string, string>()); presets.SelectedIndex = 0; Repaint(); }))),
+        };
+        foreach (var grp in Pal.Tokens.GroupBy(t => t.Group))
+            cards.Add(Card(grp.Key.ToUpperInvariant(), grp.Select(t => Row(t.Label, t.Tip, ColourField(t))).ToArray()));
+        return Cards(cards.ToArray());
+    }
+
+    private static bool SameColours(Dictionary<string, string> a, Dictionary<string, string> b) =>
+        a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var v) && string.Equals(v, kv.Value, StringComparison.OrdinalIgnoreCase));
+
+    private void Repaint()
+    {
+        foreach (var r in refreshSwatches) r();
+        Show(sections.Count - 1);
+    }
+
+    private static readonly string[] Swatches =
+    {
+        "#000000", "#0b0e13", "#121722", "#1f2633", "#2a3142", "#4b5563", "#7b8597", "#b0b8c4", "#d7dde8", "#ffffff",
+        "#22d3ee", "#06b6d4", "#00e5ff", "#38bdf8", "#0ea5e9", "#3b82f6", "#60a5fa", "#6366f1", "#0e3a44", "#16324a",
+        "#34d399", "#10b981", "#22c55e", "#00ff88", "#84cc16", "#2ec4b6", "#065f46", "#14532d", "#a3e635", "#bef264",
+        "#fbbf24", "#eab308", "#f59e0b", "#ffd400", "#fb923c", "#f97316", "#f59e5b", "#ff8c00", "#44250e", "#78350f",
+        "#f87171", "#ef4444", "#ff5c5c", "#dc2626", "#4a1414", "#5a1414", "#f472b6", "#ec4899", "#e879f9", "#a78bfa",
+    };
+
+    /// <summary>A colour: swatch (click for a palette) + hex box + reset. Applies live.</summary>
+    private Control ColourField(Pal.Token t)
+    {
+        var swatch = new Button { Width = 34, Height = 26, CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1), BorderBrush = Pal.B(Pal.Edge), Padding = new Thickness(0) };
+        var hex = Flight.Text(92);
+        hex.FontFamily = Pal.Mono;
+        hex.FontSize = 12.5;
+        void Paint()
+        {
+            var w = Pal.Wanted(t.Key);
+            swatch.Background = new SolidColorBrush(w);
+            hex.Text = Pal.Hex(w);
+            hex.BorderBrush = Pal.B(Pal.Edge);
+        }
+        void SetTo(Color col)
+        {
+            Pal.Set(t.Key, col);
+            Paint();
+        }
+        void Commit()
+        {
+            if (Pal.TryParse(hex.Text, out var col)) SetTo(col);
+            else hex.BorderBrush = Pal.B(Pal.Neg);
+        }
+        hex.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Commit(); e.Handled = true; } };
+        hex.LostFocus += (_, _) => Commit();
+
+        var grid = new UniformGrid { Columns = 10, Margin = new Thickness(2) };
+        var fly = new Flyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+        foreach (var s in Swatches)
+        {
+            var col = Color.Parse(s);
+            var b = new Button { Width = 22, Height = 22, Margin = new Thickness(2), Padding = new Thickness(0), CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(col), BorderBrush = Pal.B(Pal.Edge), BorderThickness = new Thickness(1) };
+            ToolTip.SetTip(b, s);
+            b.Click += (_, _) => { SetTo(col); fly.Hide(); };
+            grid.Children.Add(b);
+        }
+        var flyBody = new StackPanel { Spacing = 6 };
+        flyBody.Children.Add(new TextBlock { Text = t.Label.ToUpperInvariant(), FontSize = 10, FontWeight = FontWeight.SemiBold, LetterSpacing = 1.2, Foreground = Pal.B(Pal.Muted) });
+        flyBody.Children.Add(grid);
+        flyBody.Children.Add(new TextBlock { Text = "or type any #rrggbb in the box", FontSize = 10.5, Foreground = Pal.B(Pal.Muted) });
+        fly.Content = flyBody;
+        swatch.Flyout = fly;
+
+        var reset = Flight.HeadBtn("↺", () => SetTo(t.Default), $"default {Pal.Hex(t.Default)}");
+        reset.Padding = new Thickness(9, 0);
+        reset.Margin = new Thickness(0);
+
+        Paint();
+        refreshSwatches.Add(Paint);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        row.Children.Add(swatch);
+        row.Children.Add(hex);
+        row.Children.Add(reset);
+        return row;
+    }
+
+    // ───────────── layout ─────────────
+
+    private static Control Cards(params Control[] cards)
+    {
+        var sp = new StackPanel { MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Left };
+        foreach (var k in cards) sp.Children.Add(k);
+        return sp;
+    }
+
+    private static Control Card(string title, params Control[] rows)
+    {
+        var sp = new StackPanel();
         for (var i = 0; i < rows.Length; i++)
         {
-            g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            var l = Ui.Label(rows[i].Label, Pal.Muted);
-            l.Margin = new Thickness(0, 4);
-            Avalonia.Controls.Grid.SetRow(l, i);
-            Avalonia.Controls.Grid.SetRow(rows[i].Field, i);
-            Avalonia.Controls.Grid.SetColumn(rows[i].Field, 1);
-            rows[i].Field.Margin = new Thickness(0, 3);
-            rows[i].Field.HorizontalAlignment = HorizontalAlignment.Left;
-            g.Children.Add(l);
-            g.Children.Add(rows[i].Field);
+            if (i > 0) sp.Children.Add(new Border { Height = 1, Background = Pal.B(Pal.Edge), Margin = new Thickness(0, 2) });
+            sp.Children.Add(rows[i]);
         }
+        return Flight.Card(title, sp);
+    }
+
+    private static Control Row(string label, string? hint, Control field)
+    {
+        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 1 };
+        left.Children.Add(new TextBlock { Text = label, FontSize = 13, Foreground = Pal.B(Pal.Text) });
+        if (!string.IsNullOrEmpty(hint)) left.Children.Add(new TextBlock { Text = hint, FontSize = 11, Foreground = Pal.B(Pal.Muted), TextWrapping = TextWrapping.Wrap });
+        field.VerticalAlignment = VerticalAlignment.Center;
+        field.HorizontalAlignment = HorizontalAlignment.Right;
+        field.Margin = new Thickness(16, 0, 0, 0);
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), MinHeight = 44, Margin = new Thickness(2, 3) };
+        Grid.SetColumn(field, 1);
+        g.Children.Add(left);
+        g.Children.Add(field);
         return g;
     }
 
+    private static int Idx(int[] items, int v, int dflt) => Array.IndexOf(items, v) is var i && i >= 0 ? i : dflt;
+
+    // ───────────── fields ─────────────
+
     private Control Num(double v, Action<double> set)
     {
-        var t = Ui.Input(110);
+        var t = Flight.Num(110);
         t.Text = Ui.F(v);
         apply.Add(() => set(Ui.Num(t, v)));
         return t;
     }
 
-    private Control Text(string v, Action<string> set)
+    private Control Text(string v, Action<string> set, double width = 200)
     {
-        var t = Ui.Input(200);
+        var t = Flight.Text(width);
         t.Text = v;
         apply.Add(() => set(t.Text?.Trim() ?? v));
         return t;
     }
 
-    private Control Bool(bool v, Action<bool> set, string? tip = null)
+    private Control Bool(bool v, Action<bool> set)
     {
-        var k = Ui.Check("", tip);
-        k.IsChecked = v;
+        var k = Flight.Switch(v);
         apply.Add(() => set(k.IsChecked == true));
         return k;
     }
 
-    private Control Pick(string[] items, int index, Action<int> set)
+    private Control Seg(string[] items, int index, Action<int> set)
     {
-        var cb = Ui.Combo(200, items);
-        cb.SelectedIndex = index;
-        apply.Add(() => { if (cb.SelectedIndex >= 0) set(cb.SelectedIndex); });
-        return cb;
+        var s = new Seg(items) { Width = Math.Max(150, items.Length * 62) };
+        s.SelectedIndex = index;
+        apply.Add(() => set(s.SelectedIndex));
+        return s;
     }
 
     private Control Trend(string name, TrendConfig t, Action<TrendConfig> set)
     {
         var cur = t;
-        var g = Grid(
-            ($"{name} on", Bool(t.Enabled, b => cur = cur with { Enabled = b })),
-            ($"{name} candle seconds", Num(t.IntervalSec, v => cur = cur with { IntervalSec = Math.Max(1, (int)v) })),
-            ($"{name} ATR candles", Num(t.NumCandles, v => cur = cur with { NumCandles = Math.Max(1, (int)v) })),
-            ($"{name} multiplier", Num(t.Multiplier, v => cur = cur with { Multiplier = v })),
-            ($"{name} flips on", Pick(Enum.GetNames<SwitchCond>(), (int)t.Switch, i => cur = cur with { Switch = (SwitchCond)i })),
-            ($"{name} confirm candles", Num(t.Confirm, v => cur = cur with { Confirm = Math.Max(1, (int)v) })),
-            ($"{name} volume ×", Num(t.VolMult, v => cur = cur with { VolMult = v })),
-            ($"{name} min delta", Num(t.DeltaMin, v => cur = cur with { DeltaMin = v })));
+        var card = Card(name,
+            Row("On", null, Bool(t.Enabled, b => cur = cur with { Enabled = b })),
+            Row("Candle", "seconds", Num(t.IntervalSec, v => cur = cur with { IntervalSec = Math.Max(1, (int)v) })),
+            Row("ATR candles", null, Num(t.NumCandles, v => cur = cur with { NumCandles = Math.Max(1, (int)v) })),
+            Row("Multiplier", "× ATR", Num(t.Multiplier, v => cur = cur with { Multiplier = v })),
+            Row("Flips on", "what turns the line", Seg(Enum.GetNames<SwitchCond>(), (int)t.Switch, i => cur = cur with { Switch = (SwitchCond)i })),
+            Row("Confirm candles", null, Num(t.Confirm, v => cur = cur with { Confirm = Math.Max(1, (int)v) })),
+            Row("Volume ×", "for the Volume flip", Num(t.VolMult, v => cur = cur with { VolMult = v })),
+            Row("Min delta", "for the Delta flips", Num(t.DeltaMin, v => cur = cur with { DeltaMin = v })));
         apply.Add(() => set(cur));
-        return g;
+        return card;
     }
 }

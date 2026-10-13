@@ -100,6 +100,8 @@ public sealed class Settings
     /// <summary>The ticket settings under the tape; hidden = tape + order buttons only.</summary>
     public bool ShowTicket { get; set; } = true;
     public bool ShowJournal { get; set; }
+    /// <summary>Colour scheme: token → #rrggbb, only where it differs from the default (Pal.Tokens).</summary>
+    public Dictionary<string, string> Colors { get; set; } = new();
     public TrendConfig St1 { get; set; } = TrendConfig.DefaultT1;
     public TrendConfig St2 { get; set; } = TrendConfig.DefaultT2;
     public PaxOrCfg PaxOr { get; set; } = new();
@@ -118,8 +120,11 @@ public sealed class Settings
 
     public static Settings Load()
     {
-        try { return File.Exists(FilePath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), Opts) ?? new() : new(); }
-        catch { return new(); }
+        Settings s;
+        try { s = File.Exists(FilePath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), Opts) ?? new() : new(); }
+        catch { s = new(); }
+        Pal.Apply(s.Colors);
+        return s;
     }
 
     public void Save()

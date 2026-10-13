@@ -120,14 +120,24 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => { SaveFields(); bridge.Dispose(); };
 
         // Dev only: BDIQ_SNAPSHOT=<file.png> saves a picture of the window after BDIQ_SNAPSHOT_SEC (4) s and exits.
+        // BDIQ_SNAPSHOT_THEME=<preset> switches the colours live after 1 s; BDIQ_SNAPSHOT_SETTINGS=<section>
+        // pictures the settings window open at that section instead.
         if (Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT") is { Length: > 0 } shot)
+        {
+            if (Pal.Presets.FirstOrDefault(p => p.Name == Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT_THEME")) is { Name: not null } preset)
+                DispatcherTimer.RunOnce(() => Pal.Apply(preset.Colors), TimeSpan.FromSeconds(1));
+            SettingsWindow? sw = null;
+            if (Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT_SETTINGS") is { Length: > 0 } section)
+                DispatcherTimer.RunOnce(() => { sw = new SettingsWindow(cfg, OnSettingsSaved, section); sw.Show(this); }, TimeSpan.FromSeconds(1));
             DispatcherTimer.RunOnce(() =>
             {
-                using var bmp = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)Bounds.Width, (int)Bounds.Height));
-                bmp.Render(this);
+                Window target = sw ?? (Window)this;
+                using var bmp = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)target.Bounds.Width, (int)target.Bounds.Height));
+                bmp.Render(target);
                 bmp.Save(shot);
                 Close();
             }, TimeSpan.FromSeconds(double.TryParse(Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT_SEC"), out var sec) ? sec : 4));
+        }
     }
 
     private DrawdownTracker NewTracker() => new(cfg.Rules, cfg.Peaks.TryGetValue(cfg.Account, out var pk) ? pk : null);
@@ -352,10 +362,10 @@ public sealed partial class MainWindow : Window
             Grid.SetColumnSpan(b, span);
             g.Children.Add(b);
         }
-        var dark = Color.Parse("#1a2130");
+        var dark = Pal.Btn;
         Add(Ui.BigBtn("BUY MKT", Pal.BuyBtn, Pal.Bid, () => Market(true), "market buy with your size and bracket (B when hotkeys are armed)"), 0, 0, 2);
         Add(Ui.BigBtn("SELL MKT", Pal.SellBtn, Pal.Ask, () => Market(false), "market sell with your size and bracket (S when armed)"), 0, 2, 2);
-        Add(Ui.BigBtn("FLATTEN", Color.Parse("#4a1414"), Pal.Neg, Flatten, "close the position and cancel its orders (F). Never blocked."), 0, 4, 2);
+        Add(Ui.BigBtn("FLATTEN", Pal.FlatBtn, Pal.Neg, Flatten, "close the position and cancel its orders (F). Never blocked."), 0, 4, 2);
         Add(Ui.BigBtn("REVERSE", dark, Pal.Text, Reverse, "flip the position at market (R when armed)"), 1, 0, 3);
         Add(Ui.BigBtn("CANCEL ALL", dark, Pal.Text, CancelAll, "cancel every order on this instrument (Esc). Never blocked."), 1, 3, 3);
         Add(Ui.BigBtn("B/E", dark, Pal.Text, BreakEven, "move your stops to entry ± B/E offset (E when armed)"), 2, 0, 3);

@@ -15,8 +15,8 @@ namespace BookDepthIQ.Dom;
 /// </summary>
 public sealed class TapeControl : Control
 {
-    private static readonly Color BigBuy = Color.Parse("#38bdf8");
-    private static readonly Color BigSell = Color.Parse("#f59e5b");
+    private static Color BigBuy => Pal.BigBuy;
+    private static Color BigSell => Pal.BigSell;
     private readonly DomState s;
     private readonly Settings cfg;
     private int scroll;
@@ -95,9 +95,9 @@ public sealed class TapeControl : Control
 /// </summary>
 public sealed class LogControl : Control
 {
-    private static readonly Color Ok = Color.Parse("#2ec4b6");
-    private static readonly Color Blocked = Color.Parse("#f0b429");
-    private static readonly Color Bad = Color.Parse("#ff5c5c");
+    private static Color Ok => Pal.LogOk;
+    private static Color Blocked => Pal.LogBlocked;
+    private static Color Bad => Pal.LogBad;
     private readonly DomState s;
     private int scroll;
 

@@ -95,7 +95,7 @@ public sealed partial class MainWindow
         string Line(TrendSnapshot t) => t.LineTicks is long l ? $"{(t.Dir == TrendDir.Up ? "▲" : "▼")} {Px(l * s.TickSize)}" : "—";
         Set("ST1 · ST2", $"{Line(snap.T1)} · {Line(snap.T2)}", snap.T1.Dir == TrendDir.Up ? Pal.Pos : snap.T1.Dir == TrendDir.Down ? Pal.Neg : Pal.Muted);
         var vz = s.Vwap.Value is double vw && vwapSigma is double sg && sg > 0 && s.LastTick is long lt ? (lt - vw) / sg : (double?)null;
-        Set("VWAP", s.Vwap.Value is double vv ? $"{Px(vv * s.TickSize)} {(vz is double z ? $"{z:+0.0;-0.0}σ" : "")}" : "—", Color.Parse("#a78bfa"));
+        Set("VWAP", s.Vwap.Value is double vv ? $"{Px(vv * s.TickSize)} {(vz is double z ? $"{z:+0.0;-0.0}σ" : "")}" : "—", Pal.Vwap);
         var share = Footprint.BidShare(s.Book.Bids.Sizes.Take(10), s.Book.Asks.Sizes.Take(10));
         Set("BID / ASK LIQ", share is double b ? $"{Pct(b)} / {Pct(1 - b)}" : "—", Pal.Text);
         Set("REALIZED", LadderControl.Usd(s.Realized), s.Realized >= 0 ? Pal.Pos : Pal.Neg);

@@ -155,7 +155,7 @@ public sealed class LadderControl : Control
             // Value area on the PRICE column: BookDepthIQ's faint magenta band between VAL and VAH.
             var inVa = prof.TotalVol > 0 && prof.Val is long val && prof.Vah is long vah && t + g / 2.0 >= val && t + g / 2.0 <= vah + g;
             if (inVa && ColRect(Col.Price) is (double px0, double pw0))
-                ctx.FillRectangle(Pal.B(Color.FromArgb(15, 232, 121, 249)), new Rect(px0, y, pw0, RowH));
+                ctx.FillRectangle(Pal.B(Pal.VaBand, 15 / 255.0), new Rect(px0, y, pw0, RowH));
             ctx.FillRectangle(Pal.B(Pal.RowLine), new Rect(0, y + RowH - 1, w, 1));
             if (hoverRow == t && hoverCol is Col hc && hc is Col.Buy or Col.Sold or Col.Bid or Col.Ask or Col.Bought or Col.Sell && ColRect(hc) is (double hx, double hw))
                 ctx.FillRectangle(Pal.B(Pal.Hover), new Rect(hx, y, hw, RowH - 1));
@@ -181,7 +181,7 @@ public sealed class LadderControl : Control
                     case Col.Price:
                     {
                         var col = t == bestBid ? Pal.Bid : t == bestAsk ? Pal.Ask : Pal.Muted;
-                        if (t == last) ctx.DrawRectangle(Pal.B(Color.Parse("#2a3142")), new Pen(Pal.B(Pal.Warn), 1.5), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
+                        if (t == last) ctx.DrawRectangle(Pal.B(Pal.LastBox), new Pen(Pal.B(Pal.Warn), 1.5), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
                         if (t == avgRow) ctx.DrawRectangle(null, new Pen(Pal.B(Pal.Warn), 1, new DashStyle(new double[] { 3, 2 }, 0)), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
                         Text(ctx, (t * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture), x, y, cw, RowH, t == last ? Colors.White : col, 11.5, TextAlignment.Center);
                         break;
@@ -215,8 +215,8 @@ public sealed class LadderControl : Control
                     case Col.Profile when vol.TryGetValue(t, out var vv) && vv > 0:
                     {
                         var wv = Math.Min(1, vv / Math.Max(1, prof.MaxVol)) * (cw - 2);
-                        var fill = t == prof.Poc ? Color.FromArgb(242, 228, 232, 240) : inVa ? Color.FromArgb(217, 150, 160, 178) : Color.FromArgb(128, 96, 106, 122);
-                        ctx.FillRectangle(new SolidColorBrush(fill), new Rect(x + 1, y + 0.5, wv, RowH - 1));
+                        var fill = t == prof.Poc ? Pal.B(Pal.ProfPoc, 0.95) : inVa ? Pal.B(Pal.ProfVa, 0.85) : Pal.B(Pal.ProfBar, 0.5);
+                        ctx.FillRectangle(fill,new Rect(x + 1, y + 0.5, wv, RowH - 1));
                         break;
                     }
                     // Δ — BookDepthIQ ladder.ts: signed bar from the column centre, cyan for +, orange for −,
@@ -225,8 +225,8 @@ public sealed class LadderControl : Control
                     {
                         var cx = x + cw / 2;
                         var dw = Math.Min(1, Math.Abs(dv) / Math.Max(1, prof.MaxAbsDelta)) * (cw / 2 - 1);
-                        var fill = dv >= 0 ? Color.FromArgb(204, 34, 211, 238) : Color.FromArgb(204, 251, 146, 60);
-                        ctx.FillRectangle(new SolidColorBrush(fill), new Rect(dv >= 0 ? cx : cx - dw, y + 0.5, dw, RowH - 1));
+                        var fill = Pal.B(dv >= 0 ? Pal.DeltaUp : Pal.DeltaDn, 0.8);
+                        ctx.FillRectangle(fill,new Rect(dv >= 0 ? cx : cx - dw, y + 0.5, dw, RowH - 1));
                         break;
                     }
                 }
@@ -301,7 +301,7 @@ public sealed class LadderControl : Control
             if (v == 0) continue;
             var a = Math.Min(1, Math.Abs(v) / p90);
             // Yellow = a wall: 3× the typical (median-ish) size showing, as in the Vest panel.
-            var c = Math.Abs(v) >= 3 * p90 / 2 ? Pal.Warn : v > 0 ? Pal.Bid : Pal.Ask;
+            var c = Math.Abs(v) >= 3 * p90 / 2 ? Pal.HeatHot : v > 0 ? Pal.HeatBid : Pal.HeatAsk;
             ctx.FillRectangle(Pal.B(c, 0.15 + 0.75 * a), new Rect(x + 1 + i * cellW, y + 1, Math.Max(1, cellW - 0.5), RowH - 3));
         }
         var f = s.Liquidity.FlowAt(t, g, Math.Max(1, ind.BigMin / 2));

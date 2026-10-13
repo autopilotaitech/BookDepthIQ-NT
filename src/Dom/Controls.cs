@@ -11,11 +11,11 @@ namespace BookDepthIQ.Dom;
 public static class Flight
 {
     public static readonly FontFamily Sans = new("Segoe UI Variable Text, Segoe UI, Inter, Arial");
-    public static readonly Color CardBg = Color.Parse("#0f141d");
-    public static readonly Color CardEdge = Color.Parse("#1c2433");
-    public static readonly Color Field = Color.Parse("#0a0e15");
-    public static readonly Color Accent = Color.Parse("#38bdf8");
-    public static readonly Color SegOn = Color.Parse("#16324a");
+    public static Color CardBg => Pal.Card;
+    public static Color CardEdge => Pal.Edge;
+    public static Color Field => Pal.Field;
+    public static Color Accent => Pal.Accent;
+    public static Color SegOn => Pal.SegOn;
 
     /// <summary>A section card: SMALL CAPS title, then its content.</summary>
     public static Control Card(string title, Control content)
@@ -103,10 +103,31 @@ public static class Flight
         {
             Content = text, FontFamily = Sans, FontSize = 12, FontWeight = FontWeight.SemiBold, Height = 30, Padding = new Thickness(14, 0), Margin = new Thickness(0, 0, 6, 0),
             CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1), VerticalContentAlignment = VerticalAlignment.Center,
-            Background = Pal.B(danger ? Color.Parse("#5a1414") : Field), BorderBrush = Pal.B(danger ? Pal.Neg : CardEdge), Foreground = Pal.B(danger ? Color.Parse("#ffd6d6") : Pal.Text),
+            Background = Pal.B(danger ? Pal.KillBtn : Field), BorderBrush = Pal.B(danger ? Pal.Neg : CardEdge), Foreground = Pal.B(danger ? Color.Parse("#ffd6d6") : Pal.Text),
         };
         if (tip != null) ToolTip.SetTip(b, tip);
         b.Click += (_, _) => click();
+        return b;
+    }
+
+    /// <summary>An ON / OFF switch: a pill toggle whose label says its state.</summary>
+    public static ToggleButton Switch(bool on, string? tip = null)
+    {
+        var b = Pill(on ? "ON" : "OFF", tip);
+        b.IsChecked = on;
+        b.Width = 64;
+        b.IsCheckedChanged += (_, _) => b.Content = b.IsChecked == true ? "ON" : "OFF";
+        return b;
+    }
+
+    /// <summary>The primary action: solid accent, dark text.</summary>
+    public static Button Primary(string text, Action click, string? tip = null)
+    {
+        var b = HeadBtn(text, click, tip);
+        b.Background = Pal.B(Accent);
+        b.BorderBrush = Pal.B(Accent);
+        b.Foreground = Pal.B(Pal.Bg);
+        b.Padding = new Thickness(22, 0);
         return b;
     }
 
@@ -125,6 +146,13 @@ public static class Flight
             b.BorderBrush = Pal.B(on ? Accent : CardEdge);
             b.BorderThickness = new Thickness(1);
             b.Foreground = Pal.B(on ? Accent : Pal.Muted);
+        }
+        // Fluent paints a checked ToggleButton in the Windows accent; use the scheme's (shared, live) brushes.
+        foreach (var state in new[] { "", "PointerOver", "Pressed" })
+        {
+            b.Resources["ToggleButtonBackgroundChecked" + state] = Pal.B(SegOn);
+            b.Resources["ToggleButtonForegroundChecked" + state] = Pal.B(Accent);
+            b.Resources["ToggleButtonBorderBrushChecked" + state] = Pal.B(Accent);
         }
         b.IsCheckedChanged += (_, _) => Paint();
         b.AttachedToVisualTree += (_, _) => Paint();

@@ -298,7 +298,9 @@ public sealed partial class MainWindow
 
     // ───────────── ladder lines ─────────────
 
-    private static readonly Color Purple = Color.Parse("#a78bfa");
+
+
+
 
     private IReadOnlyList<LadderLine> LadderLines()
     {
@@ -306,41 +308,41 @@ public sealed partial class MainWindow
         var ind = cfg.IndicatorsFor(s.Instrument);
         if (ind.VwapOn && s.Vwap.Value is double v)
         {
-            o.Add(new LadderLine((long)Math.Round(v), "VWAP", Purple, false, 1.5));
+            o.Add(new LadderLine((long)Math.Round(v), "VWAP", Pal.Vwap, false, 1.5));
             foreach (var (k, lo, hi) in s.Vwap.Bands(ind.VwapBands))
             {
-                o.Add(new LadderLine((long)Math.Round(hi), $"+{Ui.F(k)}σ", Purple, true));
-                o.Add(new LadderLine((long)Math.Round(lo), $"-{Ui.F(k)}σ", Purple, true));
+                o.Add(new LadderLine((long)Math.Round(hi), $"+{Ui.F(k)}σ", Pal.Vwap, true));
+                o.Add(new LadderLine((long)Math.Round(lo), $"-{Ui.F(k)}σ", Pal.Vwap, true));
             }
         }
         var snap = s.TrendSnap;
         if (cfg.ShowTrend)
         {
-            if (snap.T1.LineTicks is long l1) o.Add(new LadderLine(l1, (snap.T1.Dir == TrendDir.Up ? "▲" : "▼") + "ST1", snap.T1.Dir == TrendDir.Up ? Pal.Pos : Pal.Neg, false, 1.5));
-            if (snap.T2.LineTicks is long l2) o.Add(new LadderLine(l2, (snap.T2.Dir == TrendDir.Up ? "▲" : "▼") + "ST2", snap.T2.Dir == TrendDir.Up ? Pal.Pos : Pal.Neg, true));
+            if (snap.T1.LineTicks is long l1) o.Add(new LadderLine(l1, (snap.T1.Dir == TrendDir.Up ? "▲" : "▼") + "ST1", snap.T1.Dir == TrendDir.Up ? Pal.StUp : Pal.StDn, false, 1.5));
+            if (snap.T2.LineTicks is long l2) o.Add(new LadderLine(l2, (snap.T2.Dir == TrendDir.Up ? "▲" : "▼") + "ST2", snap.T2.Dir == TrendDir.Up ? Pal.StUp : Pal.StDn, true));
             if (snap.T1.LineTicks is long line && s.Trend.T1.AtrTicks is double atr && atr > 0 && snap.T1.Dir != TrendDir.Neutral)
             {
                 var up = snap.T1.Dir == TrendDir.Up;
-                o.Add(new LadderLine((long)Math.Round(line + (up ? 1 : -1) * Structure.ScalpNearAtr * atr), up ? "NO CHASE above (ST1 +2 ATR)" : "NO CHASE below (ST1 −2 ATR)", Pal.Warn, true));
+                o.Add(new LadderLine((long)Math.Round(line + (up ? 1 : -1) * Structure.ScalpNearAtr * atr), up ? "NO CHASE above (ST1 +2 ATR)" : "NO CHASE below (ST1 −2 ATR)", Pal.NoChase, true));
             }
         }
         // Naked POCs: each finished period's POC, until price trades there again.
         if (cfg.NpocOn)
             foreach (var n in s.Npoc.Levels)
-                o.Add(new LadderLine(n.Ticks, $"nPOC {DateTimeOffset.FromUnixTimeMilliseconds(n.PeriodStartMs).LocalDateTime:HH:mm}", Color.Parse("#f472b6"), true, 1.5));
+                o.Add(new LadderLine(n.Ticks, $"nPOC {DateTimeOffset.FromUnixTimeMilliseconds(n.PeriodStartMs).LocalDateTime:HH:mm}", Pal.Npoc, true, 1.5));
         if (s.Or is { } or)
-            foreach (var l in or.Levels()) o.Add(new LadderLine(l.Ticks, l.Label + (or.Forming(DomState.NowMs()) ? " (forming)" : ""), Color.Parse("#eab308"), true));
+            foreach (var l in or.Levels()) o.Add(new LadderLine(l.Ticks, l.Label + (or.Forming(DomState.NowMs()) ? " (forming)" : ""), Pal.Or, true));
         if (ind.FpOn && ind.FpLines)
         {
             var maxFp = Math.Max(1, s.Bought.Values.Concat(s.Sold.Values).DefaultIfEmpty(0).Max());
             var imb = Footprint.Find(s.Bought, s.Sold, 1, ind.FpRatio, maxFp * ind.FpMinPct / 100.0, ind.FpStack);
             foreach (var (t, buy, rows) in IndicatorCfg.StackZones(imb.BuyStack, imb.SellStack, 1))
-                o.Add(new LadderLine(t, $"{(buy ? "BUY" : "SELL")} STACK ×{rows}", buy ? Pal.Bid : Pal.Ask, true));
+                o.Add(new LadderLine(t, $"{(buy ? "BUY" : "SELL")} STACK ×{rows}", buy ? Pal.StackBuy : Pal.StackSell, true));
         }
         if (lastState == MarketState.Chop && s.Bars.Range(30, DomState.NowMs()) is var (hi30, lo30))
         {
-            o.Add(new LadderLine(hi30, "RANGE H 30m — fade", Pal.Muted, true));
-            o.Add(new LadderLine(lo30, "RANGE L 30m — fade", Pal.Muted, true));
+            o.Add(new LadderLine(hi30, "RANGE H 30m — fade", Pal.Range, true));
+            o.Add(new LadderLine(lo30, "RANGE L 30m — fade", Pal.Range, true));
         }
         // working bracket legs with their $
         foreach (var leg in s.OrdersOnScreen.Where(x => (x.IsTarget || x.IsStopLeg) && s.PosQty != 0))
