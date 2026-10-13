@@ -25,8 +25,8 @@ public sealed partial class MainWindow : Window
     private MarketState? lastState;
 
     // header
-    private readonly TextBox instBox = Ui.Input(120, "NinjaTrader instrument, e.g. NQ 12-26 (Enter or Go)");
-    private readonly ComboBox acctBox = Ui.Combo(140, Array.Empty<string>(), "NinjaTrader account (Sim101 to test)");
+    private readonly TextBox instBox = Flight.Text(120, "NinjaTrader instrument, e.g. NQ 12-26 (Enter or Go)");
+    private readonly ComboBox acctBox = new() { Width = 150, Height = 30, MinHeight = 30, FontFamily = Flight.Sans, FontSize = 13, CornerRadius = new CornerRadius(4), Background = Pal.B(Flight.Field), BorderBrush = Pal.B(Flight.CardEdge), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly Border bridgePill = Ui.Pill("BRIDGE", Pal.Warn);
     private readonly Border feedPill = Ui.Pill("FEED", Pal.Warn);
     private readonly Border trendPill = Ui.Pill("ST", Pal.Muted);
@@ -144,30 +144,68 @@ public sealed partial class MainWindow : Window
         };
         armBtn.IsCheckedChanged += (_, _) => { if (loading) return; cfg.HotkeysArmed = armBtn.IsChecked == true; cfg.Save(); };
 
-        var header = Ui.Bar(
-            Ui.Label("BookDepthIQ", Pal.Text, bold: true), instBox, Ui.Btn("Go", SwitchInstrument), acctBox, bridgePill, feedPill, trendPill, scalpPill, statePill,
-            Ui.Btn("RISK", () => new RiskWindow(cfg, s, dd, ApplyRiskPlan).Show(this), "risk calculator for every CME contract; Use in DOM writes the plan into the ticket"),
-            Ui.Btn("SETTINGS", () => new SettingsWindow(cfg, OnSettingsSaved).Show(this), "account rules, protect my day, indicators, SuperTrend, ladder columns, fees"),
-            Ui.Btn("KILL ⏻", Kill, "closes every position and cancels every order on this account (Ctrl+K). Never blocked.", Pal.Neg, Color.Parse("#3a1010")));
+        // Header, flight-panel style: identity on the left (instrument, account, link status), the three
+        // market reads in the middle as badges, actions on the right with KILL set apart in red.
+        ToolTip.SetTip(acctBox, "NinjaTrader account (Sim101 to test)");
+        foreach (var b in new[] { bridgePill, feedPill }) Flight.Badge(b);
+        foreach (var b in new[] { trendPill, scalpPill, statePill }) Flight.Badge(b, big: true);
+        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        left.Children.Add(new TextBlock { Text = "BOOKDEPTHIQ", FontFamily = Flight.Sans, FontSize = 12, FontWeight = FontWeight.Bold, LetterSpacing = 2, Foreground = Pal.B(Flight.Accent), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 8, 0) });
+        left.Children.Add(instBox);
+        left.Children.Add(Flight.HeadBtn("GO", SwitchInstrument, "load this instrument"));
+        left.Children.Add(acctBox);
+        left.Children.Add(new Border { Width = 8 });
+        left.Children.Add(bridgePill);
+        left.Children.Add(feedPill);
+        var reads = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+        reads.Children.Add(trendPill);
+        reads.Children.Add(scalpPill);
+        reads.Children.Add(statePill);
+        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        right.Children.Add(Flight.HeadBtn("RISK", () => new RiskWindow(cfg, s, dd, ApplyRiskPlan).Show(this), "risk calculator for every CME contract; Use in DOM writes the plan into the ticket"));
+        right.Children.Add(Flight.HeadBtn("SETTINGS", () => new SettingsWindow(cfg, OnSettingsSaved).Show(this), "account rules, protect my day, indicators, SuperTrend, ladder columns, fees"));
+        right.Children.Add(new Border { Width = 10 });
+        right.Children.Add(Flight.HeadBtn("KILL ⏻", Kill, "closes every position and cancels every order on this account (Ctrl+K). Never blocked.", danger: true));
+        var headGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(8, 6) };
+        // The reads take the space between; on a narrow window they clip instead of running under RISK.
+        var readsCell = new Border { ClipToBounds = true, Child = reads };
+        Grid.SetColumn(readsCell, 1);
+        Grid.SetColumn(right, 2);
+        headGrid.Children.Add(left);
+        headGrid.Children.Add(readsCell);
+        headGrid.Children.Add(right);
+        var header = new Border { Background = Pal.B(Pal.Panel), BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 0, 1), Child = headGrid };
 
-        var acctRow = Ui.Bar(acctLine, roomBar);
-        var statRow = new WrapPanel { Margin = new Thickness(8, 4) };
-        foreach (var (k, tip) in new[]
-        {
-            ("POSITION", ""), ("AVG", ""), ("FAIL PRICE", "price where your account hits its floor at this size"), ("OPEN P&L", ""), ("TO FLOOR", "ticks against you before the account fails"),
-            ("POC · VA", "visible-range volume profile: point of control and value area of the rows on screen"), ("CUM Δ", "session delta: aggressive buys − sells"), ("ST1 · ST2", "dual SuperTrend lines (60 s / 15 s)"),
-            ("VWAP", "session VWAP and how many σ price is from it"), ("BID / ASK LIQ", "share of resting size on each side (top 10 levels)"), ("REALIZED", "NinjaTrader realized P&L"), ("TODAY", "journal: trades and net $ today"),
-        })
-        {
-            var (box, v) = Ui.Stat(k, tip == "" ? null : tip);
-            stat[k] = v;
-            statRow.Children.Add(box);
-        }
+        // Telemetry band: POSITION · MARKET · ACCOUNT groups of big numbers.
+        (Control, TextBlock) St(string k, string? tip = null, double w = 0) { var x = Flight.Stat(k, tip, w); stat[k] = x.Value; return x; }
+        var roomStat = St("ROOM", "$ left before the account fails (equity − floor, or today's limit if tighter)", 90);
+        roomBar.Width = 90;
+        roomBar.MinWidth = 0;
+        roomBar.Height = 4;
+        roomBar.Margin = new Thickness(0, 3, 0, 0);
+        ((StackPanel)roomStat.Item1).Children.Add(roomBar);
+        var band = new WrapPanel { Margin = new Thickness(0, 2) };
+        band.Children.Add(Flight.Group("POSITION",
+            St("POSITION", null, 70).Item1, St("AVG", null, 80).Item1, St("OPEN P&L", null, 90).Item1,
+            St("FAIL PRICE", "price where your account hits its floor at this size", 80).Item1, St("TO FLOOR", "ticks against you before the account fails", 64).Item1));
+        band.Children.Add(Flight.Group("MARKET",
+            St("POC · VA", "visible-range volume profile: point of control and value area of the rows on screen").Item1,
+            St("CUM Δ", "delta since the profile start: aggressive buys − sells", 56).Item1,
+            St("ST1 · ST2", "dual SuperTrend lines (60 s / 15 s)").Item1,
+            St("VWAP", "session VWAP and how many σ price is from it").Item1,
+            St("BID / ASK LIQ", "share of resting size on each side (top 10 levels)").Item1));
+        band.Children.Add(Flight.Group("ACCOUNT",
+            St("EQUITY", "net liquidation (or cash + open P&L)", 96).Item1, roomStat.Item1,
+            St("TODAY", "today's P&L since the 17:00 Chicago start, and trades", 96).Item1, St("REALIZED", "NinjaTrader realized P&L", 80).Item1));
+        acctLine.FontFamily = Flight.Sans;
+        acctLine.FontSize = 11;
+        bracketLine.FontFamily = Flight.Sans;
+        bracketLine.FontSize = 12;
         var top = new StackPanel();
         top.Children.Add(header);
-        top.Children.Add(acctRow);
-        top.Children.Add(new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 0, 1), Child = statRow });
-        top.Children.Add(Ui.Pad(bracketLine));
+        top.Children.Add(new Border { Background = Pal.B(Pal.Bg), BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 0, 0, 1), Child = band });
+        top.Children.Add(Ui.Pad(acctLine, 12, 2));
+        top.Children.Add(Ui.Pad(bracketLine, 12, 3));
 
         // Right column (owner's layout, 2026-10-13): TAPE / JOURNAL / LOG view with its toggles, then the
         // ticket settings, then the order buttons in three columns. The ladder runs the full height.

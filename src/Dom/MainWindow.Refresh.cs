@@ -72,8 +72,12 @@ public sealed partial class MainWindow
         var room = dd.Room(eq);
         var day = Day();
         var dayPnl = eq - day.StartEquity;
-        acctLine.Text = $"{s.Account} · equity ${eq:N2} · floor ${dd.Floor:N2} ({cfg.DrawdownKind}) · room ${room:N2} · today {LadderControl.Usd(dayPnl)} · {day.Trades} trades" +
-                        $"{(s.TrailDd != 0 ? $" · NT trailing DD ${s.TrailDd:N2}" : "")} · {s.Instrument} tick {s.TickSize} = ${s.TickValue:N2}{(s.HistoryLoaded ? "" : " · loading history…")}{(s.HistoryNote != "" ? " · " + s.HistoryNote : "")}";
+        Set("EQUITY", $"${eq:N0}", Pal.Text);
+        Set("ROOM", $"${room:N0}", room <= 0 ? Pal.Neg : Pal.Text);
+        Set("TODAY", $"{LadderControl.Usd(dayPnl)} · {day.Trades}", dayPnl >= 0 ? Pal.Pos : Pal.Neg);
+        acctLine.Text = $"{s.Account} · floor ${dd.Floor:N2} ({cfg.DrawdownKind}){(s.TrailDd != 0 ? $" · NT trailing DD ${s.TrailDd:N2}" : "")} · {s.Instrument} tick {s.TickSize} = ${s.TickValue:N2}" +
+                        $"{(s.HistoryLoaded ? "" : " · loading history…")}{(s.HistoryNote != "" ? " · " + s.HistoryNote : "")}";
+        acctLine.Foreground = Pal.B(Pal.Muted);
         roomBar.Value = cfg.MaxDrawdown > 0 ? Math.Clamp(room / cfg.MaxDrawdown, 0, 1) : 0;
         roomBar.Foreground = Pal.B(roomBar.Value > 0.5 ? Pal.Pos : roomBar.Value > 0.25 ? Pal.Warn : Pal.Neg);
 
@@ -95,8 +99,6 @@ public sealed partial class MainWindow
         var share = Footprint.BidShare(s.Book.Bids.Sizes.Take(10), s.Book.Asks.Sizes.Take(10));
         Set("BID / ASK LIQ", share is double b ? $"{Pct(b)} / {Pct(1 - b)}" : "—", Pal.Text);
         Set("REALIZED", LadderControl.Usd(s.Realized), s.Realized >= 0 ? Pal.Pos : Pal.Neg);
-        var today = s.Journal.Where(t => Protect.TradingDay(t.Close) == day.Day).ToList();
-        Set("TODAY", $"{today.Count} · {LadderControl.Usd(today.Sum(t => t.Pnl))}", today.Sum(t => t.Pnl) >= 0 ? Pal.Pos : Pal.Neg);
 
         // bracket bar in a trade
         if (q == 0) bracketLine.Text = "";

@@ -62,6 +62,54 @@ public static class Flight
         return t;
     }
 
+    /// <summary>Restyles a status/read badge (Ui.Pill) for the header: rounded, sans, roomy.</summary>
+    public static Border Badge(Border b, bool big = false)
+    {
+        b.CornerRadius = new CornerRadius(big ? 15 : 13);
+        b.Padding = new Thickness(big ? 11 : 9, big ? 5 : 4);
+        b.Margin = new Thickness(0, 0, 6, 0);
+        b.VerticalAlignment = VerticalAlignment.Center;
+        b.Background = Pal.B(Field);
+        if (b.Child is TextBlock t) { t.FontFamily = Sans; t.FontSize = big ? 12.5 : 11.5; t.FontWeight = FontWeight.SemiBold; }
+        return b;
+    }
+
+    /// <summary>A telemetry stat: small-caps label over a big mono value.</summary>
+    public static (Control Box, TextBlock Value) Stat(string label, string? tip = null, double minWidth = 0)
+    {
+        var v = new TextBlock { FontFamily = Pal.Mono, FontSize = 15, FontWeight = FontWeight.SemiBold, Foreground = Pal.B(Pal.Text), Text = "—" };
+        var sp = new StackPanel { Spacing = 1, Margin = new Thickness(0, 0, 14, 0), MinWidth = minWidth };
+        sp.Children.Add(new TextBlock { Text = label, FontFamily = Sans, FontSize = 9.5, LetterSpacing = 1, Foreground = Pal.B(Pal.Muted) });
+        sp.Children.Add(v);
+        if (tip != null) ToolTip.SetTip(sp, tip);
+        return (sp, v);
+    }
+
+    /// <summary>A telemetry group: a small title over a row of stats, with a divider on its right.</summary>
+    public static Control Group(string title, params Control[] stats)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var c in stats) row.Children.Add(c);
+        var sp = new StackPanel { Spacing = 4 };
+        sp.Children.Add(new TextBlock { Text = title, FontFamily = Sans, FontSize = 9, FontWeight = FontWeight.SemiBold, LetterSpacing = 1.6, Foreground = Pal.B(Accent), Opacity = 0.8 });
+        sp.Children.Add(row);
+        return new Border { BorderBrush = Pal.B(CardEdge), BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(12, 6, 6, 6), Child = sp };
+    }
+
+    /// <summary>A header button: ghost (outline) or solid danger.</summary>
+    public static Button HeadBtn(string text, Action click, string? tip = null, bool danger = false)
+    {
+        var b = new Button
+        {
+            Content = text, FontFamily = Sans, FontSize = 12, FontWeight = FontWeight.SemiBold, Height = 30, Padding = new Thickness(14, 0), Margin = new Thickness(0, 0, 6, 0),
+            CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1), VerticalContentAlignment = VerticalAlignment.Center,
+            Background = Pal.B(danger ? Color.Parse("#5a1414") : Field), BorderBrush = Pal.B(danger ? Pal.Neg : CardEdge), Foreground = Pal.B(danger ? Color.Parse("#ffd6d6") : Pal.Text),
+        };
+        if (tip != null) ToolTip.SetTip(b, tip);
+        b.Click += (_, _) => click();
+        return b;
+    }
+
     /// <summary>A pill toggle: off = outline, on = filled accent.</summary>
     public static ToggleButton Pill(string text, string? tip = null)
     {
