@@ -2,7 +2,7 @@
 
 A standalone DOM for NinjaTrader 8: an **Avalonia** app (`src/Dom`, .NET 8) in its own process,
 fed by a thin **NT8 AddOn bridge** (`nt8/AddOns/BookDepthIQBridge.cs`) over `127.0.0.1`. It is a
-port of the BookDepthIQ-Vest panel (C:\Users\walls\OneDrive\Documents\github\BookDepthIQ-Vest):
+port of the BookDepthIQ-Vest panel (https://github.com/autopilotaitech/BookDepthIQ-Vest):
 same look and behaviour, with risk in CME contracts / ticks / tick value instead of perp units.
 
 Separate project. Do not edit BookDepthIQ or BookDepthIQ-Vest from here; read them for logic.
