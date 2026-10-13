@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compile check only: builds nt8/AddOns/*.cs the way NinjaTrader would (.NET Framework 4.8,
+       C# 6, NT's default references). NinjaTrader itself compiles the file after you copy it in. -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Library</OutputType>
+    <LangVersion>6</LangVersion>
+    <UseWPF>true</UseWPF>
+    <NtBin Condition="'$(NtBin)' == ''">C:\Program Files\NinjaTrader 8\bin</NtBin>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>CS0067;CS0169</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\AddOns\*.cs" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="NinjaTrader.Core"><HintPath>$(NtBin)\NinjaTrader.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="NinjaTrader.Gui"><HintPath>$(NtBin)\NinjaTrader.Gui.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
