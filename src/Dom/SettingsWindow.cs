@@ -67,6 +67,8 @@ public sealed class SettingsWindow : Window
             ("VWAP session end", Text(ind.VwapEnd, v => ind = ind with { VwapEnd = v })),
             ("VWAP time zone", Text(ind.VwapTz, v => ind = ind with { VwapTz = v })),
             ("Bands σ (e.g. 1, 2)", Text(string.Join(", ", ind.VwapBands.Select(Ui.F)), v => ind = ind with { VwapBands = IndicatorCfg.ParseBands(v) })),
+            ("Profile · Δ · footprint start (HH:MM, blank = DOM open)", Text(ind.ProfileStart, v => ind = ind with { ProfileStart = v })),
+            ("Profile uses history from the start", Bool(ind.ProfileHistory, b => ind = ind with { ProfileHistory = b }, "off = live prints only; on = backfill from the start time with NinjaTrader's history (History hours must reach back that far)")),
             ("Footprint imbalances", Bool(ind.FpOn, b => ind = ind with { FpOn = b })),
             ("Imbalance ratio (3 = 3:1)", Num(ind.FpRatio, v => ind = ind with { FpRatio = v })),
             ("Min row volume, % of busiest", Num(ind.FpMinPct, v => ind = ind with { FpMinPct = v })),

@@ -69,8 +69,12 @@ BUY.
   histogram (POC near-white, value area mid-grey, outside it dim grey), with the value area as a
   faint magenta band on PRICE. Δ is a signed bar from the column centre, cyan for + and orange for −.
   **Visible range:** the POC, value area and bar scale come from the rows on screen, so they follow
-  scrolling and zoom. Δ scales to the visible rows too. Both update on every print. They count the
-  CME trading day (reset at 17:00 Chicago), from NinjaTrader's history plus live prints.
+  scrolling and zoom. Δ scales to the visible rows too. Both update on every print.
+  **Start time (SETTINGS → Indicators):** profile, Δ and the footprint count **live** prints from
+  your start time (HH:MM in the VWAP zone), or from when the DOM opens if it is blank (the default).
+  **Use history** backfills from the start time with NinjaTrader's history; otherwise it is live
+  only. SuperTrend, VWAP, the opening range and the heatmap always use history, so they are ready at
+  once.
 - **P&L:** what each price is worth to your open position.
 - **Lines:** VWAP with ±σ bands, ST1/ST2, the RTH opening range (NQ/ES, BookDepthIQ PAXOR),
   **NO CHASE** (ST1 ± 2 ATR), RANGE H/L in chop, your TP/SL legs with their $, **FAIL** (where the

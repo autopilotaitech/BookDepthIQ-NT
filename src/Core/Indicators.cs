@@ -66,6 +66,11 @@ public sealed record IndicatorCfg
     public string VwapEnd { get; init; } = "16:00";
     public string VwapTz { get; init; } = "America/New_York";
     public double[] VwapBands { get; init; } = { 1, 2 };
+    /// <summary>Volume profile, Δ and footprint count prints from the latest "HH:MM" (VWAP zone); "" = from
+    /// when the DOM opened or switched market (owner, 2026-10-13).</summary>
+    public string ProfileStart { get; init; } = "";
+    /// <summary>Backfill the profile from the start time with NinjaTrader's history. Off = live prints only.</summary>
+    public bool ProfileHistory { get; init; }
     public bool FpOn { get; init; } = true;
     /// <summary>Lights a Sold/Bought cell at this diagonal ratio (3 = 3:1).</summary>
     public double FpRatio { get; init; } = 3;
