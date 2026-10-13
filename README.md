@@ -176,6 +176,19 @@ per 1% move. Hover it for every level.
 - **Caveats:** dealer positioning is inferred (customers sell calls, buy puts), not observed. The
   data is delayed. These are levels, not direction.
 
+## Package to share
+
+```
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.0.0
+```
+
+This runs the tests, then builds `dist\BookDepthIQ-DOM-1.0.0-win-x64.zip` (~37 MB), which holds:
+- `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
+- `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
+- `INSTALL.txt`: the install steps.
+
+The exe is not code-signed, so Windows SmartScreen asks once ("More info › Run anyway").
+
 ## Settings and colours
 
 SETTINGS has a section rail on the left: Account, Fees & warnings, Protect my day, Ladder,
