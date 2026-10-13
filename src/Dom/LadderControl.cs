@@ -179,6 +179,16 @@ public sealed class LadderControl : Control
             lineRows.Add(row);
         }
 
+        // On a line's row, wipe the line from behind a number's glyphs first; the bar and the number then
+        // draw over that, so the line passes BEHIND every number and the bars stay whole.
+        void Clear(long t, string text, double x, double y, double tw, double size, TextAlignment align, bool bold = false)
+        {
+            if (!lineRows.Contains(t)) return;
+            var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, bold ? TfBold : Tf, size, Pal.B(Pal.Text));
+            var left = align == TextAlignment.Right ? x + tw - ft.Width : align == TextAlignment.Center ? x + (tw - ft.Width) / 2 : x;
+            ctx.FillRectangle(Pal.B(Pal.Bg), new Rect(left - 2, y + (RowH - ft.Height) / 2, ft.Width + 4, ft.Height));
+        }
+
         for (var r = 0; r < rows; r++)
         {
             var t = top - r * g;
@@ -191,6 +201,7 @@ public sealed class LadderControl : Control
                     case Col.Bid when bids.TryGetValue(t, out var bs) && bs > 0:
                     {
                         var bw = cw * bs / maxSize;
+                        Clear(t, Num(bs), x, y, cw - 4, 11.5, TextAlignment.Right, wallsB.Contains(t));
                         ctx.FillRectangle(Pal.B(Pal.Bid, 0.28), new Rect(x + cw - bw, y + 2, bw, RowH - 5));
                         Text(ctx, Num(bs), x, y, cw - 4, RowH, wallsB.Contains(t) ? Pal.Warn : Pal.Bid, 11.5, TextAlignment.Right, bold: wallsB.Contains(t));
                         break;
@@ -198,6 +209,7 @@ public sealed class LadderControl : Control
                     case Col.Ask when asks.TryGetValue(t, out var asz) && asz > 0:
                     {
                         var aw = cw * asz / maxSize;
+                        Clear(t, Num(asz), x + 4, y, cw - 4, 11.5, TextAlignment.Left, wallsA.Contains(t));
                         ctx.FillRectangle(Pal.B(Pal.Ask, 0.28), new Rect(x, y + 2, aw, RowH - 5));
                         Text(ctx, Num(asz), x + 4, y, cw - 4, RowH, wallsA.Contains(t) ? Pal.Warn : Pal.Ask, 11.5, TextAlignment.Left, bold: wallsA.Contains(t));
                         break;
@@ -219,6 +231,7 @@ public sealed class LadderControl : Control
                     case Col.Sold when sold.TryGetValue(t, out var sv) && sv > 0:
                     {
                         var lit = imb.Sell.Contains(t);
+                        Clear(t, Num(sv), x, y, cw - 4, 10.5, TextAlignment.Right, lit);
                         if (lit) ctx.FillRectangle(Pal.B(Pal.Ask, imb.SellStack.Contains(t) ? 0.45 : 0.25), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
                         Text(ctx, Num(sv), x, y, cw - 4, RowH, lit ? Colors.White : Pal.Ask, 10.5, TextAlignment.Right, bold: lit);
                         break;
@@ -226,6 +239,7 @@ public sealed class LadderControl : Control
                     case Col.Bought when bought.TryGetValue(t, out var bv) && bv > 0:
                     {
                         var lit = imb.Buy.Contains(t);
+                        Clear(t, Num(bv), x + 4, y, cw - 4, 10.5, TextAlignment.Left, lit);
                         if (lit) ctx.FillRectangle(Pal.B(Pal.Bid, imb.BuyStack.Contains(t) ? 0.45 : 0.25), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
                         Text(ctx, Num(bv), x + 4, y, cw - 4, RowH, lit ? Colors.White : Pal.Bid, 10.5, TextAlignment.Left, bold: lit);
                         break;
@@ -233,6 +247,7 @@ public sealed class LadderControl : Control
                     case Col.Pnl when s.PosQty != 0:
                     {
                         var pv = (t * s.TickSize - s.PosAvg) * s.PosQty * s.PointValue;
+                        Clear(t, Usd(pv), x, y, cw - 4, 10.5, TextAlignment.Right);
                         Text(ctx, Usd(pv), x, y, cw - 4, RowH, pv >= 0 ? Pal.Pos : Pal.Neg, 10.5, TextAlignment.Right);
                         break;
                     }
