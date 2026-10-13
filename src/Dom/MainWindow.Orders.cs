@@ -330,6 +330,27 @@ public sealed partial class MainWindow
         if (cfg.NpocOn)
             foreach (var n in s.Npoc.Levels)
                 o.Add(new LadderLine(n.Ticks, $"nPOC {DateTimeOffset.FromUnixTimeMilliseconds(n.PeriodStartMs).LocalDateTime:HH:mm}", Pal.Npoc, true, 1.5));
+        // GEX (BookDepthIQ's GEX Levels): numbered levels first and thinnest, then range, walls, magnet,
+        // and the flip last — the level being watched. Old data dims rather than vanishing.
+        if (GexView() is { } gv)
+        {
+            var gc = cfg.Gex;
+            var dim = GexStale();
+            Color C(Color c) => dim ? Color.FromArgb(150, c.R, c.G, c.B) : c;
+            long T(double price) => (long)Math.Round(price / s.TickSize);
+            var w = Math.Max(0.5, gc.LineWidth);
+            var n = 0;
+            foreach (var (price, _) in gv.Set.Levels.Take(Math.Clamp(gc.TopN, 0, 7))) o.Add(new LadderLine(T(price), $"GEX {++n}", C(Pal.GexLevel), false, w * 0.7));
+            if (gc.ShowRange)
+            {
+                if (gv.RangeHigh is double rh) o.Add(new LadderLine(T(rh), "RANGE HIGH", C(Pal.GexRange), true, w * 0.7));
+                if (gv.RangeLow is double rl) o.Add(new LadderLine(T(rl), "RANGE LOW", C(Pal.GexRange), true, w * 0.7));
+            }
+            if (gv.Set.CallWall is double cw) o.Add(new LadderLine(T(cw), "CALL WALL", C(Pal.GexCall), false, w * 1.4));
+            if (gv.Set.PutWall is double pw) o.Add(new LadderLine(T(pw), "PUT WALL", C(Pal.GexPut), false, w * 1.4));
+            if (gc.ShowMagnet && gv.Set.Magnet is double mg) o.Add(new LadderLine(T(mg), "MAGNET", C(Pal.GexMagnet), true, w * 1.2));
+            if (gv.Set.Flip is double fl) o.Add(new LadderLine(T(fl), "γ FLIP", C(Pal.GexFlip), false, w * 1.6));
+        }
         if (s.Or is { } or)
             foreach (var l in or.Levels()) o.Add(new LadderLine(l.Ticks, l.Label + (or.Forming(DomState.NowMs()) ? " (forming)" : ""), Pal.Or, true));
         if (ind.FpOn && ind.FpLines)

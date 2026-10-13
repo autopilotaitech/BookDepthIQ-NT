@@ -47,7 +47,14 @@ public static class Pal
         new("stackBuy", "Chart lines", "Buy stack zone", Color.Parse("#22d3ee")),
         new("stackSell", "Chart lines", "Sell stack zone", Color.Parse("#fb923c")),
 
-        new("profBar", "Profile · Δ · heat", "Profile bars", Color.Parse("#606a7a")),
+        new("gexCall", "GEX", "Call wall", Color.Parse("#4ade80")),
+        new("gexPut", "GEX", "Put wall", Color.Parse("#fb6060")),
+        new("gexFlip", "GEX", "Gamma flip", Color.Parse("#facc15")),
+        new("gexMagnet", "GEX", "Magnet", Color.Parse("#2dd4bf")),
+        new("gexLevel", "GEX", "GEX 1…7", Color.Parse("#94a3b8")),
+        new("gexRange", "GEX", "Expected range", Color.Parse("#e4e8f1")),
+
+        new("profBar","Profile · Δ · heat", "Profile bars", Color.Parse("#606a7a")),
         new("profVa", "Profile · Δ · heat", "Profile value area", Color.Parse("#96a0b2")),
         new("profPoc", "Profile · Δ · heat", "Profile POC", Color.Parse("#e4e8f0")),
         new("vaBand", "Profile · Δ · heat", "Value-area band", Color.Parse("#e879f9")),
@@ -181,6 +188,12 @@ public static class Pal
     public static Color Range => Get("range");
     public static Color StackBuy => Get("stackBuy");
     public static Color StackSell => Get("stackSell");
+    public static Color GexCall => Get("gexCall");
+    public static Color GexPut => Get("gexPut");
+    public static Color GexFlip => Get("gexFlip");
+    public static Color GexMagnet => Get("gexMagnet");
+    public static Color GexLevel => Get("gexLevel");
+    public static Color GexRange => Get("gexRange");
     public static Color ProfBar => Get("profBar");
     public static Color ProfVa => Get("profVa");
     public static Color ProfPoc => Get("profPoc");

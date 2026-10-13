@@ -139,6 +139,41 @@ BUY.
   position): **B/E after TP1**, **trailing stop** (after N R, or on ST1/ST2), **stop guard** (puts a
   vanished stop back), and the two closes above.
 
+## GEX levels
+
+This is a port of BookDepthIQ's GEX Levels. It computes dealer gamma from **CBOE's free delayed option
+chains**:
+
+| Futures | Option chain | Converted by |
+|---|---|---|
+| ES / MES | SPX | spread |
+| NQ / MNQ | QQQ | ratio |
+| YM | DIA | ratio |
+| GC | GLD | ratio |
+| CL | USO | ratio |
+
+The ladder draws these lines:
+- **CALL WALL** and **PUT WALL**
+- **γ FLIP** (the zero-gamma spot)
+- **MAGNET**
+- **GEX 1…n**
+- **RANGE HIGH / LOW** (the one-day move from iv30)
+
+The **GEX** read in MARKET shows +γ (dealers damp moves) or −γ (they amplify them), with the net $
+per 1% move. Hover it for every level.
+
+- **How the levels hold:** they change only when the daily open-interest vintage changes, and the
+  futures conversion is frozen with them, so the lines don't wander with price. RECALC in settings
+  shows the map recomputed every poll instead.
+- **No measured conversion = no lines:** the spread or ratio is the median of 30+ s of live book
+  mids. Replayed prints never feed it.
+- **Fetching:** polls every 60 s on its own task, with gzip and If-None-Match (a 304 costs no bytes).
+  It never touches an order.
+- **Settings › GEX:** on/off, expiries (4 nearest / 0DTE / all), daily or recalculated map, how many
+  numbered levels, range, magnet, line width. Colours are in Colours › GEX.
+- **Caveats:** dealer positioning is inferred (customers sell calls, buy puts), not observed. The
+  data is delayed. These are levels, not direction.
+
 ## Settings and colours
 
 SETTINGS has a section rail on the left: Account, Fees & warnings, Protect my day, Ladder,

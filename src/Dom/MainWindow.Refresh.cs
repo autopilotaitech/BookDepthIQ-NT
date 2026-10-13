@@ -99,6 +99,7 @@ public sealed partial class MainWindow
         var share = Footprint.BidShare(s.Book.Bids.Sizes.Take(10), s.Book.Asks.Sizes.Take(10));
         Set("BID / ASK LIQ", share is double b ? $"{Pct(b)} / {Pct(1 - b)}" : "—", Pal.Text);
         Set("REALIZED", LadderControl.Usd(s.Realized), s.Realized >= 0 ? Pal.Pos : Pal.Neg);
+        RefreshGex();
 
         // bracket bar in a trade
         bracketPad.IsVisible = q != 0;
@@ -112,6 +113,59 @@ public sealed partial class MainWindow
             bracketLine.Foreground = Pal.B(legs.Any(o => o.IsStopLeg) ? Pal.Text : Pal.Neg);
         }
     }
+
+    private long lastGexSample;
+
+    /// <summary>GEX: follow the instrument, feed the basis from the live book mid once a second (LIVE
+    /// prints only — a replayed tape against today's chain would be nonsense), and show the read.</summary>
+    private void RefreshGex()
+    {
+        var g = cfg.Gex;
+        if (!g.On) { gex.Stop(); Set("GEX", "off", Pal.Muted); return; }
+        gex.Follow(s.Instrument);
+        var wall = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var livePrints = s.Tape.Count > 0 && Math.Abs(wall - s.Tape[0].TimeMs) < 120_000;
+        if (livePrints && Environment.TickCount64 - lastGexSample >= 1000 && s.Book.BestBid is long bb && s.Book.BestAsk is long ba)
+        {
+            lastGexSample = Environment.TickCount64;
+            gex.SampleBasis((bb + ba) / 2.0 * s.TickSize);
+        }
+        var box = (Control?)stat["GEX"].Parent;
+        var view = GexView();
+        if (gex.Store is not { } st) { Set("GEX", "n/a", Pal.Muted); if (box != null) ToolTip.SetTip(box, gex.Status); return; }
+        if (view is null)
+        {
+            var why = st.Frozen == null && st.Live == null ? "loading…" : $"basis {st.BasisSamples}/30";
+            Set("GEX", why, Pal.Muted);
+            if (box != null) ToolTip.SetTip(box, $"{gex.Status}\nNo levels drawn until the futures/{st.Source.Name} {(st.Source.Conversion == GexConversion.Ratio ? "ratio" : "spread")} is measured from live prints (30 s) — a level at the wrong price is worse than none.");
+            return;
+        }
+        var net = view.Set.NetGex;
+        var stale = GexStale();
+        Set("GEX", $"{(net >= 0 ? "+γ" : "−γ")} {Money(Math.Abs(net))}{(stale ? " · old" : "")}", stale ? Pal.Muted : net >= 0 ? Pal.Pos : Pal.Neg);
+        if (box != null)
+        {
+            var set = view.Set;
+            string P(double? v) => v is double x ? Px(x) : "—";
+            var age = gex.PayloadUtc is DateTime t ? $"{(DateTime.UtcNow - t).TotalMinutes:0} min ago" : "—";
+            ToolTip.SetTip(box,
+                $"{(net >= 0 ? "POSITIVE gamma: dealers damp moves" : "NEGATIVE gamma: dealers amplify moves")} · net {(net < 0 ? "−" : "")}{Money(Math.Abs(net))} per 1%\n" +
+                $"call wall {P(set.CallWall)} · put wall {P(set.PutWall)} · flip {P(set.Flip)} · magnet {P(set.Magnet)}\n" +
+                $"range {P(view.RangeLow)} – {P(view.RangeHigh)}\n" +
+                $"{(g.Scope switch { GexStore.Scope.ZeroDte => "today's expiry", GexStore.Scope.All => "every expiry", _ => "4 nearest expiries" })} · {(g.Live ? "recalculated map" : "daily open-interest map")} · " +
+                $"{st.Source.Name} {(view.Mode == GexConversion.Ratio ? $"× {view.Basis:0.0000}" : $"{view.Basis:+0.00;-0.00}")} · payload {age}\n{gex.Status}\n" +
+                "Dealer positioning is inferred (customers sell calls, buy puts), not observed. Delayed data. Levels, not direction.");
+        }
+    }
+
+    private GexView? GexView() => cfg.Gex.On ? gex.Store?.View(s.TickSize, cfg.Gex.Scope, cfg.Gex.Live) : null;
+
+    /// <summary>Old when CBOE hasn't answered for 10 min or the payload is over 30 min old (closed, weekend).</summary>
+    private bool GexStale() =>
+        gex.LastOk is not DateTime ok || (DateTime.UtcNow - ok).TotalMinutes > 10 || gex.PayloadUtc is not DateTime p || (DateTime.UtcNow - p).TotalMinutes > 30;
+
+    private static string Money(double v) =>
+        v >= 1e9 ? $"${v / 1e9:0.0}B" : v >= 1e6 ? $"${v / 1e6:0}M" : $"${v / 1e3:0}K";
 
     private void Set(string key, string text, Color c)
     {

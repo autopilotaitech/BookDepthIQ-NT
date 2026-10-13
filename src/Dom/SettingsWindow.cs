@@ -211,7 +211,20 @@ public sealed class SettingsWindow : Window
                 Row("OR mid line", null, Bool(ind.OrMid, b => ind = ind with { OrMid = b }))))));
         apply.Add(() => c.SetIndicators(c.Instrument, ind));
 
-        sections.Add(("SuperTrend", "ST1 is the slow line, ST2 the fast one. The scalp read is built on ST1.", Cards(
+        var gx = c.Gex;
+        sections.Add(("GEX", "Dealer gamma levels from CBOE's free delayed option chains: ES/MES → SPX, NQ/MNQ → QQQ, YM → DIA, GC → GLD, CL → USO. " +
+                             "Positioning is inferred, not observed; levels, not direction. Read-only: GEX never touches an order.", Cards(
+            Card("GEX LEVELS",
+                Row("GEX on the ladder", "call wall, put wall, gamma flip, magnet, numbered levels", Bool(gx.On, b => gx.On = b)),
+                Row("Expiries", "4 nearest (default) · today's only · every expiry", Seg(new[] { "NEAR 4", "0DTE", "ALL" }, (int)gx.Scope, i => gx.Scope = (GexStore.Scope)i)),
+                Row("Map", "daily open-interest map (moves once a day) or recalculated every poll", Seg(new[] { "DAILY", "RECALC" }, gx.Live ? 1 : 0, i => gx.Live = i == 1))),
+            Card("DRAW",
+                Row("Numbered levels", "GEX 1…n, strongest first, within ~2 days' move (0–7)", Num(gx.TopN, v => gx.TopN = Math.Clamp((int)v, 0, 7))),
+                Row("Expected range", "one-day move from iv30", Bool(gx.ShowRange, b => gx.ShowRange = b)),
+                Row("Magnet", "the heaviest combined call + put strike (the pin)", Bool(gx.ShowMagnet, b => gx.ShowMagnet = b)),
+                Row("Line width", "px (walls and flip draw thicker); colours in Colours › GEX", Num(gx.LineWidth, v => gx.LineWidth = Math.Clamp(v, 0.5, 6)))))));
+
+        sections.Add(("SuperTrend","ST1 is the slow line, ST2 the fast one. The scalp read is built on ST1.", Cards(
             Trend("ST1", c.St1, t => c.St1 = t), Trend("ST2", c.St2, t => c.St2 = t))));
 
         var or = c.PaxOr;

@@ -8,6 +8,20 @@ public enum StopMode { Ticks, Atr, Swing }
 public enum TrailMode { Off, R, St1, St2 }
 public enum PreviewMode { Off, Long, Short }
 
+/// <summary>GEX levels (BookDepthIQ's GEX Levels indicator): which expiries, frozen daily map or the
+/// recalculated one, and what to draw.</summary>
+public sealed class GexCfg
+{
+    public bool On { get; set; } = true;
+    public GexStore.Scope Scope { get; set; } = GexStore.Scope.Near;
+    /// <summary>false = the daily open-interest map (moves once a day); true = recalculated every poll.</summary>
+    public bool Live { get; set; }
+    public int TopN { get; set; } = 5;
+    public bool ShowRange { get; set; } = true;
+    public bool ShowMagnet { get; set; } = true;
+    public double LineWidth { get; set; } = 1.5;
+}
+
 /// <summary>Which ladder columns show (the Vest panel's set).</summary>
 public sealed class Columns
 {
@@ -110,6 +124,7 @@ public sealed class Settings
     public TrendConfig St1 { get; set; } = TrendConfig.DefaultT1;
     public TrendConfig St2 { get; set; } = TrendConfig.DefaultT2;
     public PaxOrCfg PaxOr { get; set; } = new();
+    public GexCfg Gex { get; set; } = new();
     /// <summary>Per-instrument indicator settings (key: instrument root, e.g. NQ).</summary>
     public Dictionary<string, IndicatorCfg> Indicators { get; set; } = new();
 

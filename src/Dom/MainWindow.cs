@@ -19,6 +19,7 @@ public sealed partial class MainWindow : Window
     private readonly DomState s;
     private readonly BridgeClient bridge;
     private readonly LadderControl ladder;
+    private readonly GexFeed gex = new();
     private DrawdownTracker dd;
     private bool loading;
     private int cidSeq;
@@ -117,7 +118,7 @@ public sealed partial class MainWindow : Window
         // Repaint at most ~20×/s; bridge messages only change state. Management runs on the same tick.
         DispatcherTimer.Run(() => { Tick(); return true; }, TimeSpan.FromMilliseconds(50));
         KeyDown += OnKey;
-        Closed += (_, _) => { SaveFields(); bridge.Dispose(); };
+        Closed += (_, _) => { SaveFields(); bridge.Dispose(); gex.Dispose(); };
 
         // Dev only: BDIQ_SNAPSHOT=<file.png> saves a picture of the window after BDIQ_SNAPSHOT_SEC (4) s and exits.
         // BDIQ_SNAPSHOT_THEME=<preset> switches the colours live after 1 s; BDIQ_SNAPSHOT_SETTINGS=<section>
@@ -205,7 +206,8 @@ public sealed partial class MainWindow : Window
             St("CUM Δ", "delta since the profile start: aggressive buys − sells", 56).Item1,
             St("ST1 · ST2", "dual SuperTrend lines (60 s / 15 s)").Item1,
             St("VWAP", "session VWAP and how many σ price is from it").Item1,
-            St("BID / ASK LIQ", "share of resting size on each side (top 10 levels)").Item1));
+            St("BID / ASK LIQ", "share of resting size on each side (top 10 levels)").Item1,
+            St("GEX", "dealer gamma from CBOE's delayed option chain (Settings › GEX)").Item1));
         band.Children.Add(Flight.Group("ACCOUNT",
             St("EQUITY", "net liquidation (or cash + open P&L)", 96).Item1, roomStat.Item1,
             St("TODAY", "today's P&L since the 17:00 Chicago start, and trades", 96).Item1, St("REALIZED", "NinjaTrader realized P&L", 80).Item1));
