@@ -128,6 +128,9 @@ public sealed class Settings
     /// <summary>The ticket settings under the tape; hidden = tape + order buttons only.</summary>
     public bool ShowTicket { get; set; } = true;
     public bool ShowJournal { get; set; }
+    public bool ShowOutlook { get; set; } = true;
+    public bool OutlookCollapsed { get; set; }
+    public int FlowSeconds { get; set; } = 15;
     /// <summary>Tape and order-log text size, px (rows scale with it). Ctrl+wheel over either changes it.</summary>
     public double TapeFont { get; set; } = DefaultTapeFont;
     public double LogFont { get; set; } = 11;

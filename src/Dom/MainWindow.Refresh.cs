@@ -23,6 +23,7 @@ public sealed partial class MainWindow
         if (now - lastRefresh < 200) return;
         lastRefresh = now;
         RefreshTop();
+        RefreshOutlook();
         RefreshTicket();
         foreach (var p in chipPaint) p();
         if (s.OrderLog.Entries.Count != lastLogCount || s.Journal.Count != lastJournalCount) RefreshSide();
@@ -52,7 +53,7 @@ public sealed partial class MainWindow
 
         var snap = s.TrendSnap;
         var stText = snap.State switch { CombinedState.StrongLong => "▲▲ STRONG LONG", CombinedState.WeakLong => "▲ LONG", CombinedState.StrongShort => "▼▼ STRONG SHORT", CombinedState.WeakShort => "▼ SHORT", _ => "CHOP" };
-        Ui.SetPill(trendPill, $"{stText} {(snap.Confidence >= 0 ? "+" : "")}{snap.Confidence}", snap.State is CombinedState.StrongLong or CombinedState.WeakLong ? Pal.Pos : snap.State is CombinedState.StrongShort or CombinedState.WeakShort ? Pal.Neg : Pal.Muted,
+        Ui.SetPill(trendPill, $"{stText} · SCORE {(snap.Confidence >= 0 ? "+" : "")}{snap.Confidence}", snap.State is CombinedState.StrongLong or CombinedState.WeakLong ? Pal.Pos : snap.State is CombinedState.StrongShort or CombinedState.WeakShort ? Pal.Neg : Pal.Muted,
             "dual SuperTrend (BookDepthIQ trend.rs): ST1 60 s and ST2 15 s, confidence −100..100");
 
         var now = DomState.NowMs();

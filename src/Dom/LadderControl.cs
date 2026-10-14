@@ -22,7 +22,7 @@ public sealed record LadderLine(long Ticks, string Label, Color Color, bool Dash
 /// </summary>
 public sealed class LadderControl : Control
 {
-    private enum Col { Buy, Sold, Bid, Price, Ask, Bought, Sell, Pnl, Heat, Profile, Delta }
+    private enum Col { Buy, Sold, Bid, Price, Ask, Bought, Sell, Pnl, Heat, Profile, Delta, Flow, Abs }
 
     private readonly DomState s;
     private readonly Settings cfg;
@@ -86,7 +86,7 @@ public sealed class LadderControl : Control
         var spec = new List<(Col, double)>();
         // Heat + pull/stack at the far left, next to BUY (owner, 2026-10-13).
         void Add(Col col, double dflt) => spec.Add((col, cfg.ColWidths.TryGetValue(col.ToString(), out var w) && w > 0 ? w : dflt));
-        if (c.Heat) Add(Col.Heat, 0.14);
+        if (c.Heat) { Add(Col.Heat, 0.14); Add(Col.Flow, 0.04); Add(Col.Abs, 0.025); }
         if (c.Orders) Add(Col.Buy, 0.07);
         if (c.Footprint) Add(Col.Sold, 0.07);
         Add(Col.Bid, 0.11);
@@ -109,7 +109,7 @@ public sealed class LadderControl : Control
     private Col BuyCol => cfg.Columns.Orders ? Col.Buy : Col.Bid;
     private Col SellCol => cfg.Columns.Orders ? Col.Sell : Col.Ask;
 
-    private static readonly string[] Heads = { "BUY", "SOLD", "BID", "PRICE", "ASK", "BOUGHT", "SELL", "P&L", "HEAT 5M · PULL/STACK", "PROFILE", "Δ" };
+    private static readonly string[] Heads = { "BUY", "SOLD", "BID", "PRICE", "ASK", "BOUGHT", "SELL", "P&L", "HEAT", "PROFILE", "Δ", "FLOW", "ABS" };
 
     public override void Render(DrawingContext ctx)
     {
@@ -124,7 +124,7 @@ public sealed class LadderControl : Control
 
         ctx.FillRectangle(Pal.B(Pal.Panel), new Rect(0, 0, w, RowH));
         foreach (var (c, x, cw) in cols)
-            Text(ctx, c == Col.Heat ? $"HEAT {cfg.HeatMinutes}M ▾ · PULL/STACK" : Heads[(int)c] + (c == Col.Price && g > 1 ? $" ×{g}" : ""), x, 0, cw, RowH, Pal.Muted, 9.5, TextAlignment.Center);
+            Text(ctx, c == Col.Heat ? $"HEAT {cfg.HeatMinutes}M ▾" : c == Col.Flow ? $"FLOW {cfg.FlowSeconds}s" : Heads[(int)c] + (c == Col.Price && g > 1 ? $" ×{g}" : ""), x, 0, cw, RowH, Pal.Muted, 9.5, TextAlignment.Center);
 
         var book = s.Book;
         var bids = LadderMath.Aggregate(book.Bids.Ticks, book.Bids.Sizes, g);
@@ -274,6 +274,22 @@ public sealed class LadderControl : Control
                     case Col.Heat:
                         DrawHeat(ctx, t, g, x, y, cw, heatScale, ind);
                         break;
+                    case Col.Flow:
+                    {
+                        var f = s.Liquidity.FlowAt(t, g);
+                        if (f.DisplayText is { } value)
+                        {
+                            var color = f.Net > 0 ? Pal.Pos : Pal.Neg;
+                            Text(ctx, value, x, y, cw - 2, RowH, f.Signal ? color : Pal.Mix(color, Pal.Muted, 0.6), 9.5, TextAlignment.Right, bold: f.Signal);
+                        }
+                        break;
+                    }
+                    case Col.Abs:
+                    {
+                        var absorb = s.Liquidity.Absorb(t, g, Math.Max(1, ind.BigMin / 2));
+                        if (absorb != null) Text(ctx, absorb == "bid" ? "B" : "A", x, y, cw, RowH, absorb == "bid" ? Pal.Bid : Pal.Ask, 10, TextAlignment.Center, bold: true);
+                        break;
+                    }
                     // PROFILE — BookDepthIQ ladder.ts: neutral GREY volume histogram (Bookmap/Sierra convention).
                     // POC brightest (near-white), value area (70%) mid-grey, outside VA dim-grey. Not buy/sell
                     // coloured: buy/sell imbalance is the Δ column; a profile is total volume at price.
@@ -364,10 +380,7 @@ public sealed class LadderControl : Control
     private void DrawHeat(DrawingContext ctx, long t, int g, double x, double y, double cw, double p90, IndicatorCfg ind)
     {
         var h = s.Liquidity.Heat(t, g);
-        // The PULL/STACK / ABS read needs ~30 px; a column dragged narrower shows the heat only, so the
-        // read never spills into the next column.
-        var readW = cw >= 60 ? 30 : 0;
-        var cellW = Math.Max(0, cw - readW) / h.Length;
+        var cellW = Math.Max(0, cw) / h.Length;
         for (var i = 0; i < h.Length; i++)
         {
             var v = h[i];
@@ -377,15 +390,6 @@ public sealed class LadderControl : Control
             var c = Math.Abs(v) >= 3 * p90 / 2 ? Pal.HeatHot : v > 0 ? Pal.HeatBid : Pal.HeatAsk;
             ctx.FillRectangle(Pal.B(c, 0.15 + 0.75 * a), new Rect(x + 1 + i * cellW, y + 1, Math.Max(1, cellW - 0.5), RowH - 3));
         }
-        if (readW == 0) return;
-        var f = s.Liquidity.FlowAt(t, g, Math.Max(1, ind.BigMin / 2));
-        if (f.DisplayText is { } text)
-        {
-            var directional = f.Net > 0 ? Pal.Pos : Pal.Neg;
-            var colour = f.Signal ? directional : Pal.Mix(directional, Pal.Muted, 0.6);
-            Text(ctx, text, x + cw - 29, y, 28, RowH, colour, 9.5, TextAlignment.Right, bold: f.Signal);
-        }
-        else if (f.Absorb != null) Text(ctx, "ABS", x + cw - 29, y, 28, RowH, Pal.Warn, 9, TextAlignment.Right, bold: true);
     }
 
     private static Dictionary<long, double> Grouped(Dictionary<long, double> m, int g)

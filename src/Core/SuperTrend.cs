@@ -57,11 +57,11 @@ public sealed class TrendEngine
     public double LineDistanceNorm() => line is double l && atr is double a && a > 0 ? Math.Clamp((lastClose - l) / (3 * a), -1, 1) : 0;
 
     /// <summary>Feed one trade. Returns the completed candle's snapshot when this trade starts a new bucket.</summary>
-    public TrendSnapshot? OnTrade(long tsMs, double priceTicks, double size, bool isBuy)
+    public TrendSnapshot? OnTrade(long tsMs, double priceTicks, double size, bool? isBuy)
     {
         if (!Cfg.Enabled || Cfg.IntervalSec <= 0) return null;
         var bucket = (long)Math.Floor(tsMs / (Cfg.IntervalSec * 1000.0));
-        var signed = isBuy ? size : -size;
+        var signed = isBuy == true ? size : isBuy == false ? -size : 0;
         var c = cur;
         if (c is null)
         {
@@ -208,7 +208,7 @@ public sealed class DualTrend
         T2.SetBookImbalance(v);
     }
 
-    public DualSnapshot? OnTrade(long tsMs, double priceTicks, double size, bool isBuy)
+    public DualSnapshot? OnTrade(long tsMs, double priceTicks, double size, bool? isBuy)
     {
         var s1 = T1.OnTrade(tsMs, priceTicks, size, isBuy);
         var s2 = T2.OnTrade(tsMs, priceTicks, size, isBuy);

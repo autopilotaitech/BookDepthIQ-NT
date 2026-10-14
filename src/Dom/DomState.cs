@@ -45,6 +45,9 @@ public sealed class DomState
 
     // ── analytics (ported from the Vest panel) ──
     public LiquidityTracker Liquidity { get; private set; } = new();
+    public OutlookRecorder Outlook { get; } = new();
+    public int OutlookObservations { get; private set; }
+    public string OutlookRecordStatus { get; private set; } = "collecting observations";
     /// <summary>Naked POCs: every period's POC until price trades there again (history + live).</summary>
     public NakedPocTracker Npoc { get; private set; } = new();
     public Dictionary<long, double> Bought { get; } = new();
@@ -161,12 +164,19 @@ public sealed class DomState
     public void Note(OrderLogStatus st, string text) => OrderLog.Add(st, text);
 
     /// <summary>A new heat · pull/stack window, minutes (5, 15, 30, 60): only the heat starts fresh.</summary>
-    public void SetHeatWindow(int minutes) => Liquidity = new LiquidityTracker(Math.Clamp(minutes, 5, 60) * 60_000L);
+    public void SetHeatWindow(int minutes)
+    {
+        Liquidity = new LiquidityTracker(Math.Clamp(minutes, 5, 60) * 60_000L);
+        Liquidity.SetFlowWindow(cfg.FlowSeconds);
+    }
 
     /// <summary>Settings that change the analytics (ST configs, OR, VWAP session) rebuild them from history.</summary>
     public void ResetAnalytics()
     {
+        Outlook.Reset();
+        OutlookObservations = 0;
         Liquidity = new LiquidityTracker(Math.Clamp(cfg.HeatMinutes, 5, 60) * 60_000L);
+        Liquidity.SetFlowWindow(cfg.FlowSeconds);
         Npoc = new NakedPocTracker(Math.Clamp(cfg.NpocMinutes, 1, 240));
         Bought.Clear(); Sold.Clear(); Vol.Clear(); Delta.Clear(); CumDelta = 0;
         Trend = new DualTrend(cfg.St1, cfg.St2);
@@ -286,13 +296,26 @@ public sealed class DomState
         LastTick = t;
         if (live)
         {
+            if (FeedAgeMs > 2000) Outlook.Reset();
+            if (Outlook.OnTrade(t, ms) is { } outcome)
+            {
+                try
+                {
+                    Directory.CreateDirectory(Settings.Dir);
+                    File.AppendAllText(Path.Combine(Settings.Dir, "outlook-observations.jsonl"),
+                        JsonSerializer.Serialize(new { Instrument, TickSize, Outcome = outcome }) + Environment.NewLine);
+                    OutlookObservations++;
+                    OutlookRecordStatus = $"{OutlookObservations} observations saved this session";
+                }
+                catch { OutlookRecordStatus = "observation save failed"; }
+            }
             Tape.Insert(0, new Trade(t, size, side, ms));
             // Deep enough that a size filter on the tape (Settings › Tape & log) still has rows to show.
             if (Tape.Count > 5000) Tape.RemoveRange(5000, Tape.Count - 5000);
             Liquidity.OnTrade(t, size, side, NowMs());
         }
         // dual SuperTrend (unknown side counts as half each: no delta either way)
-        var snap = Trend.OnTrade(ms, t, size, side != 's');
+        var snap = Trend.OnTrade(ms, t, size, side == 'b' ? true : side == 's' ? false : (bool?)null);
         if (snap != null) TrendSnap = snap;
         Bars.Add(ms, t);
         // Naked POCs see every print, history and live.

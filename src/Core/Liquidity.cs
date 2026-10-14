@@ -20,7 +20,8 @@ public sealed class LiquidityTracker
     /// window: 1 min at 5 min, as before; 12 min at 60 min).</summary>
     public long WindowMs { get; }
     public long BinMs { get; }
-    public long FlowWindowMs { get; }
+    public long FlowWindowMs { get; private set; }
+    public void SetFlowWindow(int seconds) => FlowWindowMs = Math.Clamp(seconds, 5, 60) * 1000L;
 
     public LiquidityTracker(long windowMs = Bins * DefaultBinMs)
     {
@@ -86,7 +87,7 @@ public sealed class LiquidityTracker
             var traded = tradedSince.TryGetValue(p, out var z) ? z : 0;
             var drop = before - after;
             var pull = drop > 0 ? Math.Max(0, drop - traded) : 0;
-            var stack = after > before ? after - before : 0;
+            var stack = Math.Max(0, after - before + traded);
             if (pull > 0 || stack > 0 || traded > 0)
             {
                 if (!flows.TryGetValue(p, out var list)) flows[p] = list = new List<Flow>();
@@ -138,7 +139,7 @@ public sealed class LiquidityTracker
         if (hits.Count > 0 && at - hits[0].At > FlowWindowMs) hits = hits.Where(h => at - h.At <= FlowWindowMs).ToList();
         foreach (var p in flows.Keys.ToList())
         {
-            var keep = flows[p].Where(f => at - f.At <= FlowWindowMs).ToList();
+            var keep = flows[p].Where(f => at - f.At <= Math.Max(60_000, FlowWindowMs)).ToList();
             if (keep.Count > 0) flows[p] = keep;
             else flows.Remove(p);
         }
@@ -198,7 +199,7 @@ public sealed class LiquidityTracker
         long pulled = 0, stacked = 0, traded = 0;
         for (var k = 0; k < group; k++)
             if (flows.TryGetValue(price + k, out var list))
-                foreach (var f in list) { pulled += f.Pull; stacked += f.Stack; traded += f.Traded; }
+                foreach (var f in list.Where(f => now - f.At <= FlowWindowMs)) { pulled += f.Pull; stacked += f.Stack; traded += f.Traded; }
         var net = stacked - pulled;
         return new FlowRead(net, pulled, stacked, traded, Absorb(price, group, absorbMin), Math.Abs(net) > 0 && Math.Abs(net) >= 0.2 * (pulled + stacked));
     }

@@ -214,6 +214,12 @@ Ported from BookDepthIQ's IB layer (v1.0.146/147). **Off by default:** SETTINGS 
 
 ## Package to share
 
+The OUTLOOK toolbar button shows a collapsible evidence panel above the tape. It reports
+bid/ask replenishment, absorption holds, ST disagreement and regime. FLOW has independent
+5/15/60-second windows; ABS has its own ladder column (B = bid, A = ask).
+Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.jsonl`.
+No calibrated probability is displayed yet; these observations are not trade returns.
+
 ```
 powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.10.6
 ```

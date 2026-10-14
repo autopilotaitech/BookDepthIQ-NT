@@ -177,7 +177,6 @@ public sealed partial class MainWindow : Window
         left.Children.Add(feedPill);
         var reads = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
         reads.Children.Add(trendPill);
-        reads.Children.Add(scalpPill);
         reads.Children.Add(statePill);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         right.Children.Add(Flight.HeadBtn("SETTINGS", () => new SettingsWindow(cfg, OnSettingsSaved).Show(this), "account rules, protect my day, indicators, SuperTrend, ladder columns, fees"));
@@ -265,6 +264,7 @@ public sealed partial class MainWindow : Window
         toggles.Children.Add(Chip("JOURNAL", () => { cfg.ShowJournal = !cfg.ShowJournal; cfg.ShowLog = false; cfg.Save(); RefreshSide(); }, "trade journal: every round trip with its setup, risk, result and R (click again for the tape)", () => cfg.ShowJournal));
         toggles.Children.Add(Chip("LOG", () => { cfg.ShowLog = !cfg.ShowLog; cfg.ShowJournal = false; cfg.Save(); RefreshSide(); }, "order log: every click, NinjaTrader's answer, rejections and fills (click again for the tape)", () => cfg.ShowLog));
         toggles.Children.Add(new Border { Width = 1, Height = 14, Background = Pal.B(Pal.Edge), Margin = new Thickness(8, 0, 4, 0) });
+        toggles.Children.Add(Chip("OUTLOOK", () => { cfg.ShowOutlook = !cfg.ShowOutlook; cfg.Save(); RefreshOutlook(); }, "show or hide outlook above the tape", () => cfg.ShowOutlook));
         toggles.Children.Add(Chip("TICKET", () => { cfg.ShowTicket = !cfg.ShowTicket; cfg.Save(); ApplyTicketRows(); }, "show or hide the ticket settings (hidden = tape and buttons only)", () => cfg.ShowTicket));
         toggles.Children.Add(Chip("HEAT", () => { cfg.Columns.Heat = !cfg.Columns.Heat; cfg.Save(); }, "heatmap + pull/stack column on the ladder", () => cfg.Columns.Heat));
         toggles.Children.Add(Chip("ST", () => { cfg.ShowTrend = !cfg.ShowTrend; cfg.Save(); }, "SuperTrend lines on the ladder", () => cfg.ShowTrend));
@@ -283,11 +283,16 @@ public sealed partial class MainWindow : Window
         var buttons = BuildButtons();
         sideGrid = new Grid { Width = 372, Background = Pal.B(Pal.Bg), RowDefinitions = new RowDefinitions("Auto,*,*,Auto") };
         Grid.SetRow(sideHead, 0);
-        Grid.SetRow(side, 1);
+        var sideBody = new DockPanel();
+        var outlook = BuildOutlook();
+        DockPanel.SetDock(outlook, Dock.Top);
+        sideBody.Children.Add(outlook);
+        sideBody.Children.Add(side);
+        Grid.SetRow(sideBody, 1);
         Grid.SetRow(settingsPanel, 2);
         Grid.SetRow(buttons, 3);
         sideGrid.Children.Add(sideHead);
-        sideGrid.Children.Add(side);
+        sideGrid.Children.Add(sideBody);
         sideGrid.Children.Add(settingsPanel);
         sideGrid.Children.Add(buttons);
         var sideDock = sideGrid;
