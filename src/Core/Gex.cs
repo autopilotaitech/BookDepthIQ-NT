@@ -429,14 +429,15 @@ public sealed class GexStore
         return true;
     }
 
-    /// <summary>Contract roll / instrument switch: the old basis means nothing for the new contract.</summary>
+    /// <summary>Contract roll / instrument switch: the old basis means nothing for the new contract. The
+    /// index spot stays: it doesn't depend on the contract, and CBOE answers 304 (no new spot) until it
+    /// publishes again, so clearing it would stall the basis — and the levels — until then.</summary>
     public void ResetBasis()
     {
         lock (gate)
         {
             basis.Reset();
             frozenBasis = null;
-            latestSpot = null;
         }
     }
 

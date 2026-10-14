@@ -109,6 +109,22 @@ public class GexTests
     }
 
     [Fact]
+    public void A_contract_switch_relearns_the_basis_without_waiting_for_a_new_payload()
+    {
+        // CBOE answers 304 until it publishes again, so no new spot arrives after the switch.
+        var st = new GexStore(new GexSource("QQQ", GexConversion.Ratio), minSamples: 3);
+        Assert.True(st.Accept(Gex.Compute("QQQ", "2026-10-13 15:00:00", 730, 18, Chain(1))));
+        st.NoteSpot(730);
+        for (var i = 0; i < 3; i++) st.SampleBasis(730 * 41.2);
+        Assert.NotNull(st.View(0.25, GexStore.Scope.Near, live: false));
+
+        st.ResetBasis();
+        Assert.Null(st.View(0.25, GexStore.Scope.Near, live: false));
+        for (var i = 0; i < 3; i++) st.SampleBasis(730 * 41.5);
+        Assert.Equal(41.5, st.View(0.25, GexStore.Scope.Near, live: false)!.Basis, 6);
+    }
+
+    [Fact]
     public void Levels_hold_while_the_vintage_holds_and_move_on_a_new_one()
     {
         var st = new GexStore(new GexSource("QQQ", GexConversion.Ratio), minSamples: 3);
