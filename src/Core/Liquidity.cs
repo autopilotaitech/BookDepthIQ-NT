@@ -5,7 +5,11 @@ namespace BookDepthIQ.Core;
 // minute. ABSORB marks a price one side kept hitting — more than was showing — while the level held
 // and its size stayed. Pure. Port of BookDepthIQ-Vest src/panel/liquidity.ts. Prices in ticks.
 
-public sealed record FlowRead(long Net, long Pulled, long Stacked, long Traded, string? Absorb, bool Signal);
+public sealed record FlowRead(long Net, long Pulled, long Stacked, long Traded, string? Absorb, bool Signal)
+{
+    /// <summary>Signed raw net pull/stack text for an eligible row, or null when the net is zero.</summary>
+    public string? DisplayText => Net == 0 ? null : (Net > 0 ? "+" : "") + Net;
+}
 
 public sealed class LiquidityTracker
 {

@@ -379,8 +379,13 @@ public sealed class LadderControl : Control
         }
         if (readW == 0) return;
         var f = s.Liquidity.FlowAt(t, g, Math.Max(1, ind.BigMin / 2));
-        if (f.Absorb != null) Text(ctx, "ABS", x + cw - 29, y, 28, RowH, Pal.Warn, 9, TextAlignment.Right, bold: true);
-        else if (f.Signal) Text(ctx, (f.Net > 0 ? "+" : "") + f.Net, x + cw - 29, y, 28, RowH, f.Net > 0 ? Pal.Pos : Pal.Neg, 9.5, TextAlignment.Right, bold: true);
+        if (f.DisplayText is { } text)
+        {
+            var directional = f.Net > 0 ? Pal.Pos : Pal.Neg;
+            var colour = f.Signal ? directional : Pal.Mix(directional, Pal.Muted, 0.6);
+            Text(ctx, text, x + cw - 29, y, 28, RowH, colour, 9.5, TextAlignment.Right, bold: f.Signal);
+        }
+        else if (f.Absorb != null) Text(ctx, "ABS", x + cw - 29, y, 28, RowH, Pal.Warn, 9, TextAlignment.Right, bold: true);
     }
 
     private static Dictionary<long, double> Grouped(Dictionary<long, double> m, int g)

@@ -163,6 +163,20 @@ public class LiquidityFootprintTests
     }
 
     [Fact]
+    public void Pull_and_stack_with_nonzero_net_is_visible_even_when_noise_filtered()
+    {
+        var l = new LiquidityTracker();
+        l.OnBook(Deep(), 0);
+        for (var k = 1; k <= 10; k++) l.OnBook(Deep(new() { [100] = k % 2 == 1 ? 0 : 10 }), k * 200);
+        l.OnBook(Deep(new() { [100] = 9 }), 3000);
+        var flow = l.FlowAt(100);
+
+        Assert.False(flow.Signal);
+        Assert.Equal(-1, flow.Net);
+        Assert.Equal("-1", flow.DisplayText);
+    }
+
+    [Fact]
     public void Absorb_bid()
     {
         var l = new LiquidityTracker();

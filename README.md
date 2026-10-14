@@ -84,7 +84,7 @@ BUY.
   **BUY/SELL STACK** lines. BID/ASK size bars also scale to the rows on screen.
 - **HEAT:** resting size over the heat window (5 minutes by default, in 10-second bins), time-averaged and coloured
   by the side it was on. Yellow means a wall. **PULL/STACK** shows the net size pulled or added in
-  the last minute. **ABS** means absorption: one side kept hitting a level for more than was showing,
+  the last minute at every eligible visible level; lower-confidence re-quoting flow is muted. **ABS** means absorption: one side kept hitting a level for more than was showing,
   and it held.
 - **Heat window:** SETTINGS → Ladder → 5 / 15 / 30 / 60 min. That's 30 slices across the window, with
   pull/stack and absorb over a fifth of it (1 min at 5 min, as before).
@@ -215,10 +215,10 @@ Ported from BookDepthIQ's IB layer (v1.0.146/147). **Off by default:** SETTINGS 
 ## Package to share
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.0.0
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.10.6
 ```
 
-This runs the tests, then builds `dist\BookDepthIQ-DOM-1.0.0-win-x64.zip` (~37 MB), which holds:
+This runs the tests, then builds `dist\BookDepthIQ-DOM-1.10.6-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
