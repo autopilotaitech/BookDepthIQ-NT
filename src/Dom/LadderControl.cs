@@ -14,7 +14,8 @@ public sealed record LadderLine(long Ticks, string Label, Color Color, bool Dash
 /// The price ladder, drawn directly (no per-cell controls): HEAT · PULL/STACK | BUY | SOLD | BID |
 /// PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ, each switchable. Click the
 /// buy side (BUY, SOLD, BID) for a buy limit, the sell side (ASK, BOUGHT, SELL) for a sell limit,
-/// shift-click for a stop. Click a working order to cancel it, drag it to move it; drag a preview leg to
+/// shift-click for a stop. A click on a row that has orders adds another; right-click cancels them, drag
+/// moves them; drag a preview leg to
 /// set the stop or a target. Calm follow: the ladder re-centres only when price drifts a sixth of the
 /// screen (never while hovered unless price nears the edge). Zoom: wheel or drag on PRICE (anchored at the
 /// mouse), double-click PRICE resets; wheel elsewhere scrolls (Shift = a page) and holds the view 15 s.
@@ -30,6 +31,9 @@ public sealed class LadderControl : Control
     private long? hoverRow;
     private Col? hoverCol;
     private WorkingOrder? dragOrder;
+    /// <summary>Every order on the dragged order's side and row: they move together.</summary>
+    private List<WorkingOrder> dragGroup = new();
+    private bool dragShift;
     private int? dragPreview; // -1 = SL, 0..2 = TP
     private long? dragTo;
     private (Col Col, double X, double W)[] cols = Array.Empty<(Col, double, double)>();
@@ -277,14 +281,18 @@ public sealed class LadderControl : Control
                 }
             }
 
-            foreach (var o in orders)
+            // Several orders on one side of a row draw as one chip: total contracts, ×count.
+            foreach (var grp in orders.Where(o => Row(Book.ToTicks(o.Price, s.TickSize)) == t).GroupBy(o => o.IsBuy))
             {
-                if (Row(Book.ToTicks(o.Price, s.TickSize)) != t || ColRect(o.IsBuy ? BuyCol : SellCol) is not (double x, double cw)) continue;
+                if (ColRect(grp.Key ? BuyCol : SellCol) is not (double x, double cw)) continue;
+                var o = grp.First();
+                var n = grp.Count();
                 var col = o.IsTarget ? Pal.Pos : o.IsStopLeg ? Pal.Neg : o.IsBuy ? Pal.Bid : Pal.Ask;
                 var pen = o.IsStop ? new Pen(Pal.B(col), 1, new DashStyle(new double[] { 3, 2 }, 0)) : new Pen(Pal.B(col), 1);
-                ctx.DrawRectangle(Pal.B(col, dragOrder?.Id == o.Id ? 0.08 : 0.22), pen, new Rect(x + 2, y + 1, cw - 4, RowH - 3));
-                var label = o.Name.StartsWith("BDIQ TP", StringComparison.Ordinal) || o.Name.StartsWith("BDIQ SL", StringComparison.Ordinal) ? o.Name[5..] : o.IsStop ? "STP" : "LMT";
-                Text(ctx, $"{label} {o.Left}", x, y, cw, RowH, col, 10, TextAlignment.Center, bold: true);
+                ctx.DrawRectangle(Pal.B(col, grp.Any(g => dragGroup.Any(d => d.Id == g.Id)) ? 0.08 : 0.22), pen, new Rect(x + 2, y + 1, cw - 4, RowH - 3));
+                var label = n > 1 ? (grp.All(g => g.IsStop) ? "STP" : grp.All(g => !g.IsStop) ? "LMT" : "ORD")
+                    : o.Name.StartsWith("BDIQ TP", StringComparison.Ordinal) || o.Name.StartsWith("BDIQ SL", StringComparison.Ordinal) ? o.Name[5..] : o.IsStop ? "STP" : "LMT";
+                Text(ctx, n > 1 ? $"{label} {grp.Sum(g => g.Left)} ×{n}" : $"{label} {o.Left}", x, y, cw, RowH, col, 10, TextAlignment.Center, bold: true);
             }
             foreach (var (kind, ticks, buy, lbl) in previews)
             {
@@ -397,11 +405,12 @@ public sealed class LadderControl : Control
 
     // ───────────── input ─────────────
 
-    private WorkingOrder? OrderAt(long row, Col col)
+    /// <summary>Every working order drawn in this BUY or SELL cell.</summary>
+    private List<WorkingOrder> OrdersAt(long row, Col col)
     {
         var buyCol = col == BuyCol;
-        if (!buyCol && col != SellCol) return null;
-        return s.OrdersOnScreen.FirstOrDefault(o => Row(Book.ToTicks(o.Price, s.TickSize)) == row && o.IsBuy == buyCol);
+        if (!buyCol && col != SellCol) return new();
+        return s.OrdersOnScreen.Where(o => Row(Book.ToTicks(o.Price, s.TickSize)) == row && o.IsBuy == buyCol).ToList();
     }
 
     private int? PreviewAt(long row, Col col)
@@ -479,9 +488,26 @@ public sealed class LadderControl : Control
             e.Pointer.Capture(this);
             return;
         }
-        if (OrderAt(row, col) is { } o) { dragOrder = o; dragTo = row; e.Pointer.Capture(this); return; }
-        if (PreviewAt(row, col) is int k) { dragPreview = k; dragTo = row; e.Pointer.Capture(this); return; }
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var here = OrdersAt(row, col);
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            // Right-click an order: cancel every order on that side at that price.
+            foreach (var x in here) CancelRequested?.Invoke(x);
+            return;
+        }
+        if (here.Count > 0)
+        {
+            // Pick the orders up: dragged to another row they move; released on their own row it is a
+            // plain click, which places another order there (NT SuperDOM style).
+            dragOrder = here[0];
+            dragGroup = here;
+            dragShift = shift;
+            dragTo = row;
+            e.Pointer.Capture(this);
+            return;
+        }
+        if (PreviewAt(row, col) is int k) { dragPreview = k; dragTo = row; e.Pointer.Capture(this); return; }
         if (col is Col.Buy or Col.Sold or Col.Bid) PlaceRequested?.Invoke(true, row, shift);
         else if (col is Col.Ask or Col.Bought or Col.Sell) PlaceRequested?.Invoke(false, row, shift);
         base.OnPointerPressed(e);
@@ -503,12 +529,15 @@ public sealed class LadderControl : Control
         else if (dragOrder != null)
         {
             var o = dragOrder;
+            var group = dragGroup;
             var to = dragTo;
             dragOrder = null;
+            dragGroup = new();
             dragTo = null;
             e.Pointer.Capture(null);
-            if (to is null || to == Row(Book.ToTicks(o.Price, s.TickSize))) CancelRequested?.Invoke(o); // dropped on its own row = cancel
-            else MoveRequested?.Invoke(o, to.Value);
+            var home = Row(Book.ToTicks(o.Price, s.TickSize));
+            if (to is null || to == home) PlaceRequested?.Invoke(o.IsBuy, home, dragShift); // a click: add another order here
+            else foreach (var x in group) MoveRequested?.Invoke(x, to.Value);
             InvalidateVisual();
         }
         else if (dragPreview is int k)

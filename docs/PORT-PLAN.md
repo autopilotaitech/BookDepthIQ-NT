@@ -11,7 +11,7 @@ CME **contracts, ticks and tick value, with fees per side**.
   limit and stop entries; OCO TP/SL on fill; cancel; move; flatten; cancel all. Compiles against
   NT 8.1.x (`nt8/BridgeCheck`).
 - DOM: Vest look, with columns BUY | BID | PRICE | ASK | SELL | P&L | VOLUME. Click to trade,
-  shift for a stop, click an order to cancel it, drag to move it. Calm follow, last-price box,
+  shift for a stop, right-click an order to cancel it, drag to move it (a click on it adds another). Calm follow, last-price box,
   average-price row, tape, order log, result bar.
 - CME risk: contracts / $ risk / % room sizing, $/tick, fees, R:R, % of room, losers left,
   break-even ticks, stop-past-fail warning. Prop drawdown: static, trailing intraday, trailing EOD,
