@@ -357,7 +357,7 @@ public sealed partial class MainWindow : Window
         }
         var lines = new StackPanel { Spacing = 3 };
         lines.Children.Add(grid);
-        foreach (var line in new[] { riskLine, checkLine, costLine, lockLine, notice, resultBar })
+        foreach (var line in new[] { riskLine, checkLine, costLine, lockLine })
         {
             line.FontFamily = Flight.Sans;
             line.FontSize = 11.5;
@@ -397,7 +397,16 @@ public sealed partial class MainWindow : Window
         Add(Ui.BigBtn("CANCEL ALL", dark, Pal.Text, CancelAll, "cancel every order on this instrument (Esc). Never blocked."), 1, 3, 3);
         Add(Ui.BigBtn("B/E", dark, Pal.Text, BreakEven, "move your stops to entry ± B/E offset (E when armed)"), 2, 0, 3);
         Add(Ui.BigBtn("CLOSE HALF", dark, Pal.Text, CloseHalf, "close half the position at market; bracket legs trimmed. Never blocked."), 2, 3, 3);
-        return new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 0), Background = Pal.B(Pal.Panel), Child = g };
+        // Why a click did or didn't send sits right above the buttons, always in view (the ticket can be
+        // hidden or scrolled): no silent no-ops.
+        var status = new StackPanel { Spacing = 2, Margin = new Thickness(6, 4, 6, 0) };
+        foreach (var line in new[] { notice, resultBar })
+        {
+            line.FontFamily = Flight.Sans;
+            line.FontSize = 11.5;
+            status.Children.Add(line);
+        }
+        return new Border { BorderBrush = Pal.B(Pal.Line), BorderThickness = new Thickness(0, 1, 0, 0), Background = Pal.B(Pal.Panel), Child = new StackPanel { Children = { status, g } } };
     }
 
     /// <summary>Quick size chips for the size mode: contracts, $ risk or % of room.</summary>

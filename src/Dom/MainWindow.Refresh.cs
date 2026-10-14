@@ -26,6 +26,15 @@ public sealed partial class MainWindow
         RefreshTicket();
         foreach (var p in chipPaint) p();
         if (s.OrderLog.Entries.Count != lastLogCount || s.Journal.Count != lastJournalCount) RefreshSide();
+        // A command NinjaTrader never answered says so instead of looking like nothing happened.
+        foreach (var (cid, at) in s.Sent.Where(x => Environment.TickCount64 - x.Value > 8000).ToList())
+        {
+            s.Sent.Remove(cid);
+            s.LastOk = false;
+            s.LastResult = "no answer from NinjaTrader in 8 s — check NinjaTrader's Log tab and the order log";
+            s.Note(OrderLogStatus.Error, s.LastResult);
+            Notice(s.LastResult);
+        }
         if (now > noticeUntil) notice.Text = "";
         // Status lines take no space when they have nothing to say.
         foreach (var line in new[] { riskLine, checkLine, costLine, lockLine, notice, resultBar }) line.IsVisible = !string.IsNullOrEmpty(line.Text);
