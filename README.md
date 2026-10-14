@@ -12,7 +12,7 @@ port of the [BookDepthIQ-Vest](https://github.com/autopilotaitech/BookDepthIQ-Ve
 same ladder, look, reads and click behaviour. Risk is worked out in **CME contracts, ticks and tick
 value, with commissions**, and against **your prop firm's drawdown rules**.
 
-![BookDepthIQ DOM on NQ: footprint, heatmap with walls, volume profile, delta, P&L column, SuperTrend, VWAP σ, scalp read, bracket bar and CME risk line](docs/images/dom.png)
+![BookDepthIQ DOM on NQ: volumetric footprint, full-depth heatmap with walls, volume profile, delta, P&L column, SuperTrend, VWAP σ, scalp read, bracket bar and CME risk line](docs/images/dom.png)
 
 ```
 ┌──────────────── NinjaTrader 8 ────────────────┐                ┌──────── BookDepthIQ DOM (Avalonia) ────────┐
