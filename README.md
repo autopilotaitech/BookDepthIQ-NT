@@ -186,6 +186,25 @@ per 1% move. Hover it for every level.
 - **Caveats:** dealer positioning is inferred (customers sell calls, buy puts), not observed. The
   data is delayed. These are levels, not direction.
 
+## Initial Balance
+
+Ported from BookDepthIQ's IB layer (v1.0.146/147). **Off by default:** SETTINGS → Initial balance.
+
+- The IB is the high and low of the first **1, 3, 5, 15, 30 or 60 minutes** after the open, from every
+  trade in the half-open window `[open, open + length)`. **RTH** opens at the OR bell for index futures
+  (08:30 Chicago; CL 08:00, metals and treasuries 07:20); **Globex** at 17:00 Chicago (Sunday–Thursday).
+  All 12 ranges are tracked at once, so switching session or length is instant.
+- **Lines:** IB H (cyan) and IB L (orange), dashed while the window is open; MID; the 1.5×, 2× and 3×
+  extensions once it forms; optionally the IB window's value area (VAH / VAL).
+- **IB pill** in the header: building `3/15`, inside, `▲ 09:12 Δ +340` (broke high at 09:12, delta since
+  the break), `▼` (broke low), back inside. Its tooltip has H / L / MID / range, POC and value area,
+  range vs the median of past days, percentile (from 5 days), the previous IB and the latest events.
+- Built from NinjaTrader's tick history and then live prints. If the DOM opens after an IB closed and
+  the history doesn't reach back to the open, it shows **missed** unless an earlier run recorded it;
+  raise SETTINGS → Ladder → History to load. A DOM that joins mid-window marks the IB **PARTIAL**.
+- Every whole IB that forms is saved to `%APPDATA%\BookDepthIQ-NT\ib-history.jsonl` (one row per day,
+  instrument, session, length and open time) for the stats. The Playback connection never writes.
+
 ## Package to share
 
 ```
@@ -203,7 +222,7 @@ The exe is not code-signed, so Windows SmartScreen asks once ("More info › Run
 ## Settings and colours
 
 SETTINGS has a section rail on the left: Account, Fees & warnings, Protect my day, Ladder, Tape &
-log, Indicators (one set for every instrument), GEX, SuperTrend, Opening range, Colours. Each section is a set of cards with ON/OFF switches
+log, Indicators (one set for every instrument), GEX, SuperTrend, Opening range, Initial balance, Colours. Each section is a set of cards with ON/OFF switches
 and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) discards.
 
 - **SETTINGS → Colours:** every colour the DOM draws can be changed:
@@ -231,7 +250,7 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 
 ```
 dotnet build                                   # Core, DOM, tests, fake bridge
-dotnet test                                    # 53 tests: risk, drawdown, SuperTrend, PAXOR, heat, footprint, nPOC, GEX, trips …
+dotnet test                                    # 69 tests: risk, drawdown, SuperTrend, PAXOR, IB, heat, footprint, nPOC, GEX, trips …
 BDIQ_PORT=36972 dotnet run --project tools/FakeBridge -- --position   # simulated NQ, never sends orders
 BDIQ_PORT=36972 dotnet run --project src/Dom   # the DOM against the fake (NinjaTrader is not touched)
 dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\Program Files\NinjaTrader 8\bin

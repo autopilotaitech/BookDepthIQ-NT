@@ -82,6 +82,58 @@ public sealed class DomState
     /// <summary>Settings changed: rebuild the profile window on the next print.</summary>
     public void ResetProfileWindow() { profileKey = ""; profileCheckedAt = 0; }
     public PaxOr? Or { get; private set; }
+
+    // ── Initial Balance (BookDepthIQ ib_store.rs): every range tracked from history + live prints ──
+    public IbTracker Ib { get; private set; } = new("08:30");
+    /// <summary>Formed IBs, shared by every instrument: %APPDATA%\BookDepthIQ-NT\ib-history.jsonl.</summary>
+    public static IbHistory IbHistory { get; } = new(Path.Combine(Settings.Dir, "ib-history.jsonl"));
+    /// <summary>Live prints held while NinjaTrader's history loads, so the IB sees every print oldest first.</summary>
+    private readonly List<(long Ms, long Tick, long Size, char Side)> ibPending = new();
+    public string IbRoot => CmeSpecs.RootOf(Instrument);
+
+    private void NewIb()
+    {
+        Ib = new IbTracker(Core.Ib.RthStart(IbRoot, cfg.PaxOr.StartTime));
+        ibPending.Clear();
+    }
+
+    private void FeedIb(long ms, long t, long size, char side, bool live)
+    {
+        if (live && !HistoryLoaded)
+        {
+            if (ibPending.Count < 200_000) ibPending.Add((ms, t, size, side));
+            return;
+        }
+        // History fills in only before the DOM subscribed; live prints cover the rest (nothing twice).
+        if (!live && ms >= openedAt) return;
+        if (Ib.LastMs is long last && ms < last) return; // out of order: the windows and events need time order
+        var (formed, armed) = Ib.OnTrade(ms, t, size, side);
+        foreach (var s in armed) RestoreIb(s);
+        foreach (var f in formed) RecordIb(f);
+    }
+
+    private void FlushIb()
+    {
+        foreach (var p in ibPending.OrderBy(p => p.Ms).ToList()) FeedIb(p.Ms, p.Tick, p.Size, p.Side, live: true); // HistoryLoaded is set: these go straight in
+        ibPending.Clear();
+    }
+
+    /// <summary>A session armed after some of its windows closed: seed those from today's history rows.</summary>
+    private void RestoreIb(IbSession s)
+    {
+        if (Ib.AnchorOf(s) is not long a) return;
+        foreach (var len in Ib.MissedLengths(s))
+            if (IbHistory.Get(Core.Ib.SessionDate(a), IbRoot, s, len, Core.Ib.OpenHhmm(a)) is { } row)
+                Ib.RestoreFormed(s, len, row.High, row.Low);
+    }
+
+    /// <summary>A whole IB (not partial) from a real feed goes to history. NinjaTrader's Playback connection
+    /// replays old tape at today's clock, so it never writes.</summary>
+    private void RecordIb(IbFormed f)
+    {
+        if (f.Partial || Account.StartsWith("Playback", StringComparison.OrdinalIgnoreCase) || IbRoot.Length == 0) return;
+        IbHistory.Record(new IbHistoryRow(Core.Ib.SessionDate(f.AnchorMs), IbRoot, f.Session, f.LenMin, Core.Ib.OpenHhmm(f.AnchorMs), f.High, f.Low, TickSize));
+    }
     public SpreadWindow Spread { get; } = new();
 
     // ── journal, log ──
@@ -120,6 +172,7 @@ public sealed class DomState
         Trend = new DualTrend(cfg.St1, cfg.St2);
         TrendSnap = Trend.Snapshot();
         Bars.Clear(); Vwap.Reset(); vwapWindow = null; Or = null;
+        NewIb();
         profileKey = ""; profileCheckedAt = 0;
         Tape.Clear(); LastTick = null; HistoryLoaded = false; HistoryNote = "";
     }
@@ -174,6 +227,7 @@ public sealed class DomState
                 {
                     HistoryLoaded = true;
                     HistoryNote = S(m, "err") is { Length: > 0 } e ? "history: " + e : "";
+                    FlushIb();
                 }
                 break;
             case "account":
@@ -278,6 +332,7 @@ public sealed class DomState
                 Or = new PaxOr(sess, PaxOr.LevelFactorTicks(root, cfg.PaxOr, TickSize), cfg.PaxOr.ShowMid || ind.OrMid);
             Or?.Add(ms, t);
         }
+        FeedIb(ms, t, size, side, live);
     }
 
     // ───────────── executions → journal ─────────────

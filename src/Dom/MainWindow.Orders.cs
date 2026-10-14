@@ -366,6 +366,29 @@ public sealed partial class MainWindow
                     _ => new LadderLine(l.Ticks, l.Label, Pal.OrLow, true, 2),
                 });
         }
+        // Initial Balance (BookDepthIQ ib.ts): extensions and VA dotted and thinner, MID dashed, H / L solid —
+        // dashed while the window is still open (extensions withheld until it forms).
+        if (cfg.Ib.On && s.Ib.View(cfg.Ib.Session, cfg.Ib.LengthMin) is { High: long ih, Low: long il } ibv)
+        {
+            var w = Math.Max(0.5, cfg.Ib.LineWidth);
+            var name = $"IB {ibv.LenMin}m{(ibv.Partial ? " PARTIAL" : "")}";
+            var span = ih - il;
+            if (cfg.Ib.ShowExtensions && ibv.Formed && span > 0)
+                foreach (var m in Ib.ExtensionMults)
+                {
+                    var off = (long)Math.Round(span * (m - 1));
+                    o.Add(new LadderLine(ih + off, $"IB {Ui.F(m)}x H", Pal.IbLevel, true, w * 0.7));
+                    o.Add(new LadderLine(il - off, $"IB {Ui.F(m)}x L", Pal.IbLevel, true, w * 0.7));
+                }
+            if (cfg.Ib.ShowValueArea && ibv.Vah is long vah && ibv.Val is long val)
+            {
+                o.Add(new LadderLine(vah, "IB VAH", Pal.IbLevel, true, w * 0.7));
+                o.Add(new LadderLine(val, "IB VAL", Pal.IbLevel, true, w * 0.7));
+            }
+            if (cfg.Ib.ShowMid) o.Add(new LadderLine((long)Math.Round(il + span / 2.0), $"{name} MID", Pal.IbLevel, true, w));
+            o.Add(new LadderLine(ih, $"{name} H{(ibv.Formed ? "" : " forming")}", Pal.IbHigh, !ibv.Formed, w * 1.4));
+            o.Add(new LadderLine(il, $"{name} L{(ibv.Formed ? "" : " forming")}", Pal.IbLow, !ibv.Formed, w * 1.4));
+        }
         if (ind.FpOn && ind.FpLines)
         {
             var maxFp = Math.Max(1, s.Bought.Values.Concat(s.Sold.Values).DefaultIfEmpty(0).Max());

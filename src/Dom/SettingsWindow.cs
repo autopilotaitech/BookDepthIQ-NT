@@ -249,6 +249,22 @@ public sealed class SettingsWindow : Window
             c.SetIndicators(c.Instrument, c.IndicatorsFor(c.Instrument) with { OrOn = orOn, OrMid = orMid });
         });
 
+        // Initial Balance (BookDepthIQ's IB layer): all 12 ranges are always tracked; these choose which to draw.
+        var ib = c.Ib;
+        var lens = Core.Ib.Lengths;
+        sections.Add(("Initial balance", "The high and low of the first minutes after the open, from every trade (NinjaTrader's history, then live). " +
+                                         "RTH opens at the OR bell for index futures (CL 08:00, metals and treasuries 07:20, Chicago); Globex at 17:00. " +
+                                         "Each IB that forms is kept in ib-history.jsonl for the median, percentile and previous-day stats.", Cards(
+            Card("INITIAL BALANCE",
+                Row("IB on the ladder", "IB H (cyan) and IB L (orange), dashed while forming; the IB pill in the header", Bool(ib.On, b => ib.On = b)),
+                Row("Session", "RTH open or the 17:00 Globex open", Seg(new[] { "RTH", "GLOBEX" }, ib.Session == IbSession.Rth ? 0 : 1, i => ib.Session = i == 0 ? IbSession.Rth : IbSession.Globex)),
+                Row("Length", "minutes after the open (default 15)", Seg(lens.Select(x => x + "M").ToArray(), Idx(lens, ib.LengthMin, 3), i => ib.LengthMin = lens[i]))),
+            Card("DRAW",
+                Row("Mid line", null, Bool(ib.ShowMid, b => ib.ShowMid = b)),
+                Row("Extensions", "1.5×, 2×, 3× the range above and below, once formed", Bool(ib.ShowExtensions, b => ib.ShowExtensions = b)),
+                Row("Value area", "IB VAH / VAL: 70% of the IB window's volume around its POC", Bool(ib.ShowValueArea, b => ib.ShowValueArea = b)),
+                Row("Line width", "px; colours in Colours › Chart lines", Num(ib.LineWidth, v => ib.LineWidth = Math.Clamp(v, 0.5, 6)))))));
+
         sections.Add(("Colours", "Every colour the DOM draws. Changes show live; SAVE keeps them, CANCEL puts them back.", ColoursBody()));
     }
 

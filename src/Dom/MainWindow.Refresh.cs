@@ -110,6 +110,7 @@ public sealed partial class MainWindow
         Set("BID / ASK LIQ", share is double b ? $"{Pct(b)} / {Pct(1 - b)}" : "—", Pal.Text);
         Set("REALIZED", LadderControl.Usd(s.Realized), s.Realized >= 0 ? Pal.Pos : Pal.Neg);
         RefreshGex();
+        RefreshIb();
 
         // bracket bar in a trade
         bracketPad.IsVisible = q != 0;
@@ -166,6 +167,66 @@ public sealed partial class MainWindow
                 $"{st.Source.Name} {(view.Mode == GexConversion.Ratio ? $"× {view.Basis:0.0000}" : $"{view.Basis:+0.00;-0.00}")} · payload {age}\n{gex.Status}\n" +
                 "Dealer positioning is inferred (customers sell calls, buy puts), not observed. Delayed data. Levels, not direction.");
         }
+    }
+
+    /// <summary>The IB card (BookDepthIQ's IB Wall card, ibLevels.ts chipFor/ibCard) for the DOM's instrument:
+    /// the state in the pill, the numbers in its tooltip.</summary>
+    private void RefreshIb()
+    {
+        var g = cfg.Ib;
+        var box = (Control?)stat["IB"].Parent;
+        if (!g.On) { Set("IB", "off", Pal.Muted); if (box != null) ToolTip.SetTip(box, "Initial Balance is off (Settings › Initial balance)."); return; }
+        var r = s.Ib.View(g.Session, g.LengthMin);
+        string T(long ms) => TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(ms), Session.Zone(Ib.Tz)).ToString("HH:mm", CultureInfo.InvariantCulture);
+        string Sg(long v) => (v >= 0 ? "+" : "−") + Math.Abs(v).ToString("N0", CultureInfo.InvariantCulture);
+        var last = r.Events.Count > 0 ? r.Events[^1] : null;
+        var delta = r.DeltaSinceBreak is long d ? $" Δ {Sg(d)}" : "";
+        var len = $"{g.LengthMin}m";
+        var (text, col) = r.State switch
+        {
+            IbState.Idle => ($"{len} waiting", Pal.Muted),
+            IbState.Missed => ($"{len} missed", Pal.Muted),
+            IbState.Building => ($"{len} {Math.Max(0, ((s.Ib.LastMs ?? r.WindowStart ?? 0) - (r.WindowStart ?? 0)) / 60_000)}/{g.LengthMin}", Pal.Muted),
+            IbState.Above when last != null => ($"{len} ▲ {T(last.Ms)}{delta}", Pal.Pos),
+            IbState.Below when last != null => ($"{len} ▼ {T(last.Ms)}{delta}", Pal.Neg),
+            IbState.Inside when last?.Kind == IbEventKind.BackInside => ($"{len} back in {T(last.Ms)}", Pal.Warn),
+            _ => ($"{len} inside", Pal.Text),
+        };
+        Set("IB", text, col);
+        if (box == null) return;
+        string P(long? t) => t is long x ? Px(x * s.TickSize) : "—";
+        var lines = new List<string>
+        {
+            $"{s.IbRoot} · IB {len} · {(g.Session == IbSession.Rth ? "RTH" : "Globex")}" +
+            (r.WindowStart is long ws && r.WindowEnd is long we ? $" · {T(ws)}–{T(we)} Chicago" : "") + (r.Partial ? " · PARTIAL (joined after the open)" : "") + (r.Restored ? " · restored from history" : ""),
+            r.State switch
+            {
+                IbState.Idle => "Waiting for the open.",
+                IbState.Missed => $"Joined after this IB closed and no history row has it. Raise Settings › Ladder › History to load (now {cfg.HistoryHours} h) to rebuild it from NinjaTrader's ticks.",
+                IbState.Building => "Building.",
+                IbState.Above => "Above the IB high.",
+                IbState.Below => "Below the IB low.",
+                _ => "Inside the IB.",
+            },
+        };
+        if (r.High is long h && r.Low is long l)
+        {
+            var range = h - l;
+            lines.Add($"H {P(h)} · L {P(l)} · MID {Px((l + range / 2.0) * s.TickSize)} · range {Ui.F(range * s.TickSize)} pts ({range} ticks)");
+            if (r.Poc is long poc) lines.Add($"POC {P(poc)} · VA {P(r.Val)} – {P(r.Vah)}");
+            if (r.WindowStart is long a)
+            {
+                var st = DomState.IbHistory.Stats(s.IbRoot, g.Session, g.LengthMin, Ib.OpenHhmm(a), Ib.SessionDate(a), r.Formed ? range : null);
+                var vs = st.MedianRange is double med && med > 0 ? $" · range {range / med:0.00}× median ({Ui.F(med * s.TickSize)} pts)" : "";
+                var pct = st.Percentile is double pc ? $" · {pc:0}th percentile" : st.Days > 0 ? $" · percentile from {IbHistory.MinDaysForPercentile} days" : "";
+                lines.Add($"{st.Days} day{(st.Days == 1 ? "" : "s")} tracked{vs}{pct}");
+                if (st.Prev is { } pv) lines.Add($"previous IB ({pv.Date}): H {P(pv.High)} · L {P(pv.Low)} · range {Ui.F((pv.High - pv.Low) * s.TickSize)} pts");
+            }
+        }
+        if (r.Events.Count > 0)
+            lines.Add("events: " + string.Join(" · ", r.Events.TakeLast(6).Select(e => $"{(e.Kind == IbEventKind.BrokeHigh ? "broke high" : e.Kind == IbEventKind.BrokeLow ? "broke low" : "back inside")} {T(e.Ms)}")) +
+                      (r.DeltaSinceBreak is long dd ? $" · Δ since break {Sg(dd)}" : ""));
+        ToolTip.SetTip(box, string.Join(Environment.NewLine, lines));
     }
 
     private GexView? GexView() => cfg.Gex.On ? gex.Store?.View(s.TickSize, cfg.Gex.Scope, cfg.Gex.Live) : null;

@@ -22,6 +22,20 @@ public sealed class GexCfg
     public double LineWidth { get; set; } = 1.5;
 }
 
+/// <summary>Initial Balance on the ladder (BookDepthIQ's IB layer). Off by default, as there: a new layer must
+/// not appear uninvited. All 12 ranges are always tracked; these only choose which one to draw.</summary>
+public sealed class IbCfg
+{
+    public bool On { get; set; }
+    public IbSession Session { get; set; } = IbSession.Rth;
+    /// <summary>1, 3, 5, 15, 30 or 60.</summary>
+    public int LengthMin { get; set; } = 15;
+    public bool ShowMid { get; set; } = true;
+    public bool ShowExtensions { get; set; } = true;
+    public bool ShowValueArea { get; set; }
+    public double LineWidth { get; set; } = 1.5;
+}
+
 /// <summary>Which ladder columns show (the Vest panel's set).</summary>
 public sealed class Columns
 {
@@ -127,6 +141,7 @@ public sealed class Settings
     public TrendConfig St2 { get; set; } = TrendConfig.DefaultT2;
     public PaxOrCfg PaxOr { get; set; } = new();
     public GexCfg Gex { get; set; } = new();
+    public IbCfg Ib { get; set; } = new();
     /// <summary>Legacy: per-instrument indicator settings from older files, read once by MigrateIndicators.</summary>
     public Dictionary<string, IndicatorCfg> Indicators { get; set; } = new();
 

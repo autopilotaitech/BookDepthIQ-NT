@@ -211,7 +211,8 @@ public sealed partial class MainWindow : Window
             St("ST1 · ST2", "dual SuperTrend lines (60 s / 15 s)").Item1,
             St("VWAP", "session VWAP and how many σ price is from it").Item1,
             St("BID / ASK LIQ", "share of resting size on each side (top 10 levels)").Item1,
-            St("GEX", "dealer gamma from CBOE's delayed option chain (Settings › GEX)").Item1));
+            St("GEX", "dealer gamma from CBOE's delayed option chain (Settings › GEX)").Item1,
+            St("IB", "Initial Balance: the high/low of the first minutes after the open (Settings › Initial balance)").Item1));
         band.Children.Add(Flight.Group("ACCOUNT",
             St("EQUITY", "net liquidation (or cash + open P&L)", 96).Item1, roomStat.Item1,
             St("TODAY", "today's P&L since the 17:00 Chicago start, and trades", 96).Item1, St("REALIZED", "NinjaTrader realized P&L", 80).Item1));
