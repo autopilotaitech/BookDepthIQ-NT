@@ -233,7 +233,8 @@ public sealed class DomState
         if (live)
         {
             Tape.Insert(0, new Trade(t, size, side, ms));
-            if (Tape.Count > 300) Tape.RemoveRange(300, Tape.Count - 300);
+            // Deep enough that a size filter on the tape (Settings › Tape & log) still has rows to show.
+            if (Tape.Count > 5000) Tape.RemoveRange(5000, Tape.Count - 5000);
             Liquidity.OnTrade(t, size, side, NowMs());
         }
         // dual SuperTrend (unknown side counts as half each: no delta either way)

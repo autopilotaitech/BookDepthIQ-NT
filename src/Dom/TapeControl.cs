@@ -41,7 +41,8 @@ public sealed class TapeControl : Control
         var c2 = w * 2 / 2.8;
         // Text size is the user's (Settings › Tape & log, or Ctrl+wheel here); rows scale with it.
         var scale = cfg.TapeFont / Settings.DefaultTapeFont;
-        foreach (var t in s.Tape.Skip(scroll))
+        var min = Math.Max(1, cfg.TapeMinSize);
+        foreach (var t in Shown().Skip(scroll))
         {
             if (y > Bounds.Height) break;
             if (!firstSeen.ContainsKey(t)) firstSeen[t] = scroll == 0 ? now : 0;
@@ -71,6 +72,14 @@ public sealed class TapeControl : Control
         if (firstSeen.Count > 600)
             foreach (var k in firstSeen.Keys.Where(k => !s.Tape.Contains(k)).ToList()) firstSeen.Remove(k);
         if (s.Tape.Count == 0) Text(ctx, "waiting for trades…", 6, 4, w - 12, 16, Pal.Muted, 11.5, TextAlignment.Left, false);
+        else if (y == 0) Text(ctx, $"no prints of {min}+ contracts yet (Settings › Tape & log)", 6, 4, w - 12, 16, Pal.Muted, 11.5, TextAlignment.Left, false);
+    }
+
+    /// <summary>The prints the tape shows: those at or above the user's minimum size.</summary>
+    private IEnumerable<Trade> Shown()
+    {
+        var min = Math.Max(1, cfg.TapeMinSize);
+        return min <= 1 ? s.Tape : s.Tape.Where(t => t.Size >= min);
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -83,7 +92,7 @@ public sealed class TapeControl : Control
             e.Handled = true;
             return;
         }
-        scroll = Math.Clamp(scroll - (int)Math.Round(e.Delta.Y * 3), 0, Math.Max(0, s.Tape.Count - 5));
+        scroll = Math.Clamp(scroll - (int)Math.Round(e.Delta.Y * 3), 0, Math.Max(0, Shown().Count() - 5));
         InvalidateVisual();
         e.Handled = true;
     }

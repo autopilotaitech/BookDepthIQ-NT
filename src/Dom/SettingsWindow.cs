@@ -182,7 +182,9 @@ public sealed class SettingsWindow : Window
                 Row("SuperTrend lines", "ST1 / ST2 and the no-chase line", Bool(c.ShowTrend, b => c.ShowTrend = b)),
                 Row("History to load", "hours, 1–48", Num(c.HistoryHours, v => c.HistoryHours = Math.Clamp((int)v, 1, 48)))))));
 
-        sections.Add(("Tape & log", "Text size for the tape and the order log; rows grow with it. Ctrl+wheel over either changes it on the fly.", Cards(
+        sections.Add(("Tape & log", "Which prints the tape shows, and the text size for the tape and the order log; rows grow with it. Ctrl+wheel over either changes the size on the fly.", Cards(
+            Card("FILTER",
+                Row("Tape: show prints of", "≥ contracts (default 1 = every print; e.g. 3, 10, 100)", Num(c.TapeMinSize, v => c.TapeMinSize = Math.Max(1, (long)v)))),
             Card("SIZE",
                 Row("Tape text", "px, 8–22 (default 11.5)", Num(c.TapeFont, v => c.TapeFont = Settings.ClampFont(v))),
                 Row("Order log text", "px, 8–22 (default 11)", Num(c.LogFont, v => c.LogFont = Settings.ClampFont(v)))))));

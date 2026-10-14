@@ -243,7 +243,7 @@ public sealed partial class MainWindow
     {
         lastLogCount = s.OrderLog.Entries.Count;
         lastJournalCount = s.Journal.Count;
-        sideTitle.Text = cfg.ShowLog ? "LOG" : cfg.ShowJournal ? "JOURNAL" : "TAPE";
+        sideTitle.Text = cfg.ShowLog ? "LOG" : cfg.ShowJournal ? "JOURNAL" : cfg.TapeMinSize > 1 ? $"TAPE ≥{cfg.TapeMinSize}" : "TAPE";
         logButtons.IsVisible = cfg.ShowLog;
         if (cfg.ShowLog) { if (side.Content != logView) side.Content = logView; }
         else if (cfg.ShowJournal)
