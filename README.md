@@ -2,6 +2,11 @@
 
 # BookDepthIQ-NT
 
+<p align="center">
+  <a href="https://buy.stripe.com/dRmaEW9AnfzT3gpf1senS0a"><img src="https://img.shields.io/badge/%F0%9F%92%B8_TIP_JAR-any_amount_%E2%86%92-635BFF?style=for-the-badge&logo=stripe&logoColor=white" alt="Tip jar: leave a tip, any amount (Stripe)" height="40"></a>
+  <br><sub><b>Free to use.</b> If it helps your trading, leave a tip, any amount you like. Secure checkout by Stripe.</sub>
+</p>
+
 A modern standalone pop-out **DOM for NinjaTrader 8**, built with **Avalonia** (.NET 8). It is a full
 port of the [BookDepthIQ-Vest](https://github.com/autopilotaitech/BookDepthIQ-Vest) panel, with the
 same ladder, look, reads and click behaviour. Risk is worked out in **CME contracts, ticks and tick
