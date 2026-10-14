@@ -11,7 +11,7 @@ namespace BookDepthIQ.Dom;
 public sealed record LadderLine(long Ticks, string Label, Color Color, bool Dashed = false, double Width = 1);
 
 /// <summary>
-/// The price ladder, drawn directly (no per-cell controls): HEAT 5M · PULL/STACK | BUY | SOLD | BID |
+/// The price ladder, drawn directly (no per-cell controls): HEAT · PULL/STACK | BUY | SOLD | BID |
 /// PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ, each switchable. Click the
 /// buy side (BUY, SOLD, BID) for a buy limit, the sell side (ASK, BOUGHT, SELL) for a sell limit,
 /// shift-click for a stop. Click a working order to cancel it, drag it to move it; drag a preview leg to
@@ -119,7 +119,7 @@ public sealed class LadderControl : Control
 
         ctx.FillRectangle(Pal.B(Pal.Panel), new Rect(0, 0, w, RowH));
         foreach (var (c, x, cw) in cols)
-            Text(ctx, c == Col.Heat ? $"HEAT {cfg.HeatMinutes}M · PULL/STACK" : Heads[(int)c] + (c == Col.Price && g > 1 ? $" ×{g}" : ""), x, 0, cw, RowH, Pal.Muted, 9.5, TextAlignment.Center);
+            Text(ctx, c == Col.Heat ? $"HEAT {cfg.HeatMinutes}M ▾ · PULL/STACK" : Heads[(int)c] + (c == Col.Price && g > 1 ? $" ×{g}" : ""), x, 0, cw, RowH, Pal.Muted, 9.5, TextAlignment.Center);
 
         var book = s.Book;
         var bids = LadderMath.Aggregate(book.Bids.Ticks, book.Bids.Sizes, g);
@@ -421,7 +421,7 @@ public sealed class LadderControl : Control
         if (p.Y < RowH)
         {
             hoverRow = null;
-            Cursor = DividerAt(p.X) != null ? new Cursor(StandardCursorType.SizeWestEast) : new Cursor(StandardCursorType.Arrow);
+            Cursor = DividerAt(p.X) != null ? new Cursor(StandardCursorType.SizeWestEast) : ColAt(p.X) == Col.Heat ? new Cursor(StandardCursorType.Hand) : new Cursor(StandardCursorType.Arrow);
             InvalidateVisual();
             return;
         }
@@ -458,6 +458,15 @@ public sealed class LadderControl : Control
                 }
                 resizeAt = d;
                 e.Pointer.Capture(this);
+            }
+            else if (ColAt(p.X) == Col.Heat)
+            {
+                // Click the heat header: the window steps 5 → 15 → 30 → 60 min (a new window starts empty).
+                var w = new[] { 5, 15, 30, 60 };
+                cfg.HeatMinutes = w[(Array.IndexOf(w, cfg.HeatMinutes) + 1) % w.Length];
+                cfg.Save();
+                s.SetHeatWindow(cfg.HeatMinutes);
+                InvalidateVisual();
             }
             return;
         }

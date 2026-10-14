@@ -108,6 +108,9 @@ public sealed class DomState
 
     public void Note(OrderLogStatus st, string text) => OrderLog.Add(st, text);
 
+    /// <summary>A new heat · pull/stack window, minutes (5, 15, 30, 60): only the heat starts fresh.</summary>
+    public void SetHeatWindow(int minutes) => Liquidity = new LiquidityTracker(Math.Clamp(minutes, 5, 60) * 60_000L);
+
     /// <summary>Settings that change the analytics (ST configs, OR, VWAP session) rebuild them from history.</summary>
     public void ResetAnalytics()
     {
