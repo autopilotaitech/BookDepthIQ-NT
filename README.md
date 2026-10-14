@@ -230,7 +230,7 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 
 ```
 dotnet build                                   # Core, DOM, tests, fake bridge
-dotnet test                                    # 52 tests: risk, drawdown, SuperTrend, PAXOR, heat, footprint, nPOC, GEX, trips …
+dotnet test                                    # 53 tests: risk, drawdown, SuperTrend, PAXOR, heat, footprint, nPOC, GEX, trips …
 BDIQ_PORT=36972 dotnet run --project tools/FakeBridge -- --position   # simulated NQ, never sends orders
 BDIQ_PORT=36972 dotnet run --project src/Dom   # the DOM against the fake (NinjaTrader is not touched)
 dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\Program Files\NinjaTrader 8\bin
