@@ -131,14 +131,20 @@ public sealed class LadderControl : Control
         var asks = LadderMath.Aggregate(book.Asks.Ticks, book.Asks.Sizes, g);
         var wallsB = Footprint.Walls(bids);
         var wallsA = Footprint.Walls(asks);
-        long maxSize = 1;
-        foreach (var v in bids.Values) maxSize = Math.Max(maxSize, v);
-        foreach (var v in asks.Values) maxSize = Math.Max(maxSize, v);
         var bought = Grouped(s.Bought, g);
         var sold = Grouped(s.Sold, g);
         // Visible-range profile: POC, value area and the bar scale come from the rows on screen only, so
         // they follow scrolling and zoom; Δ scales to the visible rows too. Both update on every print.
         var bottomRow = top - (rows - 1) * g;
+        bool OnScreen(long t) => t >= bottomRow && t <= top;
+        // Book and footprint bars scale to the rows on screen: the bridge sends the whole book, and one big
+        // resting order far from price must not shrink every bar near it to a sliver.
+        long maxSize = 1;
+        foreach (var kv in bids) if (OnScreen(kv.Key)) maxSize = Math.Max(maxSize, kv.Value);
+        foreach (var kv in asks) if (OnScreen(kv.Key)) maxSize = Math.Max(maxSize, kv.Value);
+        double maxFpVis = 1;
+        foreach (var kv in bought) if (OnScreen(kv.Key)) maxFpVis = Math.Max(maxFpVis, kv.Value);
+        foreach (var kv in sold) if (OnScreen(kv.Key)) maxFpVis = Math.Max(maxFpVis, kv.Value);
         var vol = Grouped(s.Vol, g).Where(kv => kv.Key >= bottomRow && kv.Key <= top).ToDictionary(kv => kv.Key, kv => kv.Value);
         var delta = Grouped(s.Delta, g).Where(kv => kv.Key >= bottomRow && kv.Key <= top).ToDictionary(kv => kv.Key, kv => kv.Value);
         var prof = Footprint.BuildProfile(vol, delta);
@@ -233,20 +239,29 @@ public sealed class LadderControl : Control
                         Text(ctx, (t * s.TickSize).ToString("F" + dec, CultureInfo.InvariantCulture), x, y, cw, RowH, t == last ? Colors.White : col, 11.5, TextAlignment.Center);
                         break;
                     }
+                    // SOLD / BOUGHT: volumetric footprint. Each cell is a bar sized by its volume (scaled to the
+                    // busiest footprint cell on screen) growing out from the price side, number on top. An
+                    // imbalance is a strong bar with an edge on the price side; a stacked one a white edge.
                     case Col.Sold when sold.TryGetValue(t, out var sv) && sv > 0:
                     {
                         var lit = imb.Sell.Contains(t);
-                        Clear(t, Num(sv), x, y, cw - 4, 10.5, TextAlignment.Right, lit);
-                        if (lit) ctx.FillRectangle(Pal.B(Pal.Ask, imb.SellStack.Contains(t) ? 0.45 : 0.25), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
-                        Text(ctx, Num(sv), x, y, cw - 4, RowH, lit ? Colors.White : Pal.Ask, 10.5, TextAlignment.Right, bold: lit);
+                        var stack = imb.SellStack.Contains(t);
+                        Clear(t, Num(sv), x, y, cw - 7, 10.5, TextAlignment.Right, lit);
+                        var bw = Math.Max(2, (cw - 3) * Math.Min(1, sv / maxFpVis));
+                        ctx.FillRectangle(lit ? Pal.B(Pal.StackSell, stack ? 0.62 : 0.48) : Pal.B(Pal.FpSold, 0.22), new Rect(x + cw - 1 - bw, y + 2, bw, RowH - 5));
+                        if (lit) ctx.FillRectangle(stack ? Pal.B(Colors.White) : Pal.B(Pal.StackSell), new Rect(x + cw - 1 - (stack ? 4 : 2), y + 2, stack ? 4 : 2, RowH - 5));
+                        Text(ctx, Num(sv), x, y, cw - 7, RowH, lit ? Colors.White : Pal.Mix(Pal.FpSold, Colors.White, 0.25), 10.5, TextAlignment.Right, bold: lit);
                         break;
                     }
                     case Col.Bought when bought.TryGetValue(t, out var bv) && bv > 0:
                     {
                         var lit = imb.Buy.Contains(t);
-                        Clear(t, Num(bv), x + 4, y, cw - 4, 10.5, TextAlignment.Left, lit);
-                        if (lit) ctx.FillRectangle(Pal.B(Pal.Bid, imb.BuyStack.Contains(t) ? 0.45 : 0.25), new Rect(x + 1, y + 1, cw - 2, RowH - 3));
-                        Text(ctx, Num(bv), x + 4, y, cw - 4, RowH, lit ? Colors.White : Pal.Bid, 10.5, TextAlignment.Left, bold: lit);
+                        var stack = imb.BuyStack.Contains(t);
+                        Clear(t, Num(bv), x + 7, y, cw - 7, 10.5, TextAlignment.Left, lit);
+                        var bw = Math.Max(2, (cw - 3) * Math.Min(1, bv / maxFpVis));
+                        ctx.FillRectangle(lit ? Pal.B(Pal.StackBuy, stack ? 0.62 : 0.48) : Pal.B(Pal.FpBought, 0.22), new Rect(x + 1, y + 2, bw, RowH - 5));
+                        if (lit) ctx.FillRectangle(stack ? Pal.B(Colors.White) : Pal.B(Pal.StackBuy), new Rect(x + 1, y + 2, stack ? 4 : 2, RowH - 5));
+                        Text(ctx, Num(bv), x + 7, y, cw - 7, RowH, lit ? Colors.White : Pal.Mix(Pal.FpBought, Colors.White, 0.25), 10.5, TextAlignment.Left, bold: lit);
                         break;
                     }
                     case Col.Pnl when s.PosQty != 0:

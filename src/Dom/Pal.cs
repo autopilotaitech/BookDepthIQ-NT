@@ -65,6 +65,8 @@ public static class Pal
         new("vaBand", "Profile · Δ · heat", "Value-area band", Color.Parse("#e879f9")),
         new("deltaUp", "Profile · Δ · heat", "Δ buyers", Color.Parse("#22d3ee")),
         new("deltaDn", "Profile · Δ · heat", "Δ sellers", Color.Parse("#fb923c")),
+        new("fpSold", "Profile · Δ · heat", "Footprint sold numbers", Color.Parse("#c9a38a")),
+        new("fpBought", "Profile · Δ · heat", "Footprint bought numbers", Color.Parse("#8fb8c9")),
         new("heatBid", "Profile · Δ · heat", "Heat bid size", Color.Parse("#22d3ee")),
         new("heatAsk", "Profile · Δ · heat", "Heat offer size", Color.Parse("#fb923c")),
         new("heatHot", "Profile · Δ · heat", "Heat outsized level", Color.Parse("#fbbf24")),
@@ -198,6 +200,10 @@ public static class Pal
     public static Color Range => Get("range");
     public static Color StackBuy => Get("stackBuy");
     public static Color StackSell => Get("stackSell");
+    public static Color FpSold => Get("fpSold");
+    public static Color FpBought => Get("fpBought");
+    /// <summary>a blended toward b by t (0 = a, 1 = b), like CSS color-mix.</summary>
+    public static Color Mix(Color a, Color b, double t) => Color.FromRgb((byte)Math.Round(a.R + (b.R - a.R) * t), (byte)Math.Round(a.G + (b.G - a.G) * t), (byte)Math.Round(a.B + (b.B - a.B) * t));
     public static Color GexCall => Get("gexCall");
     public static Color GexPut => Get("gexPut");
     public static Color GexFlip => Get("gexFlip");

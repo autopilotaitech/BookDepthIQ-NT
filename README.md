@@ -78,8 +78,10 @@ BUY.
 - **Price:** best bid and ask are coloured, the yellow box is the last price, and the dashed amber row
   is your average. The yellow bar marks the POC; the shaded rows are the value area.
 - **BID/ASK:** depth bars. A **wall** (3× the average size on that side) shows yellow.
-- **SOLD/BOUGHT:** footprint. Diagonal **imbalances** light up, and stacked ones are brighter and
-  drawn as **BUY/SELL STACK** lines.
+- **SOLD/BOUGHT:** volumetric footprint. Each cell is a bar sized by its volume (scaled to the busiest
+  cell on screen) growing out from the price column, with the number on top. Diagonal **imbalances**
+  are solid bars with an edge on the price side; stacked ones get a white edge and are drawn as
+  **BUY/SELL STACK** lines. BID/ASK size bars also scale to the rows on screen.
 - **HEAT:** resting size over the heat window (5 minutes by default, in 10-second bins), time-averaged and coloured
   by the side it was on. Yellow means a wall. **PULL/STACK** shows the net size pulled or added in
   the last minute. **ABS** means absorption: one side kept hitting a level for more than was showing,
