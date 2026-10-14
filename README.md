@@ -214,6 +214,19 @@ Ported from BookDepthIQ's IB layer (v1.0.146/147). **Off by default:** SETTINGS 
 
 ## Package to share
 
+### Professional journal preview
+
+The JOURNAL toolbar button opens a dedicated Calendar / Analytics window, styled with the DOM's
+existing theme. Filter by SIM / LIVE / PLAYBACK, account, instrument and date range. The calendar
+shows daily net P&L and opens that day's trade timeline. Analytics includes cumulative P&L,
+drawdown, win/loss and long/short splits, profit factor, expectancy, fees, streaks and breakdowns.
+Review notes and setup tags are saved with each trade; EXPORT CSV copies the filtered history.
+Prices and P&L come from recorded NinjaTrader executions, with commissions/fees included.
+The journal records executions while the DOM is connected; it does not import earlier broker history
+or recover a position opened before recording began. A completed round trip is counted as one trade.
+SIM/LIVE/PLAYBACK classification uses the account name (Sim / Playback prefixes); environments are
+filtered separately. This preview requires the included updated AddOn to be copied and compiled.
+
 The OUTLOOK toolbar button shows a collapsible evidence panel above the tape. It reports
 bid/ask replenishment, absorption holds, ST disagreement and regime. FLOW has independent
 5/15/60-second windows; ABS has its own ladder column (B = bid, A = ask).

@@ -150,9 +150,10 @@ public sealed class DomState
     public bool LastOk { get; set; } = true;
 
     private Settings cfg;
-    public DomState(Settings cfg)
+    public DomState(Settings cfg, string? journalFile = null)
     {
         this.cfg = cfg;
+        journalPath = journalFile ?? Path.Combine(Settings.Dir, "journal.json");
         Trend = new DualTrend(cfg.St1, cfg.St2);
         LoadJournal();
     }
@@ -383,10 +384,11 @@ public sealed class DomState
     /// <summary>Brackets attach a moment after the fill: record the stop on the open trip when it shows.</summary>
     public void NoteStops()
     {
-        foreach (var o in Orders.Where(o => o.IsStopLeg)) trips.SetStop(o.Inst, o.Price);
+        foreach (var o in Orders.Where(o => o.IsStopLeg)) trips.SetStop(o.Inst, o.Price, Account);
     }
 
-    private static string JournalPath => Path.Combine(Settings.Dir, "journal.json");
+    private readonly string journalPath;
+    private string JournalPath => journalPath;
     private void LoadJournal()
     {
         try { if (File.Exists(JournalPath)) Journal.AddRange(JsonSerializer.Deserialize<List<JournalTrade>>(File.ReadAllText(JournalPath)) ?? new()); }
@@ -396,10 +398,12 @@ public sealed class DomState
     {
         try
         {
-            Directory.CreateDirectory(Settings.Dir);
-            File.WriteAllText(JournalPath, JsonSerializer.Serialize(Journal.TakeLast(2000).ToList()));
+            Directory.CreateDirectory(Path.GetDirectoryName(JournalPath)!);
+            var temporary = JournalPath + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(Journal));
+            File.Move(temporary, JournalPath, overwrite: true);
         }
-        catch { }
+        catch (Exception e) { Note(OrderLogStatus.Error, "journal save failed: " + e.Message); }
     }
 
     // ───────────── views ─────────────

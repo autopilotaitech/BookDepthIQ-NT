@@ -149,6 +149,7 @@ public sealed record JournalTrade
     public double Pnl { get; init; }
     public double FeesUsd { get; init; }
     public string Setup { get; init; } = "";
+    public string Notes { get; init; } = "";
     public string StopMode { get; init; } = "";
     /// <summary>The price you expected when you clicked, and slippage in ticks (+ = worse).</summary>
     public double? Expected { get; init; }
@@ -185,9 +186,10 @@ public static class Journal
     {
         string F(double? v, string fmt = "0.00") => v?.ToString(fmt, CultureInfo.InvariantCulture) ?? "";
         string Iso(long ms) => DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
-        var rows = trades.Select(t => string.Join(",", Iso(t.Open), Iso(t.Close), ((t.Close - t.Open) / 60_000.0).ToString("0.0", CultureInfo.InvariantCulture), t.Inst, t.Account,
-            t.Long ? "long" : "short", t.Qty, F(t.Entry, "0.########"), F(t.Exit, "0.########"), F(t.Stop, "0.########"), F(t.RiskUsd), F(t.Pnl), F(t.R), t.Setup, t.StopMode,
-            F(t.Expected, "0.########"), F(t.SlipTicks, "0.##"), F(t.FeesUsd), t.AckMs?.ToString(CultureInfo.InvariantCulture) ?? ""));
-        return string.Join("\n", new[] { "open,close,minutes,instrument,account,side,qty,entry,exit,stop,risk_usd,pnl_usd,r,setup,stop_mode,expected,slip_ticks,fees_usd,ack_ms" }.Concat(rows));
+        string Quote(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+        var rows = trades.Select(t => string.Join(",", Iso(t.Open), Iso(t.Close), ((t.Close - t.Open) / 60_000.0).ToString("0.0", CultureInfo.InvariantCulture), Quote(t.Inst), Quote(t.Account),
+            t.Long ? "long" : "short", t.Qty, F(t.Entry, "0.########"), F(t.Exit, "0.########"), F(t.Stop, "0.########"), F(t.RiskUsd), F(t.Pnl), F(t.R), Quote(t.Setup), Quote(t.StopMode),
+            F(t.Expected, "0.########"), F(t.SlipTicks, "0.##"), F(t.FeesUsd), t.AckMs?.ToString(CultureInfo.InvariantCulture) ?? "", Quote(t.Notes)));
+        return string.Join("\n", new[] { "open,close,minutes,instrument,account,side,qty,entry,exit,stop,risk_usd,pnl_usd,r,setup,stop_mode,expected,slip_ticks,fees_usd,ack_ms,notes" }.Concat(rows));
     }
 }

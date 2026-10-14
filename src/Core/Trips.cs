@@ -16,7 +16,7 @@ public sealed class TripBuilder
 {
     private sealed class Open
     {
-        public bool Long; public int Qty; public int MaxQty; public double EntryNotional; public double ExitNotional; public int ExitQty;
+        public bool Long; public int Qty; public int MaxQty; public int EntryQty; public double EntryNotional; public double ExitNotional; public int ExitQty;
         public double Fees; public long OpenMs; public TripContext Ctx = new("", "", null, null);
     }
 
@@ -27,12 +27,13 @@ public sealed class TripBuilder
     /// trip opens; pointValue(inst) and tickSize(inst) price it.</summary>
     public JournalTrade? OnExec(Exec e, string account, Func<string, bool, TripContext> context, Func<string, double> pointValue, Func<string, double> tickSize)
     {
-        if (e.Id.Length > 0 && !seen.Add(e.Id)) return null;
+        if (e.Id.Length > 0 && !seen.Add(account + "\0" + e.Inst + "\0" + e.Id)) return null;
         if (e.Qty <= 0) return null;
-        if (!open.TryGetValue(e.Inst, out var t) || t.Qty == 0)
+        var key = account + "\0" + e.Inst;
+        if (!open.TryGetValue(key, out var t) || t.Qty == 0)
         {
             t = new Open { Long = e.Buy, OpenMs = e.Ms, Ctx = context(e.Inst, e.Buy) };
-            open[e.Inst] = t;
+            open[key] = t;
         }
         if (e.Buy == t.Long)
         {
@@ -40,6 +41,7 @@ public sealed class TripBuilder
             t.Qty += e.Qty;
             t.MaxQty = Math.Max(t.MaxQty, t.Qty);
             t.EntryNotional += e.Qty * e.Price;
+            t.EntryQty += e.Qty;
             return null;
         }
         var closeQty = Math.Min(e.Qty, t.Qty);
@@ -49,10 +51,10 @@ public sealed class TripBuilder
         t.ExitQty += closeQty;
         t.ExitNotional += closeQty * e.Price;
         if (t.Qty > 0) return null;
-        open.Remove(e.Inst);
+        open.Remove(key);
         var pv = pointValue(e.Inst);
         var ts = tickSize(e.Inst);
-        var avgEntry = t.EntryNotional / Math.Max(1, t.MaxQty);
+        var avgEntry = t.EntryNotional / Math.Max(1, t.EntryQty);
         var avgExit = t.ExitNotional / Math.Max(1, t.ExitQty);
         var gross = (avgExit - avgEntry) * t.ExitQty * pv * (t.Long ? 1 : -1);
         var trade = new JournalTrade
@@ -68,8 +70,8 @@ public sealed class TripBuilder
     }
 
     /// <summary>Records the working stop on an open trip once it is known (brackets attach after the fill).</summary>
-    public void SetStop(string inst, double stop)
+    public void SetStop(string inst, double stop, string account = "Sim101")
     {
-        if (open.TryGetValue(inst, out var t) && t.Ctx.Stop is null) t.Ctx = t.Ctx with { Stop = stop };
+        if (open.TryGetValue(account + "\0" + inst, out var t) && t.Ctx.Stop is null) t.Ctx = t.Ctx with { Stop = stop };
     }
 }

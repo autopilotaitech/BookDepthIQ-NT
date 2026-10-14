@@ -640,7 +640,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Send(new Dictionary<string, object>
                 {
                     { "t", "exec" }, { "acct", ex.Account.Name }, { "inst", ex.Instrument.FullName }, { "id", ex.ExecutionId ?? "" },
-                    { "name", ex.Order != null ? ex.Order.Name ?? "" : "" }, { "side", e.MarketPosition == MarketPosition.Long ? "b" : "s" },
+                    { "name", ex.Order != null ? ex.Order.Name ?? "" : "" }, { "side", ex.Order != null ? (ex.Order.OrderAction == OrderAction.Buy || ex.Order.OrderAction == OrderAction.BuyToCover ? "b" : "s") : (e.MarketPosition == MarketPosition.Long ? "b" : "s") },
                     { "qty", ex.Quantity }, { "price", ex.Price }, { "commission", ex.Commission }, { "fee", ex.Fee }, { "ms", ToMs(ex.Time) },
                 });
                 if (ex.Order == null) return;
