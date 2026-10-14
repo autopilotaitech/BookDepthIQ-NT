@@ -107,6 +107,7 @@ public sealed partial class MainWindow : Window
         ladder.CancelRequested += o => Send($"CANCEL {Leg(o)} @ {Px(o.Price)}", cid => Protocol.Cancel(cid, s.Account, o.Id), exit: true);
         ladder.MoveRequested += (o, t) => Send($"MOVE {Leg(o)} {Px(o.Price)} → {Px(t * s.TickSize)}", cid => Protocol.Move(cid, s.Account, o.Id, t * s.TickSize), exit: true);
         ladder.PreviewDropped += PreviewDropped;
+        ladder.Hint += t => Notice(t);
 
         Content = Build();
         LoadFields();

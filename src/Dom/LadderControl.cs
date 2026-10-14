@@ -14,7 +14,7 @@ public sealed record LadderLine(long Ticks, string Label, Color Color, bool Dash
 /// The price ladder, drawn directly (no per-cell controls): HEAT · PULL/STACK | BUY | SOLD | BID |
 /// PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ, each switchable. Click the
 /// buy side (BUY, SOLD, BID) for a buy limit, the sell side (ASK, BOUGHT, SELL) for a sell limit,
-/// shift-click for a stop. A click on a row that has orders adds another; right-click cancels them, drag
+/// shift-click for a stop. A double-click on a row that has orders adds another; right-click cancels them, drag
 /// moves them; drag a preview leg to
 /// set the stop or a target. Calm follow: the ladder re-centres only when price drifts a sixth of the
 /// screen (never while hovered unless price nears the edge). Zoom: wheel or drag on PRICE (anchored at the
@@ -49,6 +49,7 @@ public sealed class LadderControl : Control
     public event Action<WorkingOrder>? CancelRequested;
     public event Action<WorkingOrder, long>? MoveRequested;
     public event Action<int, long>? PreviewDropped;
+    public event Action<string>? Hint;
 
     public LadderControl(DomState state, Settings settings)
     {
@@ -498,8 +499,10 @@ public sealed class LadderControl : Control
         }
         if (here.Count > 0)
         {
-            // Pick the orders up: dragged to another row they move; released on their own row it is a
-            // plain click, which places another order there (NT SuperDOM style).
+            // Double-click a row that has orders: add another order there.
+            if (e.ClickCount >= 2) { PlaceRequested?.Invoke(here[0].IsBuy, row, shift); return; }
+            // Otherwise pick the orders up: dragged to another row they move; released on their own
+            // row nothing is sent, and the hint says how to add.
             dragOrder = here[0];
             dragGroup = here;
             dragShift = shift;
@@ -536,7 +539,7 @@ public sealed class LadderControl : Control
             dragTo = null;
             e.Pointer.Capture(null);
             var home = Row(Book.ToTicks(o.Price, s.TickSize));
-            if (to is null || to == home) PlaceRequested?.Invoke(o.IsBuy, home, dragShift); // a click: add another order here
+            if (to is null || to == home) Hint?.Invoke("Order already here: double-click to add another, drag to move.");
             else foreach (var x in group) MoveRequested?.Invoke(x, to.Value);
             InvalidateVisual();
         }

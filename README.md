@@ -72,7 +72,7 @@ BID | PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ**. The heatmap sits at th
 BUY.
 
 - **Click** the buy side (BUY, SOLD, BID) for a buy limit, the sell side (ASK, BOUGHT, SELL) for a
-  sell limit. **Shift-click** places a stop. Clicking a row that already has an order **adds** another
+  sell limit. **Shift-click** places a stop. **Double-click** a row that already has an order to **add** another
   one there. **Right-click** a working order to cancel it (every order on that side at that price);
   **drag** it to move it (all of them). Several orders at one price show as one chip, e.g. `LMT 3 ×2`.
 - **Price:** best bid and ask are coloured, the yellow box is the last price, and the dashed amber row
