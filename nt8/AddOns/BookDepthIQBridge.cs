@@ -31,7 +31,9 @@ namespace NinjaTrader.NinjaScript.AddOns
     public class BookDepthIQBridge : AddOnBase
     {
         public const int Port = 36971;
-        private const int Levels = 40;
+        // Every level NinjaTrader holds, up to this ceiling (it was 40, which hid the deeper book that a
+        // Rithmic Level 2 feed delivers: the heatmap went blank 10 points from price).
+        private const int Levels = 1000;
         private const int BookMs = 50;
 
         // One bridge per NinjaTrader process, whatever number of AddOn instances NT creates.

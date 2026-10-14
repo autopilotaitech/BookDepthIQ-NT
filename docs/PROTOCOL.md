@@ -9,7 +9,7 @@ connects. Loopback only: the bridge never listens on another interface.
 |---|---|---|
 | `hello` | `v`, `accounts: [{name, conn}]` | on connect, and when accounts/connections change |
 | `inst` | `name`, `tick` (TickSize), `pv` (PointValue), `desc` | after `sub` |
-| `book` | `bids: [[price, size]…]`, `asks: […]`, `ms` | depth changed (coalesced, ≤ 20/s, top 40 levels) |
+| `book` | `bids: [[price, size]…]`, `asks: […]`, `ms` | depth changed (coalesced, ≤ 20/s, every level NinjaTrader holds, up to 1000 a side) |
 | `quote` | `bid`, `ask`, `last` | best bid/ask/last changed |
 | `trade` | `p`, `v`, `side` (`b` at/above ask, `s` at/below bid, `?`), `ms` | each Last print |
 | `account` | `name`, `cash`, `realized`, `unrealized`, `netliq`, `trailDd`, `dailyLimit`, `commission` | account items changed |
