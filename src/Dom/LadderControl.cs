@@ -371,19 +371,17 @@ public sealed class LadderControl : Control
         DrawZoomBadge(ctx);
     }
 
-    /// <summary>90th percentile of |heat| on screen, so colours are relative to what is showing now.</summary>
-    private double HeatScale(long top, int rows, int g)
+    /// <summary>Typical (median) and high (98th percentile) |heat| on screen, so brightness is relative to what is
+    /// showing now and ordinary levels fade back (HeatShade).</summary>
+    private HeatShade.Scale HeatScale(long top, int rows, int g)
     {
-        if (!cfg.Columns.Heat) return 1;
+        if (!cfg.Columns.Heat) return new HeatShade.Scale(1, 2);
         var vals = new List<double>();
-        for (var r = 0; r < rows; r++)
-            foreach (var v in s.Liquidity.Heat(top - r * g, g)) if (v != 0) vals.Add(Math.Abs(v));
-        if (vals.Count == 0) return 1;
-        vals.Sort();
-        return Math.Max(1, vals[(int)Math.Min(vals.Count - 1, Math.Floor(vals.Count * 0.9))]);
+        for (var r = 0; r < rows; r++) vals.AddRange(s.Liquidity.Heat(top - r * g, g));
+        return HeatShade.Measure(vals);
     }
 
-    private void DrawHeat(DrawingContext ctx, long t, int g, double x, double y, double cw, double p90, IndicatorCfg ind)
+    private void DrawHeat(DrawingContext ctx, long t, int g, double x, double y, double cw, HeatShade.Scale scale, IndicatorCfg ind)
     {
         var h = s.Liquidity.Heat(t, g);
         var cellW = Math.Max(0, cw) / h.Length;
@@ -391,10 +389,10 @@ public sealed class LadderControl : Control
         {
             var v = h[i];
             if (v == 0) continue;
-            var a = Math.Min(1, Math.Abs(v) / p90);
-            // Yellow = a wall: 3× the typical (median-ish) size showing, as in the Vest panel.
-            var c = Math.Abs(v) >= 3 * p90 / 2 ? Pal.HeatHot : v > 0 ? Pal.HeatBid : Pal.HeatAsk;
-            ctx.FillRectangle(Pal.B(c, 0.15 + 0.75 * a), new Rect(x + 1 + i * cellW, y + 1, Math.Max(1, cellW - 0.5), RowH - 3));
+            // Typical size is a faint trace; brightness climbs to the 98th percentile; yellow = a wall (≥ 3× typical).
+            var (alpha, wall) = HeatShade.Shade(v, scale, cfg.HeatContrast);
+            var c = wall ? Pal.HeatHot : v > 0 ? Pal.HeatBid : Pal.HeatAsk;
+            ctx.FillRectangle(Pal.B(c, alpha), new Rect(x + 1 + i * cellW, y + 1, Math.Max(1, cellW - 0.5), RowH - 3));
         }
     }
 

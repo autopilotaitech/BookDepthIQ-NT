@@ -30,10 +30,19 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.4](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.4).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.4/BookDepthIQ-DOM-1.12.4-win-x64.zip).
+**Current release: [1.12.5](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.5).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.5/BookDepthIQ-DOM-1.12.5-win-x64.zip).
 Upgrading from 1.10.6 or earlier requires replacing **both the DOM and the NinjaTrader bridge** and
 compiling the bridge with F5. This includes the prop-account discovery fix.
+
+### New in 1.12.5
+
+The HEAT column fades ordinary liquidity so real size stands out. Brightness is measured from the
+typical (median) resting size on screen: levels at or below it draw as a faint trace, and brightness
+climbs a curve up to the 98th percentile, so only large resting orders glow. Yellow marks a wall:
+at least 3× the typical size. **Settings › Ladder › Heat contrast** (Soft / Normal / Sharp) sets how
+hard ordinary levels fade; Normal is the default. Only the DOM changes; the bridge is the same as
+1.12.4 (no F5 needed).
 
 ### New in 1.12.4
 
@@ -270,10 +279,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.4
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.5
 ```
 
-This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.4-win-x64.zip` (~37 MB), which holds:
+This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.5-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.

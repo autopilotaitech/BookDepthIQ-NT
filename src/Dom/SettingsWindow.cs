@@ -176,6 +176,7 @@ public sealed class SettingsWindow : Window
                 Row("Δ delta", "aggressive buys − sells per price", Bool(c.Columns.Delta, b => c.Columns.Delta = b))),
             Card("HEAT · nPOC",
                 Row("Heat · pull/stack window", "how far back the heatmap reaches", Seg(new[] { "5M", "15M", "30M", "60M" }, Idx(new[] { 5, 15, 30, 60 }, c.HeatMinutes, 0), i => c.HeatMinutes = new[] { 5, 15, 30, 60 }[i])),
+                Row("Heat contrast", "how much typical-size levels fade so big liquidity stands out", Seg(new[] { "SOFT", "NORMAL", "SHARP" }, Math.Clamp(c.HeatContrast, 0, 2), i => c.HeatContrast = i)),
                 Row("Naked POC lines", "each period's POC until price trades there again", Bool(c.NpocOn, b => c.NpocOn = b)),
                 Row("nPOC period", null, Seg(new[] { "5M", "15M", "30M", "60M" }, Idx(new[] { 5, 15, 30, 60 }, c.NpocMinutes, 1), i => c.NpocMinutes = new[] { 5, 15, 30, 60 }[i]))),
             Card("LINES · DATA",

@@ -134,11 +134,24 @@ public sealed partial class MainWindow : Window
         // pictures the settings window open at that section instead.
         if (Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT") is { Length: > 0 } shot)
         {
+            // Off every monitor (the owner has one at X −1920…0) and never takes the keyboard; a non-activated show
+            // ignores the position, so it is set again once open.
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint(-12000, 40);
+            ShowActivated = false;
+            ShowInTaskbar = false;
+            Opened += (_, _) => Position = new PixelPoint(-12000, 40);
             if (Pal.Presets.FirstOrDefault(p => p.Name == Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT_THEME")) is { Name: not null } preset)
                 DispatcherTimer.RunOnce(() => Pal.Apply(preset.Colors), TimeSpan.FromSeconds(1));
             SettingsWindow? sw = null;
             if (Environment.GetEnvironmentVariable("BDIQ_SNAPSHOT_SETTINGS") is { Length: > 0 } section)
-                DispatcherTimer.RunOnce(() => { sw = new SettingsWindow(cfg, OnSettingsSaved, section); sw.Show(this); }, TimeSpan.FromSeconds(1));
+                DispatcherTimer.RunOnce(() =>
+                {
+                    sw = new SettingsWindow(cfg, OnSettingsSaved, section) { WindowStartupLocation = WindowStartupLocation.Manual, Position = new PixelPoint(-12000, 60), ShowActivated = false, ShowInTaskbar = false };
+                    var w = sw;
+                    w.Opened += (_, _) => w.Position = new PixelPoint(-12000, 60);
+                    w.Show(this);
+                }, TimeSpan.FromSeconds(1));
             DispatcherTimer.RunOnce(() =>
             {
                 Window target = sw ?? (Window)this;

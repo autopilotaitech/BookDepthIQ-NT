@@ -120,6 +120,8 @@ public sealed class Settings
     public bool ShowTrend { get; set; } = true;
     /// <summary>Heat · pull/stack window in minutes: 5, 15, 30 or 60.</summary>
     public int HeatMinutes { get; set; } = 5;
+    /// <summary>Heat contrast: 0 Soft, 1 Normal, 2 Sharp — how hard typical-size levels fade (HeatShade.Gammas).</summary>
+    public int HeatContrast { get; set; } = 1;
     /// <summary>Naked POC lines: each period's POC, drawn until price trades there again.</summary>
     public bool NpocOn { get; set; } = true;
     /// <summary>nPOC period in minutes: 5, 15, 30 or 60.</summary>
@@ -165,7 +167,9 @@ public sealed class Settings
     public DrawdownRules Rules => new(Start, MaxDrawdown, DrawdownKind, LockAt, DailyLoss);
     public DayLimits Limits => new(DayLossUsd, DayMaxTrades, CooldownSec);
 
-    public static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BookDepthIQ-NT");
+    /// <summary>%APPDATA%\BookDepthIQ-NT; a dev run can point BDIQ_SETTINGS_DIR elsewhere so it never touches the owner's settings.</summary>
+    public static string Dir => Environment.GetEnvironmentVariable("BDIQ_SETTINGS_DIR") is { Length: > 0 } d ? d
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BookDepthIQ-NT");
     private static string FilePath => Path.Combine(Dir, "settings.json");
     private static readonly JsonSerializerOptions Opts = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
