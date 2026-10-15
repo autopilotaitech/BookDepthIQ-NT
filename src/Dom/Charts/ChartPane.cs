@@ -46,6 +46,7 @@ public sealed class ChartPane : DockPanel
     ChartSnapshot? lastSnapshot;
     public void Update(string instrument,ChartSnapshot snapshot)
     {
+        if(symbol.Text!=instrument) Chart.Clear();
         symbol.Text=instrument;ToolTip.SetTip(symbol,instrument);CurrentCount=snapshot.Bars.Count;lastSnapshot=snapshot;
         status.Text=$"{snapshot.Status} · {CurrentCount:N0} bars";Chart.Update(snapshot);
     }

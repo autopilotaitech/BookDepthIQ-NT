@@ -39,6 +39,8 @@ zoom. Settings can hide the last-price display or crosshair and disable candle-c
 Visual settings apply without reloading history; the menu has an explicit Reload history action.
 Dense views use pixel buckets that retain candle OHLCV and study extrema; native bars stay untouched.
 See [verification and limitations](CHART-NAVIGATION-VERIFICATION.md). This is not a published release.
+The subsequent beta6 test build fixes contract-switch manual scaling and right-edge zoom;
+see the [reliability audit and owner checklist](CHART-RELIABILITY-AUDIT.md).
 
 ## Controls
 

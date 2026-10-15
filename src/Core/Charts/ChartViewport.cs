@@ -17,7 +17,7 @@ public sealed class ChartViewport
     {
         if(!double.IsFinite(factor)||factor<=0) return;
         pointer=Math.Clamp(pointer,0,1); var anchor=Start+Count*pointer;
-        Count=Math.Clamp(Count*factor,10,10000); Start=Math.Max(0,anchor-Count*pointer); Follow=false;CenterOnLast=false;
+        Count=Math.Clamp(Count*factor,10,10000); Start=Math.Clamp(anchor-Count*pointer,0,Math.Max(0,total-1)); Follow=false;CenterOnLast=false;
     }
     public void Pan(double delta,int total) {Follow=false;CenterOnLast=false; Start=Math.Clamp(Start+delta,0,Math.Max(0,total-1));}
     public void Evicted(int count,int total) {if(!Follow) Start=Math.Clamp(Start-Math.Max(0,count),0,Math.Max(0,total-1));else Update(total);}
