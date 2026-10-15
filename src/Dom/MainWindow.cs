@@ -123,7 +123,7 @@ public sealed partial class MainWindow : Window
         {
             bridge.Send(Protocol.SelectAccount(cfg.Account));
             bridge.Send(Protocol.Subscribe(cfg.Instrument));
-            bridge.Send(Protocol.History(cfg.Instrument, cfg.HistoryHours));
+            bridge.Send(Protocol.History(cfg.Instrument, cfg.EffectiveHistoryHours));
         };
         s.TradeClosed += OnTradeClosed;
         s.ExecutionReceived += OnExecutionReceived;
@@ -558,7 +558,7 @@ public sealed partial class MainWindow : Window
     {
         dd = NewTracker();
         s.ResetAnalytics();
-        bridge.Send(Protocol.History(s.Instrument, cfg.HistoryHours));
+        bridge.Send(Protocol.History(s.Instrument, cfg.EffectiveHistoryHours));
         LoadFields();
     }
 
@@ -569,7 +569,7 @@ public sealed partial class MainWindow : Window
         cfg.Instrument = name;
         cfg.Save();
         bridge.Send(Protocol.Subscribe(name));
-        bridge.Send(Protocol.History(name, cfg.HistoryHours));
+        bridge.Send(Protocol.History(name, cfg.EffectiveHistoryHours));
         ClearManagement();
         ladder.Recenter();
     }

@@ -191,7 +191,12 @@ public sealed class SettingsWindow : Window
                 Row("Order log text", "px, 8–22 (default 11)", Num(c.LogFont, v => c.LogFont = Settings.ClampFont(v)))))));
 
         var ind = c.IndicatorsFor(c.Instrument);
-        sections.Add(("Indicators", "VWAP, profile, footprint, big trades and the opening range — one set for every instrument.", Cards(
+        sections.Add(("Indicators", "ADX, VWAP, profile, footprint and big trades — one set for every instrument.", Cards(
+            Card("ADX · MARKET STATE",
+                Row("ADX timeframe", "completed candles; independent of nPOC and SuperTrend", Seg(new[]{"1M","3M","5M","10M","15M","30M"}, Idx(AdxBars.Timeframes,c.AdxMinutes,1), i=>c.AdxMinutes=AdxBars.Timeframes[i])),
+                Row("ADX period", "bars, 1–100 (default 14)", Num(c.AdxPeriod,v=>c.AdxPeriod=double.IsFinite(v)?(int)Math.Clamp(v,1,100):14)),
+                Row("Trend threshold", "ADX at or above this = trend; default 25", Num(c.AdxThreshold,v=>c.AdxThreshold=v)),
+                new TextBlock {Text="Strength only, not a prediction. History expands automatically (up to 48h); ADX — until enough completed bars arrive.",FontSize=11,Foreground=Pal.B(Pal.Muted),TextWrapping=TextWrapping.Wrap}),
             Card("VWAP",
                 Row("VWAP + σ bands", null, Bool(ind.VwapOn, b => ind = ind with { VwapOn = b })),
                 Row("Session start", "HH:MM", Text(ind.VwapStart, v => ind = ind with { VwapStart = v }, 90)),

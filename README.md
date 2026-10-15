@@ -30,12 +30,41 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.11](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.11).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.11/BookDepthIQ-DOM-1.12.11-win-x64.zip).
-**1.12.11 is DOM-only if upgrading from 1.12.10; the bridge is unchanged.**
+**Current release: [1.12.12](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.12).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.12/BookDepthIQ-DOM-1.12.12-win-x64.zip).
+**1.12.12 is DOM-only if upgrading from 1.12.10 or 1.12.11; the bridge is unchanged.**
 Upgrading from 1.12.9 or earlier requires replacing BOTH DOM and bridge, then compiling with F5.
 New entries are refused with an older bridge; emergency exits remain available. Keep beta on until
 the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.10.md) passes.
+
+### New in 1.12.12 — configurable ADX market state
+
+Settings › Indicators › **ADX · MARKET STATE**:
+
+- Timeframe **1 / 3 / 5 / 10 / 15 / 30 minutes**, default **3 minutes**.
+- ADX period **1–100 bars**, default **14**; trend threshold **1–100**, default **25**.
+- Existing market-state badge shows `CHOP · ADX 18.4` or `TREND ▲/▼ · ADX 28.6`.
+  The tooltip identifies timeframe, period, threshold and DI values. No new toolbar row/panel.
+- ADX measures strength, not direction or a prediction. +DI/−DI determine the arrow; SuperTrend's
+  separate score is unchanged. EXTENDED retains its existing VWAP/ST distance calculation.
+- Completed bars only; `ADX —` while history is loading, the feed is stale/disconnected, or fewer
+  than `2 × period + 1` completed traded bars are available. Empty intervals are not invented.
+- A separate bounded aggregate-bar cache leaves scalp/swing calculations unchanged. History requests
+  expand to at least five periods plus headroom, capped by the existing bridge's **48-hour** limit,
+  without overwriting your saved history preference. Default 30-minute/14-period requests **38h**.
+  Weekends, provider gaps and large periods may still require additional live bars; no fake score.
+
+The recurrence matches the installed NT8 `@ADX.cs` initialization and Wilder smoothing, including
+its zero-DI fallback of 50 (no direction still classifies as CHOP).
+[NinjaTrader documents ADX and its source](https://ninjatrader.com/support/helpGuides/nt8/average_directional_index_adx.htm).
+Scores depend on identical OHLC bars, history seed, session boundaries and completed-bar timing;
+an independently loaded NT chart can differ until inputs/seed match. This is not a direct native
+indicator instance or a claim of live chart parity. Save settings to rebuild from history.
+
+**Verification:** 248 isolated automated tests (220 core/DOM + 28 bridge-source), including numeric
+fixtures, all six timeframes, period changes, closed-bar/caching behavior, persistence, settings
+controls/cancel and actual badge updates/stale clearing. Settings visually checked with a headless
+render. No actual SIM/LIVE orders sent; remains beta with native Ticket certification outstanding.
 
 ### New in 1.12.11 — Outlook cleanup
 
@@ -233,8 +262,9 @@ BUY.
 - **SuperTrend:** dual ST, a port of BookDepthIQ's `trend.rs`, for example **▲▲ STRONG LONG +75**.
 - **Scalp read:** **GO — pullback to ST1** (within 2 ATR of the line and pulling back), **wait for
   the dip**, or **STRETCHED — don't chase**.
-- **Market state:** **TREND / CHOP**, read from price (15-minute efficiency and the move in ATR),
-  plus **EXTENDED**.
+- **Market state:** **TREND / CHOP + ADX score**, from the selected completed-bar timeframe and
+  ADX period/threshold in Settings › Indicators. DI supplies direction, not ADX. **EXTENDED** still
+  describes distance from VWAP/ST; no forecast or automatic entry.
 - **FEED:** milliseconds since NinjaTrader's last book or print.
 
 ## Ticket and risk (CME)
@@ -357,10 +387,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.11
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.12
 ```
 
-This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.11-win-x64.zip` (~37 MB), which holds:
+This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.12-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
@@ -399,7 +429,7 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 
 ```
 dotnet build                                   # Core, DOM, tests, fake bridge
-dotnet test                                    # 220 tests, including isolated Ticket/bridge regression cases; no broker orders
+dotnet test                                    # 248 tests, including isolated Ticket/bridge regression cases; no broker orders
 BDIQ_PORT=36972 dotnet run --project tools/FakeBridge -- --position   # simulated NQ, never sends orders
 BDIQ_PORT=36972 dotnet run --project src/Dom   # the DOM against the fake (NinjaTrader is not touched)
 dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\Program Files\NinjaTrader 8\bin

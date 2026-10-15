@@ -90,6 +90,14 @@ public sealed class DomState
     public DualTrend Trend { get; private set; } = new();
     public DualSnapshot TrendSnap { get; private set; } = new(new(TrendDir.Neutral, null, false), new(TrendDir.Neutral, null, false), CombinedState.Chop, 0);
     public MinuteBars Bars { get; } = new();
+    public AdxBars Adx { get; private set; } = new();
+    public StateView MarketView(long now)
+    {
+        if(!Connected || FeedAgeMs>2000 || !HistoryLoaded)
+            return new(MarketState.Warming,null,$"ADX({cfg.AdxPeriod}) · {cfg.AdxMinutes}m · waiting for fresh feed and completed history");
+        return Structure.MarketAdx(Adx.Snapshot(now),cfg.AdxMinutes,cfg.AdxPeriod,cfg.AdxThreshold,
+            LastTick,Vwap.Value,Vwap.Sigma,TrendSnap.T1.LineTicks,Trend.T1.AtrTicks);
+    }
     public Vwap Vwap { get; } = new();
     private (long From, long To)? vwapWindow;
     /// <summary>Start of the profile window (epoch ms): the latest ProfileStart, or when the DOM opened or
@@ -186,6 +194,7 @@ public sealed class DomState
         this.cfg = cfg;
         journalPath = journalFile ?? Path.Combine(Settings.Dir, "journal.json");
         Trend = new DualTrend(cfg.St1, cfg.St2);
+        Adx = new AdxBars(cfg.AdxMinutes,cfg.AdxPeriod);
         LoadJournal();
     }
 
@@ -223,6 +232,7 @@ public sealed class DomState
         Trend = new DualTrend(cfg.St1, cfg.St2);
         TrendSnap = Trend.Snapshot();
         Bars.Clear(); Vwap.Reset(); vwapWindow = null; Or = null;
+        Adx = new AdxBars(cfg.AdxMinutes,cfg.AdxPeriod);
         NewIb();
         profileKey = ""; profileCheckedAt = 0;
         Tape.Clear(); LastTick = null; HistoryLoaded = false; HistoryNote = "";
@@ -374,6 +384,7 @@ public sealed class DomState
         var snap = Trend.OnTrade(ms, t, size, side == 'b' ? true : side == 's' ? false : (bool?)null);
         if (snap != null) TrendSnap = snap;
         Bars.Add(ms, t);
+        Adx.Add(ms,t);
         // Naked POCs see every print, history and live.
         Npoc.OnPrint(ms, t, size);
         // Profile, Δ and footprint: live prints from the profile start (setting), plus history before the

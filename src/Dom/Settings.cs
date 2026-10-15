@@ -55,6 +55,15 @@ public sealed class Settings
     public string Instrument { get; set; } = "NQ 12-26";
     public string Account { get; set; } = "Sim101";
     public int HistoryHours { get; set; } = 8;
+    private int adxMinutes=3,adxPeriod=14;
+    private double adxThreshold=25;
+    public int AdxMinutes { get=>adxMinutes; set=>adxMinutes=AdxBars.Timeframes.Contains(value)?value:3; }
+    public int AdxPeriod { get=>adxPeriod; set=>adxPeriod=Math.Clamp(value,1,100); }
+    public double AdxThreshold { get=>adxThreshold; set=>adxThreshold=double.IsFinite(value)?Math.Clamp(value,1,100):25; }
+    /// <summary>Five periods of ADX seed history plus partial-bar/session-break headroom, capped by bridge support.
+    /// Does not overwrite the user's history preference; insufficient provider history stays warming.</summary>
+    [JsonIgnore] public int EffectiveHistoryHours => Math.Clamp(Math.Max(HistoryHours,
+        (int)Math.Ceiling((5*AdxPeriod+2)*AdxMinutes/60.0)+2),1,48);
 
     // ── ticket ──
     public SizeMode SizeMode { get; set; } = SizeMode.Contracts;

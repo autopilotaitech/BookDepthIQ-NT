@@ -41,6 +41,14 @@ public sealed partial class MainWindow
         foreach (var line in new[] { riskLine, checkLine, costLine, lockLine, notice, resultBar }) line.IsVisible = !string.IsNullOrEmpty(line.Text);
     }
 
+    private void RefreshMarketState(long now)
+    {
+        var view=s.MarketView(now);
+        lastState=view.State;
+        Ui.SetPill(statePill,view.AdxLabel,
+            view.State==MarketState.Chop?Pal.Warn:view.State==MarketState.Warming?Pal.Muted:Pal.Text,view.Why);
+    }
+
     private void RefreshTop()
     {
         var ack = Cost.Percentiles(s.AckMs);
@@ -59,10 +67,7 @@ public sealed partial class MainWindow
         var now = DomState.NowMs();
         var atr = s.Trend.T1.AtrTicks;
         var vwapSigma = s.Vwap.Sigma;
-        var view = Structure.Market(s.Bars.RegimeAt(now), lastState, snap.T1.Dir, s.LastTick, s.Vwap.Value, vwapSigma, snap.T1.LineTicks, atr);
-        lastState = view.State;
-        Ui.SetPill(statePill, view.State switch { MarketState.TrendUp => "TREND ▲", MarketState.TrendDown => "TREND ▼", MarketState.Chop => "CHOP", _ => "warming" } + (view.Extended != null ? " · EXTENDED" : ""),
-            view.State == MarketState.Chop ? Pal.Warn : view.State == MarketState.Warming ? Pal.Muted : Pal.Text, view.Why);
+        RefreshMarketState(now);
         var sc = Structure.Scalp(snap.T1.Dir, s.LastTick, snap.T1.LineTicks, atr, s.Bars.RegimeAt(now, Structure.ScalpPullbackBars));
         if (sc is null) Ui.SetPill(scalpPill, "SCALP —", Pal.Muted, "SuperTrend scalp read: needs ST1 and 6 minutes of prints");
         else
@@ -206,7 +211,7 @@ public sealed partial class MainWindow
             r.State switch
             {
                 IbState.Idle => "Waiting for the open.",
-                IbState.Missed => $"Joined after this IB closed and no history row has it. Raise Settings › Ladder › History to load (now {cfg.HistoryHours} h) to rebuild it from NinjaTrader's ticks.",
+                IbState.Missed => $"Joined after this IB closed and no history row has it. Raise Settings › Ladder › History to load (effective request {cfg.EffectiveHistoryHours} h) to rebuild it from NinjaTrader's ticks.",
                 IbState.Building => "Building.",
                 IbState.Above => "Above the IB high.",
                 IbState.Below => "Below the IB low.",

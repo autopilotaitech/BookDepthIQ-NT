@@ -11,7 +11,13 @@ public sealed record Regime(double Er, double MoveAtr);
 
 public enum MarketState { Warming, TrendUp, TrendDown, Chop }
 
-public sealed record StateView(MarketState State, string? Extended, string Why);
+public sealed record StateView(MarketState State, string? Extended, string Why, double? Adx=null)
+{
+    public string AdxLabel => Adx is double score
+        ? (State switch {MarketState.TrendUp=>"TREND ▲",MarketState.TrendDown=>"TREND ▼",_=>"CHOP"})+
+            " · ADX "+score.ToString("0.0",CultureInfo.InvariantCulture)+(Extended!=null?" · EXTENDED":"")
+        : "ADX —";
+}
 
 public enum ScalpZone { Go, Near, Stretched }
 
@@ -106,7 +112,26 @@ public static class Structure
         var fmt = $"15m: {(r.MoveAtr >= 0 ? "+" : "")}{r.MoveAtr.ToString("0.0", CultureInfo.InvariantCulture)} ATR, efficiency {Math.Abs(r.Er).ToString("0.00", CultureInfo.InvariantCulture)}";
         var why = state == MarketState.Chop ? $"{fmt} — back and forth" : $"{fmt}{(up || down ? "" : " (holding)")}";
         if (state != MarketState.Chop && st1 != TrendDir.Neutral && st1 != (state == MarketState.TrendUp ? TrendDir.Up : TrendDir.Down)) why += " · ST1 against";
+        return WithExtension(new(state,null,why),price,vwap,vwapSigma,st1Line,atrTicks);
+    }
+
+    /// <summary>ADX is strength only. DI comparison supplies the direction; no movement remains CHOP
+    /// even though NT's zero-DI fallback produces ADX 50. Never a trade signal or entry gate.</summary>
+    public static StateView MarketAdx(AdxReading? reading,int minutes,int period,double threshold,
+        double? price,double? vwap,double? vwapSigma,double? st1Line,double? atrTicks)
+    {
+        var basis=$"ADX({period}) · {minutes}m completed bars · threshold {threshold.ToString("0.0",CultureInfo.InvariantCulture)}";
+        if(reading is null) return new(MarketState.Warming,null,basis+$" · needs at least {2*period+1} completed bars");
+        var trending=reading.Value>=threshold && reading.PlusDi!=reading.MinusDi;
+        var state=!trending?MarketState.Chop:reading.PlusDi>reading.MinusDi?MarketState.TrendUp:MarketState.TrendDown;
+        var why=basis+$" · value {reading.Value.ToString("0.000",CultureInfo.InvariantCulture)} · +DI {reading.PlusDi.ToString("0.0",CultureInfo.InvariantCulture)} / −DI {reading.MinusDi.ToString("0.0",CultureInfo.InvariantCulture)} · strength, not a forecast";
+        return WithExtension(new(state,null,why,reading.Value),price,vwap,vwapSigma,st1Line,atrTicks);
+    }
+
+    private static StateView WithExtension(StateView view,double? price,double? vwap,double? vwapSigma,double? st1Line,double? atrTicks)
+    {
         string? ext = null;
+        var why=view.Why;
         if (price is double p)
         {
             var vz = vwap is double v && vwapSigma is double sg && sg > 0 ? (p - v) / sg : 0;
@@ -115,7 +140,7 @@ public static class Structure
             else if (vz <= -2 || sz <= -3) ext = "down";
             if (ext != null) why += " · " + (Math.Abs(vz) >= 2 ? $"{vz:0.0}σ from VWAP" : $"{sz:0.0} ATR from ST1");
         }
-        return new(state, ext, why);
+        return view with {Extended=ext,Why=why};
     }
 
     /// <summary>Where an ST1 scalp stands: GO (near the line and pulling back), NEAR (near, still running:

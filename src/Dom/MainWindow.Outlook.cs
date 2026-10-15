@@ -88,8 +88,7 @@ public sealed partial class MainWindow
         var bf = s.Liquidity.FlowAt(bid);
         var af = s.Liquidity.FlowAt(ask);
         var snap = s.TrendSnap;
-        var regime = Structure.Market(s.Bars.RegimeAt(DomState.NowMs()), lastState, snap.T1.Dir,
-            s.LastTick, s.Vwap.Value, s.Vwap.Sigma, snap.T1.LineTicks, s.Trend.T1.AtrTicks);
+        var regime = s.MarketView(DomState.NowMs());
         var heldBid = bf.Absorb == "bid";
         var heldAsk = af.Absorb == "ask";
         var recent = s.Tape.FirstOrDefault();
@@ -97,7 +96,7 @@ public sealed partial class MainWindow
             s.Outlook.Start(heldBid ? bid : ask, heldBid, recent.TimeMs);
         outlookBid.Text = $"+{bf.Stacked:N0} STACK  /  −{bf.Pulled:N0} PULL";
         outlookAsk.Text = $"+{af.Stacked:N0} STACK  /  −{af.Pulled:N0} PULL";
-        outlookTrend.Text = $"ST1 {snap.T1.Dir} · ST2 {snap.T2.Dir}\n{regime.State}" + (regime.Extended != null ? " · extended" : "");
+        outlookTrend.Text = $"ST1 {snap.T1.Dir} · ST2 {snap.T2.Dir}\n{regime.AdxLabel}";
         outlookInvalidation.IsVisible = heldBid != heldAsk;
         outlookInvalidation.Text = heldBid ? $"Invalid below {Px(bid * s.TickSize)}" : $"Invalid above {Px(ask * s.TickSize)}";
         outlookCollection.Text = s.OutlookRecordStatus;
