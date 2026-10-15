@@ -16,6 +16,31 @@ public sealed partial class MainWindow
     private long? lastTrailTick;
     private string weekendDone = "";
     private string dayCloseDone = "";
+    private string managementAccount = "";
+    private bool managementSeenPosition;
+    private long managementEntryUntil;
+    private sealed record ReverseIntent(string Account,string Instrument,bool Buy,int Qty,Ticket Ticket,
+        string Cid,long PositionRevision,long OrdersRevision,long Expires,bool Acknowledged = false);
+    private ReverseIntent? reverseIntent;
+
+    private void ClearManagement()
+    {
+        trail.Clear(); be.Clear(); guard.Clear(); lastTrailTick=null;
+        managementSeenPosition=false; managementEntryUntil=0; managementAccount=s.Account;
+        reverseIntent=null;
+    }
+
+    private void OnExecutionReceived(Exec execution)
+    {
+        if (managementAccount==s.Account && cfg.BeAfterTp1) be.OnExecution(execution);
+    }
+
+    private void OnCommandAcknowledged(string cid,bool ok)
+    {
+        if(reverseIntent is not { } intent || intent.Cid!=cid) return;
+        if(!ok) { reverseIntent=null; Refuse("REVERSE aborted: flatten was refused"); }
+        else reverseIntent=intent with { Acknowledged=true };
+    }
 
     private string NextCid() => $"c{Environment.TickCount64}-{++cidSeq}";
 
@@ -74,6 +99,9 @@ public sealed partial class MainWindow
     private string? NotReady(Ticket tk)
     {
         if (!s.Connected) return "not connected to NinjaTrader";
+        if(s.BridgeOrderVersion<Protocol.OrderVersion) return "update BookDepthIQBridge.cs and compile NinjaTrader (F5): this bridge is too old for safe Ticket orders";
+        if(!s.AccountConnectionReady) return "selected NinjaTrader account is disconnected";
+        if (!s.HasTradingSnapshot) return "waiting for fresh balances, position and orders for the selected NinjaTrader account";
         if (string.IsNullOrEmpty(s.Instrument)) return "no instrument — type one (e.g. NQ 12-26) and press Go";
         if (tk.StopWhy != null && cfg.BracketOn) return tk.StopWhy;
         if (tk.Contracts <= 0)
@@ -117,6 +145,7 @@ public sealed partial class MainWindow
 
     private void Market(bool buy)
     {
+        if(reverseIntent!=null) { Refuse("REVERSE is waiting for flat — cancel or flatten to abort"); return; }
         var tk = Ticket.For(cfg, s, dd, buy);
         if (NotReady(tk) is string why) { s.Note(OrderLogStatus.Click, $"{(buy ? "BUY" : "SELL")} MKT"); Refuse(why); return; }
         Warn(tk, null);
@@ -127,6 +156,7 @@ public sealed partial class MainWindow
 
     private void Place(bool buy, long row, bool stop)
     {
+        if(reverseIntent!=null) { Refuse("REVERSE is waiting for flat — cancel or flatten to abort"); return; }
         var price = row * s.TickSize;
         var tk = Ticket.For(cfg, s, dd, buy, row);
         if (NotReady(tk) is string why) { s.Note(OrderLogStatus.Click, $"{(buy ? "BUY" : "SELL")} {(stop ? "STOP" : "LIMIT")} @ {Px(price)}"); Refuse(why); return; }
@@ -138,9 +168,22 @@ public sealed partial class MainWindow
             var end = row + (buy ? -1 : 1) * cfg.ScaleSpanTicks;
             var plan = Targets.ScaleOrders(tk.Contracts, row, end, cfg.ScaleCount, cfg.ScaleSkew, cfg.ScaleDir);
             if (!plan.Ok) { Refuse(plan.Message); return; }
+            var slices=tk.Slices(cfg.BracketOn);
+            var target=0; var allocated=0; var sent=false;
             foreach (var leg in plan.Legs)
-                Send($"SCALE {(buy ? "BUY" : "SELL")} {leg.Qty} ct @ {Px(leg.Ticks * s.TickSize)}", cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", "limit", leg.Qty, leg.Ticks * s.TickSize, Array.Empty<Piece>(), 0));
-            Notice("scale orders have no brackets: press B/E or set a stop once filled");
+            {
+                var child=new List<Piece>(); var numbers=new List<int>(); var left=leg.Qty;
+                while(left>0 && target<slices.Count)
+                {
+                    var take=Math.Min(left,slices[target].Qty-allocated);
+                    child.Add(new Piece(slices[target].Ticks,take)); numbers.Add(target+1);
+                    left-=take; allocated+=take;
+                    if(allocated==slices[target].Qty) { target++; allocated=0; }
+                }
+                if(!Send($"SCALE {(buy ? "BUY" : "SELL")} {leg.Qty} ct @ {Px(leg.Ticks * s.TickSize)}", cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", "limit", leg.Qty, leg.Ticks * s.TickSize, child, cfg.BracketOn ? tk.StopTicks : 0,numbers))) break;
+                sent=true;
+            }
+            if(sent) ArmManagement(tk,slices,buy);
             return;
         }
         Entry(buy, stop ? "stop" : "limit", price, tk);
@@ -153,7 +196,14 @@ public sealed partial class MainWindow
         var what = $"{(buy ? "BUY" : "SELL")} {type.ToUpperInvariant()} {tk.Contracts} ct{(price is double p ? " @ " + Px(p) : "")}" +
                    (slices.Count > 0 ? $" · {string.Join(" ", slices.Where(x => x.Ticks > 0).Select((x, i) => $"TP{i + 1} {x.Ticks}t×{x.Qty}"))} SL {sl}t" : " · no bracket");
         if (!Send(what, cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", type, tk.Contracts, price, slices, sl))) return;
-        if (cfg.BracketOn && cfg.BeAfterTp1 && slices.Count(x => x.Ticks > 0) >= 2) { be.Arm(s.Instrument, cfg.BeOffsetTicks); s.Note(OrderLogStatus.Ok, $"B/E after TP1 armed (offset {cfg.BeOffsetTicks}t)"); }
+        ArmManagement(tk,slices,buy);
+    }
+
+    private void ArmManagement(Ticket tk,IReadOnlyList<Piece> slices,bool buy)
+    {
+        if(managementAccount!=s.Account) ClearManagement();
+        managementAccount=s.Account; managementEntryUntil=DomState.NowMs()+8000;
+        if (cfg.BracketOn && cfg.BeAfterTp1 && slices.Count(x => x.Ticks > 0) >= 2) { be.Arm(s.Instrument, cfg.BeOffsetTicks,slices[0].Qty,buy); s.Note(OrderLogStatus.Ok, $"B/E after TP1 armed (offset {cfg.BeOffsetTicks}t)"); }
         if (cfg.Trail != TrailMode.Off)
         {
             trail.Arm(s.Instrument, tk.StopTicks, cfg.TrailStartR, cfg.Trail == TrailMode.St1 ? 1 : cfg.Trail == TrailMode.St2 ? 2 : 0);
@@ -165,6 +215,7 @@ public sealed partial class MainWindow
 
     private void BreakEven()
     {
+        reverseIntent=null;
         if (s.PosQty == 0) { Refuse("B/E: flat — nothing to protect"); return; }
         var isLong = s.PosQty > 0;
         var target = Math.Round(s.PosAvg / s.TickSize) + (isLong ? 1 : -1) * cfg.BeOffsetTicks;
@@ -184,6 +235,7 @@ public sealed partial class MainWindow
 
     private void CloseHalf()
     {
+        reverseIntent=null;
         var q = Math.Abs(s.PosQty) / 2;
         if (s.PosQty == 0) { Refuse("CLOSE HALF: flat"); return; }
         if (q == 0) { Refuse($"{Math.Abs(s.PosQty)} ct can't be halved — use FLATTEN"); return; }
@@ -192,20 +244,29 @@ public sealed partial class MainWindow
 
     private void Reverse()
     {
+        if(reverseIntent!=null) { Refuse("REVERSE already pending — cancel or flatten to abort"); return; }
         if (s.PosQty == 0) { Refuse("REVERSE: flat — nothing to reverse"); return; }
         var buy = s.PosQty < 0;
-        var tk = Ticket.For(cfg, s, dd, buy);
-        if (NotReady(tk) is string why && !why.StartsWith("size", StringComparison.Ordinal)) { Refuse("REVERSE: " + why); return; }
         var qty = Math.Abs(s.PosQty);
-        Send($"REVERSE: cancel legs, flatten, then {(buy ? "BUY" : "SELL")} {qty} ct", cid => Protocol.Flatten(cid, s.Account, s.Instrument), exit: true);
-        Send($"{(buy ? "BUY" : "SELL")} MKT {qty} ct (reverse)", cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", "market", qty, null, Array.Empty<Piece>(), 0));
+        var tk = Ticket.For(cfg, s, dd, buy,contracts:qty);
+        if (NotReady(tk) is string why) { Refuse("REVERSE: " + why); return; }
+        if(tk.Contracts!=qty) { Refuse("REVERSE: position exceeds your configured maximum contracts"); return; }
+        ClearManagement();
+        var cidSent=""; var posRevision=s.PositionRevision; var ordersRevision=s.OrdersRevision;
+        if(Send($"REVERSE: waiting for confirmed flat before {(buy ? "BUY" : "SELL")} {qty} ct", cid => { cidSent=cid; return Protocol.Flatten(cid,s.Account,s.Instrument); },exit:true))
+            reverseIntent=new(s.Account,s.Instrument,buy,qty,tk,cidSent,posRevision,ordersRevision,DomState.NowMs()+8000);
     }
 
-    private void CancelAll() => Send("CANCEL ALL", cid => Protocol.CancelAll(cid, s.Account, s.Instrument), exit: true);
-    private void Flatten() => Send("FLATTEN", cid => Protocol.Flatten(cid, s.Account, s.Instrument), exit: true);
+    private void CancelAll() { reverseIntent=null; Send("CANCEL ALL", cid => Protocol.CancelAll(cid, s.Account, s.Instrument), exit: true); }
+    private void CancelWorkingOrder(WorkingOrder order)
+    {
+        reverseIntent=null;
+        Send($"CANCEL {Leg(order)} @ {Px(order.Price)}",cid=>Protocol.Cancel(cid,s.Account,order.Id),exit:true);
+    }
+    private void Flatten() { reverseIntent=null; Send("FLATTEN", cid => Protocol.Flatten(cid, s.Account, s.Instrument), exit: true); }
     private void Kill()
     {
-        trail.Clear(); be.Clear();
+        ClearManagement();
         Send("KILL — every position and order on the account", cid => Protocol.Kill(cid, s.Account), exit: true);
     }
 
@@ -214,16 +275,37 @@ public sealed partial class MainWindow
     private void Manage()
     {
         var now = DomState.NowMs();
-        if (now - lastMgmtMs < 250 || !s.Connected) return;
+        if(!s.Connected || !s.AccountConnectionReady || managementAccount!=s.Account) { ClearManagement(); return; }
+        if(!s.HasTradingSnapshot) return;
+        if (now - lastMgmtMs < 250) return;
         lastMgmtMs = now;
+        if(reverseIntent is { } intent)
+        {
+            if(intent.Account!=s.Account || intent.Instrument!=s.Instrument || now>intent.Expires)
+            { reverseIntent=null; Refuse("REVERSE aborted: selection changed or flat confirmation timed out"); }
+            else if(intent.Acknowledged && s.PositionRevision>intent.PositionRevision && s.OrdersRevision>intent.OrdersRevision
+                && s.PosQty==0 && !s.OrdersOnScreen.Any())
+            {
+                reverseIntent=null;
+                var current=intent.Ticket.Reprice(cfg,s,dd);
+                if(NotReady(current) is string why) Refuse("REVERSE aborted: "+why);
+                else if(current.Contracts!=intent.Qty) Refuse("REVERSE aborted: maximum contracts changed");
+                else Entry(intent.Buy,"market",null,current);
+            }
+        }
         var abs = Math.Abs(s.PosQty);
         var isLong = s.PosQty > 0;
+        var entryPending=s.OrdersOnScreen.Any(o=>o.Name=="BDIQ entry") || (!managementSeenPosition && now<=managementEntryUntil);
+        if(!cfg.BeAfterTp1) be.Clear();
+        if(cfg.Trail==TrailMode.Off) { trail.Clear(); lastTrailTick=null; }
+        if(!cfg.StopGuard) guard.Clear();
+        if(abs>0) managementSeenPosition=true;
 
         // B/E after TP1
         var tps = s.OrdersOnScreen.Count(o => o.IsTarget);
         if (be.Inst == s.Instrument)
         {
-            var r = be.Check(abs, tps);
+            var r = be.Check(abs, tps,entryPending);
             if (r == "fire")
             {
                 var target = (long)Math.Round(s.PosAvg / s.TickSize) + (isLong ? 1 : -1) * cfg.BeOffsetTicks;
@@ -240,7 +322,9 @@ public sealed partial class MainWindow
             var want = trail.OnTrade(s.Instrument, isLong, (long)Math.Round(s.PosAvg / s.TickSize), lt, stop, L(snap.T1), L(snap.T2));
             if (want is long w) MoveStops(w, "trail");
         }
-        if (abs == 0) { trail.Clear(s.Instrument); lastTrailTick = null; }
+        if(abs==0) { trail.ResetPosition(s.Instrument); lastTrailTick=null; }
+        if (abs == 0 && !entryPending && (managementSeenPosition || now>managementEntryUntil))
+        { trail.Clear(s.Instrument); be.Clear(s.Instrument); lastTrailTick = null; managementSeenPosition=false; }
         // stop guard
         if (cfg.StopGuard)
             foreach (var (_, stopPx) in guard.Check(abs > 0 ? new[] { (s.Instrument, s.StopOnScreen) } : Array.Empty<(string, double?)>(), now))

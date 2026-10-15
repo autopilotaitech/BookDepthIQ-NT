@@ -30,10 +30,33 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.8](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.8).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.8/BookDepthIQ-DOM-1.12.8-win-x64.zip).
-Upgrading from 1.10.6 or earlier requires replacing **both the DOM and the NinjaTrader bridge** and
-compiling the bridge with F5. This includes the prop-account discovery fix.
+**Current release: [1.12.9](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.9).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.9/BookDepthIQ-DOM-1.12.9-win-x64.zip).
+**1.12.9 requires replacing BOTH the DOM and NinjaTrader bridge, then compiling the bridge with F5.**
+New entries are refused with an older bridge; emergency exits remain available. Keep beta on until
+the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.9.md) passes.
+
+### New in 1.12.9 — Ticket safety fixes (still beta)
+
+- SCALE preserves enabled TP/SL protection, distributing the ticket's whole-contract target totals
+  across child entries. Each filled slice keeps its original TP1/TP2/TP3 identity and OCO pair.
+- REVERSE waits for acknowledgment, a fresh flat position and empty instrument orders before one
+  opposite entry with the captured size and brackets. It aborts on timeout, cancellation, ticket edits,
+  account/instrument changes or disconnect/reconnect. The captured stop is rechecked against current
+  equity, fees and limits before sending; it cannot bypass risk checks using a newly smaller swing stop.
+- Trailing and B/E honor OFF. Management is cleared on account/session changes. Pending limit
+  entries keep their management watches, including flat gaps between SCALE fills.
+- B/E after TP1 requires actual, deduplicated TP1 executions covering the first target's quantity;
+  CLOSE HALF or cancelled targets cannot fake a TP1 fill.
+- Entries wait for fresh balances, selected-instrument position and orders. Account changes clear old
+  balances. Pending bridge entries retain bracket handling even if another account is selected.
+- BRACKET OFF is explicitly labeled and warns beside the order buttons, even with TICKET hidden.
+  Your saved setting is not silently switched on.
+
+**Proof:** 200 automated tests pass (189 core/DOM plus 11 tests of the actual bridge source against
+an isolated test-only NinjaTrader API simulator and the real .NET Framework JSON parser). BridgeCheck
+compiles against installed NinjaTrader assemblies with zero warnings/errors. No actual SIM or LIVE
+orders were sent by these tests; native execution/OCO certification remains yours to perform.
 
 ### New in 1.12.8
 
@@ -307,10 +330,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.8
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.9
 ```
 
-This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.8-win-x64.zip` (~37 MB), which holds:
+This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.9-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
@@ -349,7 +372,7 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 
 ```
 dotnet build                                   # Core, DOM, tests, fake bridge
-dotnet test                                    # 69 tests: risk, drawdown, SuperTrend, PAXOR, IB, heat, footprint, nPOC, GEX, trips …
+dotnet test                                    # 200 tests, including isolated Ticket/bridge regression cases; no broker orders
 BDIQ_PORT=36972 dotnet run --project tools/FakeBridge -- --position   # simulated NQ, never sends orders
 BDIQ_PORT=36972 dotnet run --project src/Dom   # the DOM against the fake (NinjaTrader is not touched)
 dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\Program Files\NinjaTrader 8\bin

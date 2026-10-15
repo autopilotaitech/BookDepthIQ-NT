@@ -114,8 +114,22 @@ namespace NinjaTrader.NinjaScript.AddOns
                 public int[] Qty;       // contracts per target
                 public int[] Done;      // contracts already bracketed per target
                 public int SlTicks;
+                public int[] Numbers; // original target identity, retained across SCALE children
+                public Account Owner;
+                public HashSet<string> Executions = new HashSet<string>();
             }
             private readonly ConcurrentDictionary<Order, Bracket> brackets = new ConcurrentDictionary<Order, Bracket>();
+            private readonly HashSet<Account> executionAccounts = new HashSet<Account>();
+
+            private void WatchExecutions(Account a)
+            {
+                lock(executionAccounts) if(executionAccounts.Add(a)) a.ExecutionUpdate += OnExecutionUpdate;
+            }
+            private void ReleaseExecutions(Account a)
+            {
+                if(a==account || brackets.Values.Any(b=>b.Owner==a)) return;
+                lock(executionAccounts) if(executionAccounts.Remove(a)) a.ExecutionUpdate -= OnExecutionUpdate;
+            }
             private int ocoSeq;
 
             private volatile bool stopped;
@@ -147,9 +161,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (a != null)
                 {
                     a.OrderUpdate -= OnOrderUpdate;
-                    a.ExecutionUpdate -= OnExecutionUpdate;
                     a.PositionUpdate -= OnPositionUpdate;
                     a.AccountItemUpdate -= OnAccountItemUpdate;
+                }
+                lock(executionAccounts)
+                {
+                    foreach(var watched in executionAccounts) watched.ExecutionUpdate -= OnExecutionUpdate;
+                    executionAccounts.Clear();
                 }
                 Log("BookDepthIQ bridge stopped");
             }
@@ -295,18 +313,20 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var signature = json.Serialize(accts);
                 if (!force && signature == accountSignature) return;
                 accountSignature = signature;
-                Send(new Dictionary<string, object> { { "t", hello ? "hello" : "accounts" }, { "v", 2 }, { "accounts", accts } });
+                Send(new Dictionary<string, object> { { "t", hello ? "hello" : "accounts" }, { "v", 2 }, { "orderVersion", 1 }, { "accounts", accts } });
+                if(!hello && account!=null) { SendAccount(); SendPositions(); SendOrders(); }
             }
 
             private void Subscribe(string name)
             {
                 var inst = Instrument.GetInstrument(name, false);
                 if (inst == null) { Send(new Dictionary<string, object> { { "t", "log" }, { "msg", "no NinjaTrader instrument named '" + name + "'" } }); return; }
-                if (inst == instrument) { SendInstrument(); return; }
+                if (inst == instrument) { SendInstrument(); SendPositions(); SendOrders(); return; }
                 Unsubscribe();
                 instrument = inst;
                 lastBid = lastAsk = 0;
                 SendInstrument();
+                SendPositions(); SendOrders();
                 inst.Dispatcher.InvokeAsync(() =>
                 {
                     depth = new MarketDepth<MarketDepthRow>(inst);
@@ -349,13 +369,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (account != null)
                 {
                     account.OrderUpdate -= OnOrderUpdate;
-                    account.ExecutionUpdate -= OnExecutionUpdate;
                     account.PositionUpdate -= OnPositionUpdate;
                     account.AccountItemUpdate -= OnAccountItemUpdate;
                 }
+                var previous=account;
                 account = a;
+                if(previous!=null) ReleaseExecutions(previous);
                 a.OrderUpdate += OnOrderUpdate;
-                a.ExecutionUpdate += OnExecutionUpdate;
+                WatchExecutions(a);
                 a.PositionUpdate += OnPositionUpdate;
                 a.AccountItemUpdate += OnAccountItemUpdate;
                 SendAccount();
@@ -397,6 +418,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var sl = Int(m, "sl");
                 var tps = new List<int>();
                 var qs = new List<int>();
+                var numbers = new List<int>();
                 object tv;
                 if (m.TryGetValue("targets", out tv) && tv is System.Collections.ArrayList)
                     foreach (var t in (System.Collections.ArrayList)tv)
@@ -405,11 +427,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                         if (pair == null || pair.Count < 2) continue;
                         tps.Add(Convert.ToInt32(pair[0], System.Globalization.CultureInfo.InvariantCulture));
                         qs.Add(Convert.ToInt32(pair[1], System.Globalization.CultureInfo.InvariantCulture));
+                        numbers.Add(pair.Count > 2 ? Convert.ToInt32(pair[2], System.Globalization.CultureInfo.InvariantCulture) : tps.Count);
                     }
-                if (tps.Count == 0 && Int(m, "tp") > 0) { tps.Add(Int(m, "tp")); qs.Add(qty); }
-                if (tps.Count == 0 && sl > 0) { tps.Add(0); qs.Add(qty); }
+                if (tps.Count == 0 && Int(m, "tp") > 0) { tps.Add(Int(m, "tp")); qs.Add(qty); numbers.Add(1); }
+                if (tps.Count == 0 && sl > 0) { tps.Add(0); qs.Add(qty); numbers.Add(1); }
                 if (tps.Count > 0 && qs.Sum() != qty) { Ack(cid, false, "target sizes add up to " + qs.Sum() + ", not " + qty); return; }
-                if (tps.Count > 0) brackets[o] = new Bracket { TpTicks = tps.ToArray(), Qty = qs.ToArray(), Done = new int[tps.Count], SlTicks = sl };
+                if (tps.Count > 0) brackets[o] = new Bracket { Owner=a, TpTicks = tps.ToArray(), Qty = qs.ToArray(), Numbers=numbers.ToArray(), Done = new int[tps.Count], SlTicks = sl };
+                WatchExecutions(a);
                 a.Submit(new[] { o });
                 Ack(cid, true, string.Format("{0} {1} {2} {3}{4} sent to {5}", action, qty, inst.FullName, ot, ot == OrderType.Market ? "" : " @ " + px, a.Name));
             }
@@ -670,6 +694,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var legs = new List<Order>();
                 lock (br)
                 {
+                    if(!string.IsNullOrEmpty(ex.ExecutionId) && !br.Executions.Add(ex.ExecutionId)) return;
                     for (var i = 0; i < br.TpTicks.Length && left > 0; i++)
                     {
                         var take = Math.Min(left, br.Qty[i] - br.Done[i]);
@@ -681,17 +706,18 @@ namespace NinjaTrader.NinjaScript.AddOns
                         if (br.TpTicks[i] > 0)
                         {
                             var tpPx = mi.RoundToTickSize(ex.Price + (isLong ? 1 : -1) * br.TpTicks[i] * mi.TickSize);
-                            legs.Add(a.CreateOrder(inst, exitAction, OrderType.Limit, OrderEntry.Manual, TimeInForce.Gtc, take, tpPx, 0, oco, "BDIQ TP" + (i + 1), Core.Globals.MaxDate, null));
+                            legs.Add(a.CreateOrder(inst, exitAction, OrderType.Limit, OrderEntry.Manual, TimeInForce.Gtc, take, tpPx, 0, oco, "BDIQ TP" + br.Numbers[i], Core.Globals.MaxDate, null));
                         }
                         if (br.SlTicks > 0)
                         {
                             var slPx = mi.RoundToTickSize(ex.Price - (isLong ? 1 : -1) * br.SlTicks * mi.TickSize);
-                            legs.Add(a.CreateOrder(inst, exitAction, OrderType.StopMarket, OrderEntry.Manual, TimeInForce.Gtc, take, 0, slPx, oco, "BDIQ SL" + (i + 1), Core.Globals.MaxDate, null));
+                            legs.Add(a.CreateOrder(inst, exitAction, OrderType.StopMarket, OrderEntry.Manual, TimeInForce.Gtc, take, 0, slPx, oco, "BDIQ SL" + br.Numbers[i], Core.Globals.MaxDate, null));
                         }
                     }
                     if (br.Done.Sum() >= br.Qty.Sum()) { Bracket gone; brackets.TryRemove(ex.Order, out gone); }
                 }
                 if (legs.Count > 0) OnUi(() => a.Submit(legs));
+                ReleaseExecutions(a);
             }
 
             private void SendAccount()

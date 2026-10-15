@@ -63,6 +63,10 @@ public sealed class TrailBook
     public bool Clear(string? inst = null) { if (inst is null) { var n = w.Count; w.Clear(); return n > 0; } return w.Remove(inst); }
     public bool Has(string inst) => w.ContainsKey(inst);
     public int Count => w.Count;
+    public void ResetPosition(string inst)
+    {
+        if(w.TryGetValue(inst,out var state)) { state.Best=null; state.Long=null; }
+    }
 
     /// <summary>A trade printed while a position is open: the stop it should have now, if it should move.</summary>
     public long? OnTrade(string inst, bool isLong, long entryTicks, long priceTicks, long? stopTicks, TrendLine? st1, TrendLine? st2)
@@ -75,33 +79,37 @@ public sealed class TrailBook
     }
 }
 
-/// <summary>B/E after TP1: armed by your own entry with 2+ targets. Says Fire once, the first time the
-/// position has shrunk AND lost a target order (TP1 filled). A manual partial close keeps every target,
-/// so it does not count. One-shot; cleared when the position is gone.</summary>
+/// <summary>B/E after TP1 requires identified TP1 executions, never changes in order/position counts.</summary>
 public sealed class BeWatch
 {
-    private sealed class W { public string Inst = ""; public long OffsetTicks; public int MaxQty; public int MaxTps; public bool Seen; }
+    private sealed class W { public string Inst = ""; public long OffsetTicks; public int TargetQty, Filled; public bool Seen; public bool? Long; public HashSet<string> Executions = new(); }
     private W? w;
 
-    public void Arm(string inst, long offsetTicks) => w = new W { Inst = inst, OffsetTicks = offsetTicks };
+    public void Arm(string inst, long offsetTicks, int targetQty = 1, bool? isLong = null) =>
+        w = new W { Inst = inst, OffsetTicks = offsetTicks, TargetQty = Math.Max(1,targetQty), Long=isLong };
+    public void OnExecution(Exec e)
+    {
+        if (w is null || e.Inst != w.Inst || e.Name != "BDIQ TP1" || e.Qty <= 0 || (w.Long.HasValue && e.Buy == w.Long.Value)) return;
+        if (e.Id.Length > 0 && !w.Executions.Add(e.Id)) return;
+        w.Filled += e.Qty;
+    }
     public bool Clear(string? inst = null) { if (w is null || (inst is not null && w.Inst != inst)) return false; w = null; return true; }
     public string? Inst => w?.Inst;
     public long OffsetTicks => w?.OffsetTicks ?? 0;
 
     /// <summary>"fire" once when TP1 has filled; "gone" when the position closed; else "idle".</summary>
-    public string Check(int absQty, int targetOrders)
+    public string Check(int absQty, int targetOrders, bool entryPending = false)
     {
         if (w is null) return "idle";
         if (absQty == 0)
         {
+            if(entryPending) return "idle";
             if (!w.Seen) return "idle";
             w = null;
             return "gone";
         }
         w.Seen = true;
-        if (w.MaxTps > 0 && absQty < w.MaxQty && targetOrders < w.MaxTps) { w = null; return "fire"; }
-        w.MaxQty = Math.Max(w.MaxQty, absQty);
-        w.MaxTps = Math.Max(w.MaxTps, targetOrders);
+        if (w.Filled >= w.TargetQty) { w = null; return "fire"; }
         return "idle";
     }
 }

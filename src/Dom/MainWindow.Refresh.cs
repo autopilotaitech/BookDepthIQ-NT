@@ -251,6 +251,9 @@ public sealed partial class MainWindow
 
     private void RefreshTicket()
     {
+        bracketBtn.Content=cfg.BracketOn ? "BRACKET ON" : "BRACKET OFF";
+        protectionLine.Text=cfg.BracketOn ? "" : "BRACKET OFF — new entries have no TP/SL";
+        protectionLine.IsVisible=!cfg.BracketOn;
         var isLong = cfg.Preview != PreviewMode.Short;
         var tk = Ticket.For(cfg, s, dd, isLong);
         var r = tk.Risk;

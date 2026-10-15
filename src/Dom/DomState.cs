@@ -23,12 +23,37 @@ public sealed record WorkingOrder(string Id, string Inst, string Action, string 
 public sealed class DomState
 {
     // ── connection / account ──
-    public bool Connected { get; set; }
+    private bool connected;
+    public bool Connected
+    {
+        get=>connected;
+        set { var lost=connected && !value; connected=value; if(lost) ResetTradingSession(); }
+    }
+    public int BridgeOrderVersion { get; private set; }
     public List<AccountInfo> Accounts { get; } = new();
-    public string Account { get; set; } = "Sim101";
+    private string accountName = "Sim101";
+    public string Account
+    {
+        get => accountName;
+        set
+        {
+            if(accountName==value) return;
+            accountName=value; accountSnapshotName="";
+            positionSnapshotName=ordersSnapshotName=positionSnapshotInstrument="";
+            Cash=Realized=Unrealized=NetLiq=TrailDd=DailyLimit=Commission=0;
+            Positions.Clear(); Orders.Clear();
+            AccountChanged?.Invoke();
+        }
+    }
     public double Cash, Realized, Unrealized, NetLiq, TrailDd, DailyLimit, Commission;
     private string accountSnapshotName = "";
+    private string positionSnapshotName="", ordersSnapshotName="", positionSnapshotInstrument="";
     public bool HasAccountSnapshot => Connected && accountSnapshotName == Account;
+    public bool HasTradingSnapshot => HasAccountSnapshot && positionSnapshotName==Account &&
+        positionSnapshotInstrument==Instrument && ordersSnapshotName==Account;
+    public bool AccountConnectionReady => Accounts.FirstOrDefault(a=>a.Name==Account) is not { } a || a.Conn=="Connected";
+    public long PositionRevision { get; private set; }
+    public long OrdersRevision { get; private set; }
     public RecordedDayTotals RecordedToday(long now) => JournalAnalytics.RecordedDay(Journal,Account,now);
     /// <summary>Positions on the streamed account by instrument (they can arrive before the instrument is set).</summary>
     public Dictionary<string, (int Qty, double Avg)> Positions { get; } = new();
@@ -166,6 +191,15 @@ public sealed class DomState
 
     public event Action? Changed;
     public event Action<JournalTrade>? TradeClosed;
+    public event Action<Exec>? ExecutionReceived;
+    public event Action<string,bool>? CommandAcknowledged;
+    public event Action? AccountChanged;
+    public event Action? TradingSessionReset;
+    private void ResetTradingSession()
+    {
+        accountSnapshotName=positionSnapshotName=ordersSnapshotName=positionSnapshotInstrument="";
+        TradingSessionReset?.Invoke();
+    }
     public void Raise() => Changed?.Invoke();
 
     public void Note(OrderLogStatus st, string text) => OrderLog.Add(st, text);
@@ -201,15 +235,19 @@ public sealed class DomState
         switch (S(m, "t"))
         {
             case "hello":
+                ResetTradingSession();
                 Connected = true;
+                BridgeOrderVersion=(int)D(m,"orderVersion",0);
                 accountSnapshotName = "";
                 goto case "accounts";
             case "accounts":
                 Accounts.Clear();
                 if (m.TryGetProperty("accounts", out var al))
                     foreach (var a in al.EnumerateArray()) Accounts.Add(new AccountInfo(S(a, "name"), S(a, "conn")));
+                if(!AccountConnectionReady) ResetTradingSession();
                 break;
             case "inst":
+                positionSnapshotName=ordersSnapshotName=positionSnapshotInstrument="";
                 Instrument = S(m, "name");
                 TickSize = D(m, "tick", TickSize);
                 PointValue = D(m, "pv", PointValue);
@@ -259,6 +297,8 @@ public sealed class DomState
             case "pos":
                 if (S(m, "acct") == Account)
                 {
+                    if(S(m,"inst")==Instrument)
+                    { PositionRevision++; positionSnapshotName=Account; positionSnapshotInstrument=Instrument; }
                     var q = (int)D(m, "qty", 0);
                     if (q == 0) Positions.Remove(S(m, "inst"));
                     else Positions[S(m, "inst")] = (q, D(m, "avg", 0));
@@ -266,6 +306,8 @@ public sealed class DomState
                 break;
             case "orders":
                 if (S(m, "acct") != Account) break;
+                OrdersRevision++;
+                ordersSnapshotName=Account;
                 Orders.Clear();
                 foreach (var o in m.GetProperty("list").EnumerateArray())
                     Orders.Add(new WorkingOrder(S(o, "id"), S(o, "inst"), S(o, "action"), S(o, "type"), (int)D(o, "qty", 0), (int)D(o, "filled", 0), D(o, "limit", 0), D(o, "stop", 0), S(o, "state"), S(o, "oco"), S(o, "name")));
@@ -273,7 +315,9 @@ public sealed class DomState
                 break;
             case "exec":
                 if (S(m, "acct") != Account) break;
-                OnExec(new Exec(S(m, "id"), S(m, "inst"), S(m, "name"), S(m, "side") == "b", (int)D(m, "qty", 0), D(m, "price", 0), D(m, "commission", 0) + D(m, "fee", 0), (long)D(m, "ms", NowMs())));
+                var execution = new Exec(S(m, "id"), S(m, "inst"), S(m, "name"), S(m, "side") == "b", (int)D(m, "qty", 0), D(m, "price", 0), D(m, "commission", 0) + D(m, "fee", 0), (long)D(m, "ms", NowMs()));
+                OnExec(execution);
+                ExecutionReceived?.Invoke(execution);
                 break;
             case "ack":
             {
@@ -285,6 +329,7 @@ public sealed class DomState
                 if (ms is long x) { AckMs.Add(x); if (AckMs.Count > 50) AckMs.RemoveAt(0); }
                 LastResult = S(m, "msg") + (ms is long y ? $" · {y} ms" : "");
                 Note(ok ? OrderLogStatus.Ok : OrderLogStatus.Refused, LastResult);
+                CommandAcknowledged?.Invoke(cid,ok);
                 break;
             }
             case "reject":

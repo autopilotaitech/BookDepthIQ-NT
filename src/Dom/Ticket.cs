@@ -15,7 +15,7 @@ public sealed class Ticket
     public double Room { get; private set; }
     public int Contracts => Risk.Contracts;
 
-    public static Ticket For(Settings c, DomState s, DrawdownTracker dd, bool isLong, long? refTicks = null)
+    public static Ticket For(Settings c, DomState s, DrawdownTracker dd, bool isLong, long? refTicks = null, int? contracts = null)
     {
         var t = new Ticket();
         var atr = s.Trend.T1.AtrTicks;
@@ -41,15 +41,27 @@ public sealed class Ticket
             var ticks = c.StopMode == StopMode.Ticks ? (i < c.TpTicks.Length ? c.TpTicks[i] : 0) : (int)Math.Round((i < c.TpR.Length ? c.TpR[i] : 0) * t.StopTicks);
             t.Targets.Add(new Target(ticks, i < split.Length ? split[i] : 0));
         }
-        t.Room = dd.Room(s.Equity);
-        var first = t.Targets.FirstOrDefault(x => x.Ticks > 0);
-        t.Risk = CmeRisk.Calc(new RiskInput
-        {
-            TickValue = s.TickValue, RoomUsd = t.Room, StopTicks = t.StopTicks, TargetTicks = first?.Ticks ?? 0, FeePerSide = c.FeePerSide,
-            Mode = c.SizeMode, Input = c.SizeInput, MaxContracts = c.MaxContracts,
-        });
-        t.Split = Core.Targets.SplitTargets(t.Risk.Contracts, t.Targets);
+        t.Price(c,s,dd,contracts);
         return t;
+    }
+
+    /// <summary>Recheck captured distances and exact size against CURRENT equity, fees and limits.</summary>
+    public Ticket Reprice(Settings c,DomState s,DrawdownTracker dd)
+    {
+        var t=new Ticket {StopTicks=StopTicks,StopWhy=StopWhy};
+        t.Targets.AddRange(Targets); t.Price(c,s,dd,Contracts); return t;
+    }
+
+    private void Price(Settings c,DomState s,DrawdownTracker dd,int? contracts)
+    {
+        Room = dd.Room(s.Equity);
+        var first = Targets.FirstOrDefault(x => x.Ticks > 0);
+        Risk = CmeRisk.Calc(new RiskInput
+        {
+            TickValue = s.TickValue, RoomUsd = Room, StopTicks = StopTicks, TargetTicks = first?.Ticks ?? 0, FeePerSide = c.FeePerSide,
+            Mode = contracts.HasValue ? SizeMode.Contracts : c.SizeMode, Input = contracts ?? c.SizeInput, MaxContracts = c.MaxContracts,
+        });
+        Split = Core.Targets.SplitTargets(Risk.Contracts, Targets);
     }
 
     /// <summary>The slices sent with an entry: each target with its contracts, or one stop-only slice.</summary>

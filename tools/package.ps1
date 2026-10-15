@@ -12,7 +12,7 @@ $stage = Join-Path $out "BookDepthIQ-DOM-$Version"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force "$stage\NinjaTrader" | Out-Null
 
-dotnet test (Join-Path $root "tests\Core.Tests") -v q --nologo
+dotnet test (Join-Path $root "BookDepthIQ-NT.sln") -v q --nologo
 if ($LASTEXITCODE -ne 0) { throw "tests failed - not packaging" }
 
 dotnet publish (Join-Path $root "src\Dom") -c Release -r win-x64 --self-contained true `
@@ -27,7 +27,7 @@ Copy-Item (Join-Path $root "DISCLAIMER.md") "$stage\DISCLAIMER.txt"
 BookDepthIQ DOM $Version - install
 ====================================
 
-1. NinjaTrader AddOn (once)
+1. NinjaTrader AddOn (replace when upgrading to 1.12.9)
    - Close NinjaTrader.
    - Copy NinjaTrader\BookDepthIQBridge.cs into
        Documents\NinjaTrader 8\bin\Custom\AddOns\

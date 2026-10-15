@@ -254,6 +254,7 @@ public class TargetsManageStructureTests
         Assert.Equal("idle", w.Check(0, 0)); // limit entry not filled yet
         Assert.Equal("idle", w.Check(3, 2));
         Assert.Equal("idle", w.Check(2, 2)); // manual partial close keeps both targets
+        w.OnExecution(new Exec("tp1","NQ","BDIQ TP1",false,1,21008,0,1000));
         Assert.Equal("fire", w.Check(1, 1));
         Assert.Equal("idle", w.Check(1, 1));
     }

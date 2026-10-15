@@ -79,7 +79,7 @@ public sealed partial class MainWindow : Window
     private readonly ToggleButton guardChk = Flight.Pill("STOP GUARD", "if a stop the panel saw on your position disappears, put it back at its last price");
     private readonly TextBox setupIn = Flight.Text(130, "setup tag saved with the trade in the journal");
     private readonly Seg previewBox = new(new[] { "OFF", "LONG", "SHORT" }, "preview: the would-be stop and targets on the ladder while flat; drag them to set distances. Nothing is sent.");
-    private readonly ToggleButton scaleChk = Flight.Pill("SCALE", "a ladder click sends several limits from that price away from the market (no brackets: press B/E or set a stop after)");
+    private readonly ToggleButton scaleChk = Flight.Pill("SCALE", "a ladder click distributes the total size into limits away from the market; BRACKET protects each fill and distributes your targets across the children");
     private readonly TextBox scaleCount = Flight.Num(52, "orders (2–10)"), scaleSpan = Flight.Num(56, "span ticks"), scaleSkew = Flight.Num(52, "size skew (1 = even)");
     private readonly Seg scaleDir = new(new[] { "BIG START", "EVEN", "BIG END" });
     private readonly Dictionary<string, TextBlock> readout = new();
@@ -88,6 +88,7 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock costLine = Ui.Label("", Pal.Muted, size: 11.5, wrap: true);
     private readonly TextBlock resultBar = Ui.Label("", Pal.Muted, size: 12, wrap: true);
     private readonly TextBlock notice = Ui.Label("", Pal.Warn, size: 12, wrap: true);
+    private readonly TextBlock protectionLine = Ui.Label("", Pal.Warn, size: 11.5, wrap: true);
     private long noticeUntil;
 
     public MainWindow()
@@ -101,6 +102,9 @@ public sealed partial class MainWindow : Window
         FontSize = 12;
 
         s = new DomState(cfg) { Account = cfg.Account };
+        managementAccount=s.Account;
+        s.AccountChanged += ClearManagement;
+        s.TradingSessionReset += ClearManagement;
         dd = NewTracker();
         bridge = new BridgeClient(s);
         ladder = new LadderControl(s, cfg)
@@ -109,7 +113,7 @@ public sealed partial class MainWindow : Window
             PreviewLegs = PreviewLegs,
         };
         ladder.PlaceRequested += (buy, row, stop) => Place(buy, row, stop);
-        ladder.CancelRequested += o => Send($"CANCEL {Leg(o)} @ {Px(o.Price)}", cid => Protocol.Cancel(cid, s.Account, o.Id), exit: true);
+        ladder.CancelRequested += CancelWorkingOrder;
         ladder.MoveRequested += (o, t) => Send($"MOVE {Leg(o)} {Px(o.Price)} → {Px(t * s.TickSize)}", cid => Protocol.Move(cid, s.Account, o.Id, t * s.TickSize), exit: true);
         ladder.PreviewDropped += PreviewDropped;
         ladder.Hint += t => Notice(t);
@@ -123,6 +127,8 @@ public sealed partial class MainWindow : Window
             bridge.Send(Protocol.History(cfg.Instrument, cfg.HistoryHours));
         };
         s.TradeClosed += OnTradeClosed;
+        s.ExecutionReceived += OnExecutionReceived;
+        s.CommandAcknowledged += OnCommandAcknowledged;
         bridge.Start();
         // Repaint at most ~20×/s; bridge messages only change state. Management runs on the same tick.
         DispatcherTimer.Run(() => { Tick(); return true; }, TimeSpan.FromMilliseconds(50));
@@ -175,6 +181,7 @@ public sealed partial class MainWindow : Window
             if (loading || acctBox.SelectedItem is not AccountInfo selected || selected.Name == cfg.Account) return;
             var a = selected.Name;
             cfg.Account = a; s.Account = a; s.Positions.Clear(); s.Orders.Clear(); cfg.Save();
+            ClearManagement();
             dd = NewTracker();
             bridge.Send(Protocol.SelectAccount(a));
         };
@@ -431,7 +438,7 @@ public sealed partial class MainWindow : Window
         // Why a click did or didn't send sits right above the buttons, always in view (the ticket can be
         // hidden or scrolled): no silent no-ops.
         var status = new StackPanel { Spacing = 2, Margin = new Thickness(6, 4, 6, 0) };
-        foreach (var line in new[] { notice, resultBar })
+        foreach (var line in new[] { protectionLine, notice, resultBar })
         {
             line.FontFamily = Flight.Sans;
             line.FontSize = 11.5;
@@ -512,6 +519,7 @@ public sealed partial class MainWindow : Window
     private void SaveFields()
     {
         if (loading) return;
+        reverseIntent=null; // changing the ticket cancels any deferred reversal entry
         var prevStop = cfg.StopMode;
         cfg.SizeMode = (SizeMode)Math.Max(0, sizeMode.SelectedIndex);
         cfg.SizeInput = Ui.Num(sizeIn, cfg.SizeInput);
@@ -542,6 +550,9 @@ public sealed partial class MainWindow : Window
         cfg.Save();
         if (prevStop != cfg.StopMode) LoadFields(); // targets switch between ticks and R
         else BuildQuick();
+        if(!cfg.BeAfterTp1) be.Clear();
+        if(cfg.Trail==TrailMode.Off) { trail.Clear(); lastTrailTick=null; }
+        if(!cfg.StopGuard) guard.Clear();
     }
 
     private void OnSettingsSaved()
@@ -560,8 +571,7 @@ public sealed partial class MainWindow : Window
         cfg.Save();
         bridge.Send(Protocol.Subscribe(name));
         bridge.Send(Protocol.History(name, cfg.HistoryHours));
-        trail.Clear();
-        be.Clear();
+        ClearManagement();
         ladder.Recenter();
     }
 
