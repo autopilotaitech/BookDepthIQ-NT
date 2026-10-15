@@ -231,21 +231,21 @@ public sealed partial class MainWindow : Window
         roomBar.Margin = new Thickness(0, 3, 0, 0);
         ((StackPanel)roomStat.Item1).Children.Add(roomBar);
         roomTile = roomStat.Item1;
-        var band = new WrapPanel { Margin = new Thickness(0, 2) };
-        band.Children.Add(Flight.Group("POSITION",
+        var positionStats = new[] {
             St("POSITION", null, 70).Item1, St("AVG", null, 80).Item1, St("OPEN P&L", null, 90).Item1,
-            St("FAIL PRICE", "price where your account hits its floor at this size", 80).Item1, St("TO FLOOR", "ticks against you before the account fails", 64).Item1));
-        band.Children.Add(Flight.Group("MARKET",
+            St("FAIL PRICE", "price where your account hits its floor at this size", 80).Item1, St("TO FLOOR", "ticks against you before the account fails", 64).Item1 };
+        var marketStats = new[] {
             St("POC · VA", "visible-range volume profile: point of control and value area of the rows on screen").Item1,
             St("CUM Δ", "delta since the profile start: aggressive buys − sells", 56).Item1,
             St("ST1 · ST2", "dual SuperTrend lines (60 s / 15 s)").Item1,
             St("VWAP", "session VWAP and how many σ price is from it").Item1,
             St("BID / ASK LIQ", "share of resting size on each side (top 10 levels)").Item1,
             St("GEX", "dealer gamma from CBOE's delayed option chain (Settings › GEX)").Item1,
-            St("IB", "Initial Balance: the high/low of the first minutes after the open (Settings › Initial balance)").Item1));
-        band.Children.Add(Flight.Group("ACCOUNT",
+            St("IB", "Initial Balance: the high/low of the first minutes after the open (Settings › Initial balance)").Item1 };
+        var accountStats = new[] {
             St("EQUITY", "net liquidation (or cash + open P&L)", 96).Item1, roomStat.Item1,
-            St("TODAY", "recorded closed trades for this account's CME session, starting 17:00 Chicago", 96).Item1, St("REALIZED", "NinjaTrader realized P&L (provider reporting period)", 80).Item1));
+            St("TODAY", "recorded closed trades for this account's CME session, starting 17:00 Chicago", 96).Item1, St("REALIZED", "NinjaTrader realized P&L (provider reporting period)", 80).Item1 };
+        var band = new TelemetryBand(positionStats,accountStats,marketStats);
         acctLine.FontFamily = Flight.Sans;
         acctLine.FontSize = 11;
         bracketLine.FontFamily = Flight.Sans;
