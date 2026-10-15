@@ -537,5 +537,3 @@ public class TicketAuditTests
         Assert.Equal("idle",b.Check(2,1));
     }
 }
-
-
