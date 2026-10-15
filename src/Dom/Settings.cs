@@ -127,6 +127,8 @@ public sealed class Settings
     /// <summary>Width of the right column (tape, ticket, buttons) in px, set by dragging its edge.</summary>
     public double SideWidth { get; set; } = 372;
     public bool ShowTrend { get; set; } = true;
+    /// <summary>Optional visual ST1 ± 2 ATR guide. Off by default; never gates an order.</summary>
+    public bool ShowNoChase { get; set; }
     /// <summary>Heat · pull/stack window in minutes: 5, 15, 30 or 60.</summary>
     public int HeatMinutes { get; set; } = 5;
     /// <summary>Heat contrast: 0 Soft, 1 Normal, 2 Sharp — how hard typical-size levels fade (HeatShade.Gammas).</summary>

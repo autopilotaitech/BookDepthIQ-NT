@@ -30,12 +30,24 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.12](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.12).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.12/BookDepthIQ-DOM-1.12.12-win-x64.zip).
-**1.12.12 is DOM-only if upgrading from 1.12.10 or 1.12.11; the bridge is unchanged.**
+**Current release: [1.12.13](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.13/BookDepthIQ-DOM-1.12.13-win-x64.zip).
+**1.12.13 is DOM-only if upgrading from 1.12.10–1.12.12; the bridge is unchanged.**
 Upgrading from 1.12.9 or earlier requires replacing BOTH DOM and bridge, then compiling with F5.
 New entries are refused with an older bridge; emergency exits remain available. Keep beta on until
 the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.10.md) passes.
+
+### New in 1.12.13 — hide the no-chase guide
+
+The yellow NO CHASE line and label are **OFF by default**, including when loading older settings.
+ST1/ST2 lines remain unchanged. An optional **Settings › Indicators › Chart lines › Show no-chase
+level** switch can restore it (SuperTrend lines must also be enabled).
+
+[Logic audit](docs/NO-CHASE-AUDIT-1.12.13.md): this is only a fixed ST1 ± 2 ATR visual distance guide,
+not a validated prediction, order filter, stop or target. Hiding it does not change ADX, EXTENDED,
+scalp calculations, entries, bracket handling or management. No user settings file is forcibly reset.
+254 isolated automated tests pass (226 core/DOM + 28 bridge-source), including default hiding,
+ST preservation, opt-in geometry, toggle behavior and old settings migration. No native orders sent.
 
 ### New in 1.12.12 — configurable ADX market state
 
@@ -387,10 +399,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.12
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.13
 ```
 
-This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.12-win-x64.zip` (~37 MB), which holds:
+This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.13-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
@@ -429,7 +441,7 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 
 ```
 dotnet build                                   # Core, DOM, tests, fake bridge
-dotnet test                                    # 248 tests, including isolated Ticket/bridge regression cases; no broker orders
+dotnet test                                    # 254 tests, including isolated Ticket/bridge regression cases; no broker orders
 BDIQ_PORT=36972 dotnet run --project tools/FakeBridge -- --position   # simulated NQ, never sends orders
 BDIQ_PORT=36972 dotnet run --project src/Dom   # the DOM against the fake (NinjaTrader is not touched)
 dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\Program Files\NinjaTrader 8\bin

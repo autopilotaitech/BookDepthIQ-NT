@@ -418,7 +418,7 @@ public sealed partial class MainWindow
         {
             if (snap.T1.LineTicks is long l1) o.Add(new LadderLine(l1, (snap.T1.Dir == TrendDir.Up ? "▲" : "▼") + "ST1", snap.T1.Dir == TrendDir.Up ? Pal.StUp : Pal.StDn, false, 1.5));
             if (snap.T2.LineTicks is long l2) o.Add(new LadderLine(l2, (snap.T2.Dir == TrendDir.Up ? "▲" : "▼") + "ST2", snap.T2.Dir == TrendDir.Up ? Pal.StUp : Pal.StDn, true));
-            if (snap.T1.LineTicks is long line && s.Trend.T1.AtrTicks is double atr && atr > 0 && snap.T1.Dir != TrendDir.Neutral)
+            if (cfg.ShowNoChase && snap.T1.LineTicks is long line && s.Trend.T1.AtrTicks is double atr && atr > 0 && snap.T1.Dir != TrendDir.Neutral)
             {
                 var up = snap.T1.Dir == TrendDir.Up;
                 o.Add(new LadderLine((long)Math.Round(line + (up ? 1 : -1) * Structure.ScalpNearAtr * atr), up ? "NO CHASE above (ST1 +2 ATR)" : "NO CHASE below (ST1 −2 ATR)", Pal.NoChase, true));

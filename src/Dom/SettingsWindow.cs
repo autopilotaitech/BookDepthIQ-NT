@@ -180,7 +180,7 @@ public sealed class SettingsWindow : Window
                 Row("Naked POC lines", "each period's POC until price trades there again", Bool(c.NpocOn, b => c.NpocOn = b)),
                 Row("nPOC period", null, Seg(new[] { "5M", "15M", "30M", "60M" }, Idx(new[] { 5, 15, 30, 60 }, c.NpocMinutes, 1), i => c.NpocMinutes = new[] { 5, 15, 30, 60 }[i]))),
             Card("LINES · DATA",
-                Row("SuperTrend lines", "ST1 / ST2 and the no-chase line", Bool(c.ShowTrend, b => c.ShowTrend = b)),
+                Row("SuperTrend lines", "ST1 / ST2 lines", Bool(c.ShowTrend, b => c.ShowTrend = b)),
                 Row("History to load", "hours, 1–48", Num(c.HistoryHours, v => c.HistoryHours = Math.Clamp((int)v, 1, 48)))))));
 
         sections.Add(("Tape & log", "Which prints the tape shows, and the text size for the tape and the order log; rows grow with it. Ctrl+wheel over either changes the size on the fly.", Cards(
@@ -197,6 +197,8 @@ public sealed class SettingsWindow : Window
                 Row("ADX period", "bars, 1–100 (default 14)", Num(c.AdxPeriod,v=>c.AdxPeriod=double.IsFinite(v)?(int)Math.Clamp(v,1,100):14)),
                 Row("Trend threshold", "ADX at or above this = trend; default 25", Num(c.AdxThreshold,v=>c.AdxThreshold=v)),
                 new TextBlock {Text="Strength only, not a prediction. History expands automatically (up to 48h); ADX — until enough completed bars arrive.",FontSize=11,Foreground=Pal.B(Pal.Muted),TextWrapping=TextWrapping.Wrap}),
+            Card("CHART LINES",
+                Row("Show no-chase level", "OFF by default; optional ST1 ± 2 ATR distance guide, not an entry filter", Bool(c.ShowNoChase,b=>c.ShowNoChase=b))),
             Card("VWAP",
                 Row("VWAP + σ bands", null, Bool(ind.VwapOn, b => ind = ind with { VwapOn = b })),
                 Row("Session start", "HH:MM", Text(ind.VwapStart, v => ind = ind with { VwapStart = v }, 90)),
