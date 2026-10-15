@@ -1,7 +1,8 @@
-# Two-chart development build
+# Two-chart beta workspace
 
-Branch: `codex/two-chart-workspace`. Local package version: `1.13.0-beta.3`.
-Not published, merged or installed into the owner's NinjaTrader instance.
+Release: `1.13.0-beta.3`, integrated into main after owner testing/approval.
+Owner reports chart loading and compact layout working; broader testing continues. No automatic
+installation changes are performed by this release workflow. See [release notes](RELEASE-1.13.0-beta.3.md).
 
 Beta3 tightens the DOM telemetry to two compact rows: position/account, then market. Individual
 readouts wrap at narrower widths instead of moving entire titled groups onto tall separate rows.

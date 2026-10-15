@@ -32,18 +32,34 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.13](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.13/BookDepthIQ-DOM-1.12.13-win-x64.zip).
-**1.12.13 is DOM-only if upgrading from 1.12.10–1.12.12; the bridge is unchanged.**
-Upgrading from 1.12.9 or earlier requires replacing BOTH DOM and bridge, then compiling with F5.
-New entries are refused with an older bridge; emergency exits remain available. Keep beta on until
-the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.10.md) passes.
+**Current beta prerelease: [1.13.0-beta.3](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.13.0-beta.3).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.3/BookDepthIQ-DOM-1.13.0-beta.3-win-x64.zip)
+and [SHA256 checksum](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.3/SHA256SUMS.txt).
+**From beta2: app-only update; the chart bridge is unchanged.** From beta1 replace the app AND chart
+AddOn (the chart port changed). From 1.12.x install the new chart AddOn and compile with F5; older
+order bridges still require their existing upgrade. See [release/upgrade notes](docs/RELEASE-1.13.0-beta.3.md).
+Still beta: broader owner testing, native parity and latency checks remain pending.
+The previous [1.12.13 DOM-only release](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13) remains available.
+
+### New in 1.13.0-beta.3 — two charts and compact DOM telemetry
+
+- Optional two stacked native candle charts LEFT; existing DOM RIGHT. Initial 32%/68% proportions;
+  drag the vertical/horizontal dividers to resize, collapse charts or maximize one within their column.
+- Independent 1m/3m/5m/15m/30m/1h/4h/Day frames, default 3m and 15m, linked to the DOM contract.
+- Pointer-centered time zoom, pan, independent LIVE/Follow and AUTO price scale. Per-chart lookback
+  settings of 250–10,000 bars; optional volume, SMA/EMA and PAX-style opening range.
+- PAX is OFF initially and disabled on 1h/4h/Day. This is not an arbitrary NinjaScript indicator loader.
+- Compact two-row telemetry retains the readouts and fonts while recovering ladder height. Individual
+  readouts wrap at narrower widths, instead of whole large groups occupying tall separate rows.
+- Separate read-only chart connection on localhost:36974. DOM/orders stay on 36971; Bubbles stays on 36972.
+  Chart handshake validation prevents connecting to the wrong bridge and hanging on Loading.
+
+**289 isolated automated tests pass** (256 core/DOM + 33 bridge-source); Release packaging and native
+net48/C#6 compile pass. Owner reports chart loading and compact layout working. No agent-submitted
+native orders; full native SIM/parity/provider/latency acceptance is not claimed.
+[Chart controls and remaining limitations](docs/CHART-WORKSPACE.md).
 
 ### New in 1.12.13 — hide the no-chase guide
-
-> Development branch `codex/two-chart-workspace` adds optional native two-chart overviews.
-> This is not a replacement for the published release above. See the
-> [chart development build notes](docs/CHART-WORKSPACE.md) for controls, installation and verification limits.
 
 The yellow NO CHASE line and label are **OFF by default**, including when loading older settings.
 ST1/ST2 lines remain unchanged. An optional **Settings › Indicators › Chart lines › Show no-chase
@@ -193,9 +209,11 @@ miscalculated historical trades. Journal totals cover recorded round trips, not 
 **Download** the latest `BookDepthIQ-DOM-x.y.z-win-x64.zip` from
 [Releases](https://github.com/autopilotaitech/BookDepthIQ-NT/releases) and unzip it.
 
-1. **Bridge (once, and after each update):** copy `NinjaTrader\BookDepthIQBridge.cs` to
-   `Documents\NinjaTrader 8\bin\Custom\AddOns\`. In NinjaTrader open **New → NinjaScript Editor**
-   and press **F5**. It listens on `127.0.0.1:36971` only (this PC).
+1. **Bridges (new install):** close NinjaTrader and copy BOTH `NinjaTrader\BookDepthIQBridge.cs`
+   and `NinjaTrader\BookDepthIQChartBridge.cs` to `Documents\NinjaTrader 8\bin\Custom\AddOns\`.
+   Start NT, open **New → NinjaScript Editor** and press **F5**. DOM/orders listen on loopback36971;
+   read-only charts listen on36974. Do not replace the separate Bubbles bridge. Existing users: follow
+   the version-specific upgrade notes above; beta2→beta3 needs only the app.
 2. **DOM:** run `BookDepthIQ-DOM.exe`. It is self-contained, so nothing else needs installing.
    Windows may say "Windows protected your PC" because the exe is not code-signed: **More info →
    Run anyway**. The header shows **● NT** when it is connected, with the median time NinjaTrader
@@ -208,7 +226,8 @@ miscalculated historical trades. Journal totals cover recorded round trips, not 
 
 ## Layout
 
-The ladder runs the full height on the left. The right column holds, from top to bottom:
+Within the DOM workspace, the ladder is on the left; optional charts occupy a separate column farther
+left. The compact telemetry stays above the DOM. Its right column holds, from top to bottom:
 
 - **TAPE**, with **JOURNAL** and **LOG** chips that swap the view (click again for the tape), plus
   **TICKET**, **HEAT** and **ST** toggles (lit = on). Text size: **SETTINGS → Tape & log**, or
@@ -405,12 +424,13 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.13
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.13.0-beta.3
 ```
 
-This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.13-win-x64.zip` (~37 MB), which holds:
+This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.13.0-beta.3-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
-- `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
+- `NinjaTrader\BookDepthIQBridge.cs`: the DOM/order AddOn.
+- `NinjaTrader\BookDepthIQChartBridge.cs`: the independent read-only chart AddOn.
 - `INSTALL.txt`: the install steps.
 - `LICENSE.txt` and `DISCLAIMER.txt`.
 
