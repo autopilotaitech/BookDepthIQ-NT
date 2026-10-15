@@ -8,7 +8,6 @@ namespace BookDepthIQ.Dom;
 
 public sealed partial class MainWindow
 {
-    private readonly TextBlock outlookSummary = Ui.Label("Collecting live flow", Pal.Text, size: 11, wrap: true);
     private readonly TextBlock outlookBid = Ui.Label("—", Pal.Bid, size: 13);
     private readonly TextBlock outlookAsk = Ui.Label("—", Pal.Ask, size: 13);
     private readonly TextBlock outlookTrend = Ui.Label("—", Pal.Text, size: 12, wrap: true);
@@ -21,9 +20,6 @@ public sealed partial class MainWindow
 
     private Control BuildOutlook()
     {
-        outlookSummary.FontFamily = Flight.Sans;
-        outlookSummary.FontSize = 13;
-        outlookSummary.FontWeight = FontWeight.SemiBold;
         foreach (var value in new[] { outlookBid, outlookAsk })
         {
             value.FontFamily = Pal.Mono;
@@ -66,7 +62,6 @@ public sealed partial class MainWindow
         outlookWindows.HorizontalAlignment = HorizontalAlignment.Right;
         header.Children.Add(outlookWindows);
         body.Children.Add(header);
-        body.Children.Add(outlookSummary);
         body.Children.Add(outlookDetails);
         outlookPanel = new Border { Child = body, BorderBrush = Pal.B(Pal.Edge), BorderThickness = new Thickness(0,0,0,1) };
         RefreshOutlook();
@@ -84,8 +79,6 @@ public sealed partial class MainWindow
         if (!s.Connected || s.FeedAgeMs > 2000 || s.Book.BestBid is not long bid || s.Book.BestAsk is not long ask)
         {
             s.Outlook.Reset();
-            outlookSummary.Text = "Waiting for fresh depth and prints";
-            outlookSummary.Foreground = Pal.B(Pal.Muted);
             outlookBid.Text = outlookAsk.Text = "—";
             outlookTrend.Text = "Waiting for live data";
             outlookInvalidation.IsVisible = false;
@@ -102,10 +95,6 @@ public sealed partial class MainWindow
         var recent = s.Tape.FirstOrDefault();
         if (recent != null && Math.Abs(DomState.NowMs() - recent.TimeMs) < 2000 && heldBid != heldAsk)
             s.Outlook.Start(heldBid ? bid : ask, heldBid, recent.TimeMs);
-        outlookSummary.Text = heldBid && !heldAsk ? $"Watching support hold · {Px(bid * s.TickSize)}"
-            : heldAsk && !heldBid ? $"Watching resistance hold · {Px(ask * s.TickSize)}"
-            : "Watching · no confirmed hold";
-        outlookSummary.Foreground = Pal.B(heldBid ? Pal.Bid : heldAsk ? Pal.Ask : Pal.Text);
         outlookBid.Text = $"+{bf.Stacked:N0} STACK  /  −{bf.Pulled:N0} PULL";
         outlookAsk.Text = $"+{af.Stacked:N0} STACK  /  −{af.Pulled:N0} PULL";
         outlookTrend.Text = $"ST1 {snap.T1.Dir} · ST2 {snap.T2.Dir}\n{regime.State}" + (regime.Extended != null ? " · extended" : "");

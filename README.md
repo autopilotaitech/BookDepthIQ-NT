@@ -30,11 +30,19 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.10](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.10).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.10/BookDepthIQ-DOM-1.12.10-win-x64.zip).
-**1.12.10 requires replacing BOTH the DOM and NinjaTrader bridge, then compiling the bridge with F5.**
+**Current release: [1.12.11](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.11).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.11/BookDepthIQ-DOM-1.12.11-win-x64.zip).
+**1.12.11 is DOM-only if upgrading from 1.12.10; the bridge is unchanged.**
+Upgrading from 1.12.9 or earlier requires replacing BOTH DOM and bridge, then compiling with F5.
 New entries are refused with an older bridge; emergency exits remain available. Keep beta on until
 the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.10.md) passes.
+
+### New in 1.12.11 — Outlook cleanup
+
+Removed the entire Watching / confirmed-hold status row and its extra spacing. BID/ASK pulling and
+stacking now sit directly below the Outlook controls. Timeframes, collapse, STATE, data freshness,
+observations and all trading behavior remain unchanged. 220 isolated automated tests pass, including
+a headless Outlook layout/data/collapse regression. Still beta; native execution certification pending.
 
 ### New in 1.12.10 — reduction fills and cleaner order buttons (still beta)
 
@@ -349,10 +357,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.10
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.11
 ```
 
-This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.10-win-x64.zip` (~37 MB), which holds:
+This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.11-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
@@ -391,7 +399,7 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 
 ```
 dotnet build                                   # Core, DOM, tests, fake bridge
-dotnet test                                    # 219 tests, including isolated Ticket/bridge regression cases; no broker orders
+dotnet test                                    # 220 tests, including isolated Ticket/bridge regression cases; no broker orders
 BDIQ_PORT=36972 dotnet run --project tools/FakeBridge -- --position   # simulated NQ, never sends orders
 BDIQ_PORT=36972 dotnet run --project src/Dom   # the DOM against the fake (NinjaTrader is not touched)
 dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\Program Files\NinjaTrader 8\bin

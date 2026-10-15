@@ -72,6 +72,30 @@ sealed class TicketHarness : IDisposable
 public class TicketAuditTests
 {
     [AvaloniaFact]
+    public void Outlook_places_flow_directly_below_controls_without_a_status_row()
+    {
+        using var h=new TicketHarness(); h.Config.ShowOutlook=true;
+        foreach(var name in new[]{"outlookBid","outlookAsk","outlookTrend","outlookInvalidation","outlookCollection"})
+            TicketHarness.Set(h.Window,name,new TextBlock());
+        var oldSummary=typeof(MainWindow).GetField("outlookSummary",BindingFlags.Instance|BindingFlags.NonPublic);
+        oldSummary?.SetValue(h.Window,new TextBlock());
+        var panel=(Border)h.Call("BuildOutlook")!;
+        var body=Assert.IsType<StackPanel>(panel.Child);
+        Assert.Equal(2,body.Children.Count);
+        var details=Assert.IsType<StackPanel>(body.Children[1]);
+        var bid=Assert.IsType<Grid>(details.Children[0]);
+        var ask=Assert.IsType<Grid>(details.Children[1]);
+        Assert.Contains(bid.Children.OfType<TextBlock>(),t=>t.Text=="BID");
+        Assert.Contains(bid.Children.OfType<TextBlock>(),t=>t.Text!=null && t.Text.Contains("STACK"));
+        Assert.Contains(ask.Children.OfType<TextBlock>(),t=>t.Text=="ASK");
+        Assert.Contains(ask.Children.OfType<TextBlock>(),t=>t.Text!=null && t.Text.Contains("PULL"));
+        h.Config.OutlookCollapsed=true; h.Call("RefreshOutlook"); Assert.False(details.IsVisible);
+        h.Config.OutlookCollapsed=false; h.Call("RefreshOutlook"); Assert.True(details.IsVisible);
+        h.State.Connected=false; h.Call("RefreshOutlook");
+        Assert.Contains(bid.Children.OfType<TextBlock>(),t=>t.Text=="—");
+    }
+
+    [AvaloniaFact]
     public void Reverse_validates_captured_stop_risk_after_flatten_loss_not_a_new_smaller_swing()
     {
         using var h=new TicketHarness(); h.Config.StopMode=StopMode.Swing; h.Config.TpR=new double[]{2,0,0};
