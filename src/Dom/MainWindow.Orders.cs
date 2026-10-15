@@ -47,22 +47,25 @@ public sealed partial class MainWindow
     private DayState Day()
     {
         var today = Protect.TradingDay(DomState.NowMs());
+        var recorded = s.RecordedToday(DomState.NowMs());
         if (!cfg.Days.TryGetValue(s.Account, out var d) || d.Day != today)
         {
             // The day starts at the first equity NinjaTrader reports; until then nothing is stored.
             d = new DayState(today, s.Equity);
-            if (!(s.Equity > 0)) return d;
+            d = Protect.WithRecordedActivity(d, recorded);
+            if (!s.HasAccountSnapshot || !(s.Equity > 0)) return d;
             cfg.Days[s.Account] = d;
             cfg.Save();
         }
+        var updated = Protect.WithRecordedActivity(d, recorded);
+        if(updated != d && s.HasAccountSnapshot) { cfg.Days[s.Account]=updated; cfg.Save(); }
+        d=updated;
         return d;
     }
 
     private void OnTradeClosed(JournalTrade t)
     {
-        var d = Day();
-        cfg.Days[s.Account] = d with { Trades = d.Trades + 1, LastLossAt = t.Pnl < 0 ? DomState.NowMs() : d.LastLossAt };
-        cfg.Save();
+        Day(); // the recorded trip already supplies the count; do not increment a second counter
         RefreshSide();
     }
 

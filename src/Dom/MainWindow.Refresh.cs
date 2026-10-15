@@ -82,11 +82,14 @@ public sealed partial class MainWindow
         dd.OnEquity(eq);
         if (!cfg.Peaks.TryGetValue(cfg.Account, out var pk) || Math.Abs(pk - dd.Peak) > 0.005) { cfg.Peaks[cfg.Account] = dd.Peak; cfg.Save(); }
         var room = dd.Room(eq);
-        var day = Day();
-        var dayPnl = eq - day.StartEquity;
+        Day(); // initialize/reconcile risk tracking independently of the TODAY display
+        var today = s.RecordedToday(now);
+        var dayPnl = today.Net;
         Set("EQUITY", $"${eq:N0}", Pal.Text);
         Set("ROOM", $"${room:N0}", room <= 0 ? Pal.Neg : Pal.Text);
-        Set("TODAY", $"{LadderControl.Usd(dayPnl)} · {day.Trades}", dayPnl >= 0 ? Pal.Pos : Pal.Neg);
+        Set("TODAY", $"{LadderControl.Usd(dayPnl)} · {today.Trades} trades", dayPnl >= 0 ? Pal.Pos : Pal.Neg);
+        if(stat["TODAY"].Parent is Control todayTile) ToolTip.SetTip(todayTile,
+            $"{s.Account} · CME session {today.Day}, starting 17:00 Chicago\nRecorded closed-trade P&L after recorded fees; excludes open P&L and trades not recorded by this DOM.\nREALIZED is NinjaTrader's reported value and can cover a different period.");
         ToolTip.SetTip(roomTile, $"{s.Account} · floor ${dd.Floor:N2} ({cfg.DrawdownKind}) · room = equity − floor (or today's limit if tighter)" +
                                  $"{(s.TrailDd != 0 ? $" · NT trailing DD ${s.TrailDd:N2}" : "")} · {s.Instrument} tick {s.TickSize} = ${s.TickValue:N2}");
         roomBar.Value = cfg.MaxDrawdown > 0 ? Math.Clamp(room / cfg.MaxDrawdown, 0, 1) : 0;

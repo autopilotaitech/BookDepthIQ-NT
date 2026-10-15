@@ -30,10 +30,20 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.6](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.6).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.6/BookDepthIQ-DOM-1.12.6-win-x64.zip).
+**Current release: [1.12.7](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.7).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.7/BookDepthIQ-DOM-1.12.7-win-x64.zip).
 Upgrading from 1.10.6 or earlier requires replacing **both the DOM and the NinjaTrader bridge** and
 compiling the bridge with F5. This includes the prop-account discovery fix.
+
+### New in 1.12.7
+
+TODAY now shows recorded closed-trade P&L and completed round trips for the selected account's
+CME session (17:00 Chicago rollover), after recorded fees. It no longer subtracts a saved equity
+baseline or displays an independent saved trade counter. The journal calendar and date filters use
+the same trading-date boundary. REALIZED remains the figure reported by NinjaTrader; it can cover
+a different period or trades not recorded by this DOM. Risk equity baselines remain separate;
+trade counts reconcile from recorded activity after a journal reset, and account snapshots must be
+fresh before a new risk baseline is saved. DOM only; bridge unchanged.
 
 ### New in 1.12.6
 
@@ -285,10 +295,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.6
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.7
 ```
 
-This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.6-win-x64.zip` (~37 MB), which holds:
+This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.7-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.

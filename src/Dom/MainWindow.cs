@@ -238,7 +238,7 @@ public sealed partial class MainWindow : Window
             St("IB", "Initial Balance: the high/low of the first minutes after the open (Settings › Initial balance)").Item1));
         band.Children.Add(Flight.Group("ACCOUNT",
             St("EQUITY", "net liquidation (or cash + open P&L)", 96).Item1, roomStat.Item1,
-            St("TODAY", "today's P&L since the 17:00 Chicago start, and trades", 96).Item1, St("REALIZED", "NinjaTrader realized P&L", 80).Item1));
+            St("TODAY", "recorded closed trades for this account's CME session, starting 17:00 Chicago", 96).Item1, St("REALIZED", "NinjaTrader realized P&L (provider reporting period)", 80).Item1));
         acctLine.FontFamily = Flight.Sans;
         acctLine.FontSize = 11;
         bracketLine.FontFamily = Flight.Sans;

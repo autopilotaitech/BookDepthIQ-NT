@@ -32,7 +32,7 @@ public sealed class JournalWindow : Window
         Title = "BookDepthIQ — Trading Journal"; Icon = Brand.Icon();
         Width = 1180; Height = 860; MinWidth = 760; MinHeight = 580;
         Background = Pal.B(Pal.Bg); Foreground = Pal.B(Pal.Text); FontFamily = Flight.Sans;
-        selected = JournalAnalytics.Day(DomState.NowMs()); month = new(selected.Year, selected.Month, 1);
+        selected = JournalAnalytics.TradingDate(DomState.NowMs()); month = new(selected.Year, selected.Month, 1);
         environment.SelectedIndex = Array.IndexOf(new[] { "SIM", "LIVE", "PLAYBACK" }, JournalAnalytics.Environment(state.Account));
         range.SelectedIndex = 2;
         fromDate.SelectedDate = new DateTimeOffset(selected.AddDays(-29).ToDateTime(TimeOnly.MinValue));
@@ -91,7 +91,7 @@ public sealed class JournalWindow : Window
 
     private JournalTrade[] Filtered()
     {
-        var today = JournalAnalytics.Day(DomState.NowMs());
+        var today = JournalAnalytics.TradingDate(DomState.NowMs());
         var from = range.SelectedIndex switch { 0 => today, 1 => today.AddDays(-6), 2 => today.AddDays(-29),
             3 => new DateOnly(today.Year, (today.Month - 1) / 3 * 3 + 1, 1), 4 => new DateOnly(today.Year,1,1), _ => DateOnly.MinValue };
         var to = today;
@@ -100,8 +100,8 @@ public sealed class JournalWindow : Window
             if(fromDate.SelectedDate is not DateTimeOffset f || toDate.SelectedDate is not DateTimeOffset e) return Array.Empty<JournalTrade>();
             from=DateOnly.FromDateTime(f.DateTime); to=DateOnly.FromDateTime(e.DateTime);
         }
-        return Scope().Where(t => view.SelectedIndex == 0 ? JournalAnalytics.Day(t.Close) == selected
-            : JournalAnalytics.Day(t.Close) >= from && JournalAnalytics.Day(t.Close) <= to).ToArray();
+        return Scope().Where(t => view.SelectedIndex == 0 ? JournalAnalytics.TradingDate(t.Close) == selected
+            : JournalAnalytics.TradingDate(t.Close) >= from && JournalAnalytics.TradingDate(t.Close) <= to).ToArray();
     }
 
     private Control Metrics(JournalPerformance a)
@@ -128,7 +128,7 @@ public sealed class JournalWindow : Window
         lastCount = state.Journal.Count;
         body.Children.Clear();
         var trades = Filtered(); var a = JournalAnalytics.Compute(trades);
-        context.Text = $"{environment.SelectedItem} · {accounts.SelectedItem} · {instruments.SelectedItem} · Times: America/Chicago · Net P&L after recorded fees";
+        context.Text = $"{environment.SelectedItem} · {accounts.SelectedItem} · {instruments.SelectedItem} · CME trading dates: 17:00 Chicago rollover · Net P&L after recorded fees";
         if (view.SelectedIndex == 0) body.Children.Add(Calendar());
         else
         {
@@ -190,7 +190,7 @@ public sealed class JournalWindow : Window
 
     private Control Calendar()
     {
-        var days = Scope().GroupBy(t => JournalAnalytics.Day(t.Close)).ToDictionary(g => g.Key, g => g.ToArray());
+        var days = Scope().GroupBy(t => JournalAnalytics.TradingDate(t.Close)).ToDictionary(g => g.Key, g => g.ToArray());
         var panel = new StackPanel { Spacing = 8 };
         var navigation = new StackPanel { Orientation = Orientation.Horizontal };
         navigation.Children.Add(Flight.HeadBtn("‹", () => { month = month.AddMonths(-1); RenderBody(); }));

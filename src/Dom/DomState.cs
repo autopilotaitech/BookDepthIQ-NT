@@ -27,6 +27,9 @@ public sealed class DomState
     public List<AccountInfo> Accounts { get; } = new();
     public string Account { get; set; } = "Sim101";
     public double Cash, Realized, Unrealized, NetLiq, TrailDd, DailyLimit, Commission;
+    private string accountSnapshotName = "";
+    public bool HasAccountSnapshot => Connected && accountSnapshotName == Account;
+    public RecordedDayTotals RecordedToday(long now) => JournalAnalytics.RecordedDay(Journal,Account,now);
     /// <summary>Positions on the streamed account by instrument (they can arrive before the instrument is set).</summary>
     public Dictionary<string, (int Qty, double Avg)> Positions { get; } = new();
     public int PosQty => Positions.TryGetValue(Instrument, out var p) ? p.Qty : 0;
@@ -199,6 +202,7 @@ public sealed class DomState
         {
             case "hello":
                 Connected = true;
+                accountSnapshotName = "";
                 goto case "accounts";
             case "accounts":
                 Accounts.Clear();
@@ -248,6 +252,7 @@ public sealed class DomState
                 break;
             case "account":
                 if (S(m, "name") != Account) break;
+                accountSnapshotName = Account;
                 Cash = D(m, "cash", 0); Realized = D(m, "realized", 0); Unrealized = D(m, "unrealized", 0);
                 NetLiq = D(m, "netliq", 0); TrailDd = D(m, "trailDd", 0); DailyLimit = D(m, "dailyLimit", 0); Commission = D(m, "commission", 0);
                 break;

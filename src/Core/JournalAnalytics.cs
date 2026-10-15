@@ -4,9 +4,22 @@ public sealed record JournalPerformance(int Count, int Wins, int Losses, int Lon
     double Net, double Fees, double? WinRate, double? ProfitFactor, double? Expectancy,
     double MaxDrawdown, double LargestWin, double LargestLoss, int WinStreak, int LossStreak,
     double AverageMinutes, double? Sharpe, double? Sortino, double[] Equity);
+public sealed record RecordedDayTotals(string Day, double Net, int Trades, long? LastLossAt);
 
 public static class JournalAnalytics
 {
+    public static DateOnly TradingDate(long ms) => DateOnly.ParseExact(Protect.TradingDay(ms),"yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture);
+    public static RecordedDayTotals RecordedDay(IEnumerable<JournalTrade> source,string account,long now)
+    {
+        var day=Protect.TradingDay(now); double net=0; int count=0; long? lastLoss=null;
+        foreach(var t in source)
+        {
+            if(t.Account!=account || !t.Exit.HasValue || t.Close>now || Protect.TradingDay(t.Close)!=day) continue;
+            net+=t.Pnl; count++;
+            if(t.Pnl<0 && (lastLoss==null || t.Close>lastLoss.Value)) lastLoss=t.Close;
+        }
+        return new(day,net,count,lastLoss);
+    }
     public static string Environment(string account) => account.StartsWith("Playback", StringComparison.OrdinalIgnoreCase) ? "PLAYBACK"
         : account.StartsWith("Sim", StringComparison.OrdinalIgnoreCase) ? "SIM" : "LIVE";
     public static DateOnly Day(long ms) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(

@@ -14,6 +14,8 @@ public sealed record DayVerdict(bool Ok, string Message, double? RoomUsd = null)
 
 public static class Protect
 {
+    public static DayState WithRecordedActivity(DayState risk, RecordedDayTotals recorded) =>
+        risk.Day == recorded.Day ? risk with { Trades=recorded.Trades, LastLossAt=recorded.LastLossAt } : risk;
     private static readonly TimeZoneInfo Chicago = Session.Zone("America/Chicago");
 
     /// <summary>Trading-day label: the Chicago date, rolled forward from 17:00.</summary>
