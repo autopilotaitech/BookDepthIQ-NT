@@ -39,6 +39,9 @@ and [SHA256 checksum](https://github.com/autopilotaitech/BookDepthIQ-NT/releases
 AddOn (the chart port changed). From 1.12.x install the new chart AddOn and compile with F5; older
 order bridges still require their existing upgrade. See [release/upgrade notes](docs/RELEASE-1.13.0-beta.3.md).
 Still beta: broader owner testing, native parity and latency checks remain pending.
+Development branch `codex/chart-navigation-polish` adds clearer price/crosshair displays and
+recenter/scale controls; see [chart verification](docs/CHART-NAVIGATION-VERIFICATION.md).
+This does not change the published beta3 download above.
 The previous [1.12.13 DOM-only release](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13) remains available.
 
 ### New in 1.13.0-beta.3 — two charts and compact DOM telemetry

@@ -10,6 +10,9 @@ public sealed class ChartPaneSettings
     public bool Pax {get;set;}
     public bool Volume {get;set;}
     public bool ShowOrders {get;set;}=true;
+    public bool ShowLastPrice {get;set;}=true;
+    public bool ShowCrosshair {get;set;}=true;
+    public bool SnapCrosshair {get;set;}=true;
     public bool Sma {get;set;}
     public bool Ema {get;set;}
     public int Period {get;set;}=20;

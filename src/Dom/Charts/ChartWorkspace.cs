@@ -37,7 +37,9 @@ public sealed class ChartWorkspace : Grid,IDisposable
     {
         Dom=dom;this.settings=settings;this.model=model;this.save=save;settings.Normalize();
         ColumnDefinitions=new("0,0,*");charts.RowDefinitions=new("*,5,*");
-        panes=new[]{new ChartPane(settings.Top,Changed,()=>Hide(0),()=>Maximize(0)),new ChartPane(settings.Bottom,Changed,()=>Hide(1),()=>Maximize(1))};
+        panes=new[]{new ChartPane(settings.Top,Changed,()=>Hide(0),()=>Maximize(0),settings,()=>ReloadRequested?.Invoke()),new ChartPane(settings.Bottom,Changed,()=>Hide(1),()=>Maximize(1),settings,()=>ReloadRequested?.Invoke())};
+        panes[0].Chart.CursorChanged+=value=> {if(settings.LinkCrosshair) panes[1].Chart.SetLinkedCursor(value);};
+        panes[1].Chart.CursorChanged+=value=> {if(settings.LinkCrosshair) panes[0].Chart.SetLinkedCursor(value);};
         charts.Children.Add(panes[0]);Grid.SetRow(panes[1],2);charts.Children.Add(panes[1]);
         horizontal=new GridSplitter {ResizeDirection=GridResizeDirection.Rows,Background=Pal.B(Pal.Line)};Grid.SetRow(horizontal,1);charts.Children.Add(horizontal);
         vertical=new GridSplitter {ResizeDirection=GridResizeDirection.Columns,Background=Pal.B(Pal.Line)};Grid.SetColumn(vertical,1);
@@ -54,7 +56,7 @@ public sealed class ChartWorkspace : Grid,IDisposable
         settings.Enabled=enabled;if(enabled&&!settings.Top.Visible&&!settings.Bottom.Visible) {settings.Top.Visible=true;settings.Bottom.Visible=true;}
         maximized=-1;LayoutCharts();save();
     }
-    void Changed() {save();RequestsChanged?.Invoke();ReloadRequested?.Invoke();overlayKey=null;InvalidateVisual();}
+    void Changed() {save();RequestsChanged?.Invoke();overlayKey=null;InvalidateVisual();}
     void StartTimer()
     {
         if(!ChartsVisible||timer!=null) return;
@@ -63,6 +65,7 @@ public sealed class ChartWorkspace : Grid,IDisposable
             for(int i=0;i<2;i++) if(panes[i].IsVisible)
             {
                 var pref=i==0?settings.Top:settings.Bottom;
+                if(!settings.LinkCrosshair) panes[i].Chart.SetLinkedCursor(null);
                 if(!pref.PaxActive) panes[i].Chart.OpeningRanges=Array.Empty<ChartOrLine>();
                 panes[i].Update(Instrument,model.Snapshot(i));
             }

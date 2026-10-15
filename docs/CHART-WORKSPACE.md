@@ -31,6 +31,15 @@ Isolated tests cover projection, account/contract isolation, stale/disconnected 
 quantity, moves/cancel/flat lifecycle, invalid prices, stop-limit dual levels, both-pane clearing,
 render/toggle behavior and an empty real Ticket command sink. Native execution was not exercised.
 
+## Next build: beta5 chart navigation (feature branch)
+
+`codex/chart-navigation-polish` adds a tick-aligned live-price line/tag, crosshair price/time
+badges and OHLCV readout, optional linked crosshairs, and a CENTER action that preserves horizontal
+zoom. Settings can hide the last-price display or crosshair and disable candle-center snapping.
+Visual settings apply without reloading history; the menu has an explicit Reload history action.
+Dense views use pixel buckets that retain candle OHLCV and study extrema; native bars stay untouched.
+See [verification and limitations](CHART-NAVIGATION-VERIFICATION.md). This is not a published release.
+
 ## Controls
 
 - CHARTS toggles an optional left column. Initially off; top3m, bottom15m.
@@ -39,8 +48,10 @@ render/toggle behavior and an empty real Ticket command sink. Native execution w
 - Charts temporarily collapse below readable width (at least1390DIP, higher for a wide saved tape).
   Maximize or widen the window to restore them. Collapsing charts returns their width to the DOM.
 - Per-pane frame choices:1m/3m/5m/15m/30m/1h/4h/Day. Same exact instrument as the DOM.
-- Wheel plot to zoom around pointer; drag plot to pan; LIVE/End resumes following. AUTO or double-click
-  price axis restores visible-candle scaling; drag price axis pans price manually. Home resets view.
+- Wheel plot to zoom around pointer; drag plot to pan; LIVE/End resumes following. CENTER/Space
+  recenters on the current price without resetting time zoom. AUTO or double-click price axis
+  restores visible-candle scaling. Drag or wheel the price axis to scale; Shift-drag pans price,
+  Shift-wheel scales price over the plot. Home/double-click plot resets view.
 - Menu: chart settings, maximize/restore within chart column, hide. Settings contain per-frame lookback,
   optional volume, SMA/EMA period and optional PAX-style opening range (1–8 historical sessions).
 - PAX uses shared DOM opening-time/timezone/step preferences; OFF initially and disabled on1h/4h/Day.
@@ -77,8 +88,8 @@ The AddOn compiles with the installed NT DLLs as net48/C#6; the app builds in Re
 Still required before release: read-only native bar/session/daily settlement comparison, supplied
 PAX indicator comparison, real provider reconnect checks and callback→model→render/DOM scheduling
 benchmarks. HFT or measured latency improvements are NOT claimed. No native orders were submitted.
-Crosshair linking, full persistent manual viewport state, raw-tick diagnostic replay ring and detailed
-latency telemetry from the design are not in this development build.
+Full persistent manual viewport state, raw-tick diagnostic replay ring and detailed latency telemetry
+from the design are not in this development build. Beta5 adds optional crosshair linking.
 
 The chart OR adapter conservatively requires a completed native30second opening bar. Historical
 extensions activate at the first native30second bar proving a crossing, not a claimed exact tick.

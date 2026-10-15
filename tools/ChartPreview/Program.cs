@@ -1,0 +1,106 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Text.Json;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Layout;
+using Avalonia.Media.Imaging;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+using BookDepthIQ.Core.Charts;
+using BookDepthIQ.Dom;
+using BookDepthIQ.Dom.Charts;
+
+namespace BookDepthIQ.ChartPreview;
+
+/// <summary>Standalone synthetic UI fixture. Does not construct MainWindow, DomState, bridges or feeds.</summary>
+internal static class Program
+{
+    internal static string[] Options=Array.Empty<string>();
+    [STAThread] public static void Main(string[] args)
+    {Options=args;AppBuilder.Configure<PreviewApplication>().UsePlatformDetect().StartWithClassicDesktopLifetime(args);}
+    internal static string? Option(string name) {var i=Array.IndexOf(Options,name);return i>=0&&i+1<Options.Length?Options[i+1]:null;}
+}
+
+public sealed class PreviewApplication : Application
+{
+    public override void Initialize() {RequestedThemeVariant=ThemeVariant.Dark;Styles.Add(new FluentTheme());}
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if(ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) desktop.MainWindow=new PreviewWindow();
+        base.OnFrameworkInitializationCompleted();
+    }
+}
+
+public sealed class PreviewWindow : Window
+{
+    readonly ChartWorkspaceSettings preferences=new() {Enabled=true,LinkCrosshair=true};
+    readonly ChartPane[] panes;
+    public PreviewWindow()
+    {
+        Title="BookDepthIQ chart preview — SYNTHETIC DATA, NO TRADING";
+        Width=int.TryParse(Program.Option("--width"),out var width)?Math.Clamp(width,320,1800):800;
+        Height=int.TryParse(Program.Option("--height"),out var height)?Math.Clamp(height,300,1800):1000;
+        Background=Pal.B(Pal.Bg);FontFamily=Flight.Sans;
+        preferences.Top.Volume=true;preferences.Top.Sma=true;preferences.Bottom.Ema=true;
+        panes=new[]{new ChartPane(preferences.Top,Refresh,()=>{},()=>{},preferences,Refresh),new ChartPane(preferences.Bottom,Refresh,()=>{},()=>{},preferences,Refresh)};
+        panes[0].Chart.CursorChanged+=cursor=> {if(preferences.LinkCrosshair) panes[1].Chart.SetLinkedCursor(cursor);};
+        panes[1].Chart.CursorChanged+=cursor=> {if(preferences.LinkCrosshair) panes[0].Chart.SetLinkedCursor(cursor);};
+        var root=new DockPanel();var banner=new TextBlock {Text="BOOKDEPTHIQ · CHART QA / SYNTHETIC DATA · NO CONNECTIONS OR ORDERS",FontFamily=Flight.Sans,FontSize=10,Foreground=Pal.B(Pal.Accent),Margin=new Thickness(10,7)};
+        DockPanel.SetDock(banner,Dock.Top);root.Children.Add(banner);
+        var grid=new Grid {RowDefinitions=new("*,5,*")};grid.Children.Add(panes[0]);Grid.SetRow(panes[1],2);grid.Children.Add(panes[1]);
+        var splitter=new Avalonia.Controls.GridSplitter {ResizeDirection=Avalonia.Controls.GridResizeDirection.Rows,Background=Pal.B(Pal.Line)};Grid.SetRow(splitter,1);grid.Children.Add(splitter);root.Children.Add(grid);Content=root;
+        Refresh();
+        if(Program.Option("--snapshot") is {} output)
+        {
+            ShowActivated=false;ShowInTaskbar=false;WindowStartupLocation=WindowStartupLocation.Manual;Position=new PixelPoint(-12000,40);
+            Opened+=(_,_)=> {
+                Position=new PixelPoint(-12000,40);
+                DispatcherTimer.RunOnce(()=>Capture(output),TimeSpan.FromSeconds(1));
+            };
+        }
+    }
+    void Refresh()
+    {
+        for(int i=0;i<panes.Length;i++)
+        {
+            var settings=i==0?preferences.Top:preferences.Bottom;
+            var requested=int.TryParse(Program.Option("--bars"),out var count)?Math.Clamp(count,250,10000):240;
+            var bars=Fixture(settings.Frame,requested);
+            panes[i].Update("NQ · PREVIEW",new(bars,.25,"LIVE",bars[^1].Close+3,1));
+            var last=bars[^1].Close;
+            panes[i].Chart.TradeLines=new[]{new ChartTradeLine("target",(last+45)*.25,2,false,ChartTradeKind.Target,"TP SELL"),new ChartTradeLine("stop",(last-50)*.25,2,false,ChartTradeKind.Stop,"SL SELL"),new ChartTradeLine("position",(last-8)*.25,2,true,ChartTradeKind.Position,"AVG LONG")};
+            if(Program.Options.Contains("--center")) panes[i].Chart.Recenter();
+            if(Program.Options.Contains("--all")) panes[i].Chart.Viewport.Zoom(100,1,bars.Length);
+        }
+    }
+    public static ChartBar[] Fixture(int minutes,int count=240)
+    {
+        var random=new Random(37+minutes);var result=new List<ChartBar>();long previous=120300;
+        var end=new DateTimeOffset(2026,10,15,20,0,0,TimeSpan.Zero);var start=end.AddMinutes(-(count-1)*(double)minutes);
+        for(int i=0;i<count;i++)
+        {
+            var open=previous;var trend=i%100<55?5:-5;var close=open+random.Next(-14,15)+trend;
+            var time=start.AddMinutes(i*(double)minutes);result.Add(new(i,time,DateOnly.FromDateTime(time.Date),open,Math.Max(open,close)+random.Next(3,20),Math.Min(open,close)-random.Next(3,20),close,random.Next(30,550),1,i==count-1));previous=close;
+        }
+        return result.ToArray();
+    }
+    void Capture(string output)
+    {
+        if(Program.Options.Contains("--cursor")) panes[0].Chart.SetCursor(new Point(panes[0].Chart.Geometry.PlotWidth*.65,panes[0].Chart.Geometry.PlotHeight*.42));
+        var scale=double.TryParse(Program.Option("--scale"),NumberStyles.Float,CultureInfo.InvariantCulture,out var factor)?Math.Clamp(factor,1,3):1;
+        using var bitmap=new RenderTargetBitmap(new PixelSize((int)(Bounds.Width*scale),(int)(Bounds.Height*scale)),new Vector(96*scale,96*scale));
+        bitmap.Render(this);bitmap.Save(output);
+        var timings=new List<double>();long allocation=0;
+        if(Program.Options.Contains("--benchmark"))
+        {
+            bitmap.Render(this);var before=GC.GetAllocatedBytesForCurrentThread();
+            for(int i=0;i<60;i++) {var watch=Stopwatch.StartNew();bitmap.Render(this);timings.Add(watch.Elapsed.TotalMilliseconds);}
+            allocation=GC.GetAllocatedBytesForCurrentThread()-before;timings.Sort();
+        }
+        Console.WriteLine(JsonSerializer.Serialize(new {snapshot=Path.GetFullPath(output),width=Bounds.Width,height=Bounds.Height,scale,synthetic=true,networkConnections=0,renderP50Ms=timings.Count>0?timings[30]:0,renderP95Ms=timings.Count>0?timings[56]:0,managedBytesFor60Renders=allocation}));
+        Close();
+    }
+}
