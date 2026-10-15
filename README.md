@@ -30,6 +30,24 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
+**Current release: [1.12.3](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.3).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.3/BookDepthIQ-DOM-1.12.3-win-x64.zip).
+Upgrading from 1.10.6 or earlier requires replacing **both the DOM and the NinjaTrader bridge** and
+compiling the bridge with F5. This includes the prop-account discovery fix.
+
+### New in 1.12.3 (since 1.10.6)
+
+- Live/prop account discovery refreshes automatically; the top selector shows connection status and a refresh button.
+- TAPE has its own toolbar button; JOURNAL opens a separate calendar and analytics window.
+- The collapsible OUTLOOK panel uses the existing theme; FLOW and ABS are separate ladder columns.
+- FLOW has independent 5/15/60-second windows. Unknown-side prints no longer bias SuperTrend delta.
+- Indexed absorption and cached row reads reduce repeated render work; bridge messages use bounded, ordered batches.
+- Journal accounting isolates accounts and corrects scale-in-after-partial-exit calculations for new trades.
+- 89 automated tests, including simulated execution, persistence, account discovery and rendered UI tests.
+
+Existing journal rows are retained as recorded; installing this release does not repair previously
+miscalculated historical trades. Journal totals cover recorded round trips, not imported broker history.
+
 **Download** the latest `BookDepthIQ-DOM-x.y.z-win-x64.zip` from
 [Releases](https://github.com/autopilotaitech/BookDepthIQ-NT/releases) and unzip it.
 
@@ -219,12 +237,12 @@ connection status. Account-list changes refresh automatically within two seconds
 ↻ button requests a fresh list immediately. Selecting an account remains a manual action.
 Install and compile the updated bridge for automatic discovery.
 
-The performance preview indexes recent trades for absorption and caches row reads until the next
+The DOM indexes recent trades for absorption and caches row reads until the next
 trade/book/window change. Bridge delivery uses ordered, bounded batches (2,048 pending messages)
 with short UI time slices; it preserves every event and applies backpressure rather than dropping
 prints or fills. Tape flash-cache cleanup uses a retained-trade set once per second.
 
-### Professional journal preview
+### Professional journal
 
 The JOURNAL toolbar button opens a dedicated Calendar / Analytics window, styled with the DOM's
 existing theme. Filter by SIM / LIVE / PLAYBACK, account, instrument and date range. The calendar
@@ -235,7 +253,7 @@ Prices and P&L come from recorded NinjaTrader executions, with commissions/fees 
 The journal records executions while the DOM is connected; it does not import earlier broker history
 or recover a position opened before recording began. A completed round trip is counted as one trade.
 SIM/LIVE/PLAYBACK classification uses the account name (Sim / Playback prefixes); environments are
-filtered separately. This preview requires the included updated AddOn to be copied and compiled.
+filtered separately. This release requires the included updated AddOn to be copied and compiled.
 
 The OUTLOOK toolbar button shows a collapsible evidence panel above the tape. It reports
 bid/ask replenishment, absorption holds, ST disagreement and regime. FLOW has independent
