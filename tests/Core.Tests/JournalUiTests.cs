@@ -20,6 +20,40 @@ public class JournalTestApplication : Application
 public class JournalUiTests
 {
     [AvaloniaFact]
+    public void Reset_requires_specific_sim_account_and_confirmation()
+    {
+        var path=Path.Combine(Path.GetTempPath(),Guid.NewGuid()+".json");
+        var state=new DomState(new Settings(),path);
+        state.Journal.Add(new JournalTrade { Account="Sim101", Inst="MNQ", Exit=101, Close=DomState.NowMs(), Pnl=20 });
+        var window=new JournalWindow(state);
+        try
+        {
+            window.Show(); window.CaptureRenderedFrame()?.Dispose();
+            var reset=Assert.Single(window.GetVisualDescendants().OfType<Button>(),b=>b.Content as string=="RESET SIM");
+            Assert.False(reset.IsEnabled);
+            window.GetVisualDescendants().OfType<ComboBox>().First().SelectedItem="Sim101";
+            Assert.True(reset.IsEnabled);
+            reset.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(state.Journal);
+            var dialog=Assert.Single(window.OwnedWindows);
+            dialog.Close();
+            Assert.Single(state.Journal);
+            reset.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            dialog=Assert.Single(window.OwnedWindows);
+            dialog.CaptureRenderedFrame()?.Dispose();
+            dialog.GetVisualDescendants().OfType<Button>().Single(b=>b.Content as string=="RESET JOURNAL")
+                .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Empty(state.Journal);
+            Assert.Empty(new DomState(new Settings(),path).Journal);
+            File.Delete(path);
+            foreach(var backup in Directory.GetFiles(Path.GetDirectoryName(path)!,Path.GetFileName(path)+".before-*.bak")) File.Delete(backup);
+            window.GetVisualDescendants().OfType<Seg>().First(s=>s.SelectedItem=="SIM").SelectedIndex=1;
+            Assert.False(reset.IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void Directional_flow_heatmap_renders_signed_values()
     {
         var cfg=new Settings { Group=1,RowHeight=26,Columns=new Columns { Heat=true,Orders=false,Footprint=false,Pnl=false,Profile=false,Delta=false } };

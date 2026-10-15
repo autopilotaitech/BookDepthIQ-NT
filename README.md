@@ -30,10 +30,22 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.7](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.7).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.7/BookDepthIQ-DOM-1.12.7-win-x64.zip).
+**Current release: [1.12.8](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.8).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.8/BookDepthIQ-DOM-1.12.8-win-x64.zip).
 Upgrading from 1.10.6 or earlier requires replacing **both the DOM and the NinjaTrader bridge** and
 compiling the bridge with F5. This includes the prop-account discovery fix.
+
+### New in 1.12.8
+
+Journal now has **RESET SIM**: select SIM and a specific account (not All accounts), then confirm.
+This clears that account's recorded journal across **all dates and instruments**, refreshing the
+calendar, analytics and recorded TODAY totals. NinjaTrader's SIM reset does not clear this app's
+separate journal automatically. A recoverable `journal.json.before-*.bak` is saved beside the journal
+in `%APPDATA%\BookDepthIQ-NT` before replacement; storage failures leave the in-memory history intact.
+Other accounts and LIVE records are untouched. No orders are sent; balances, risk equity baselines,
+drawdown limits and open trades are not reset. An open trade is still recorded when it closes.
+119 automated tests pass, including confirmed/cancelled UI reset, backup, reload, account isolation,
+LIVE rejection and storage failure. DOM only; bridge unchanged.
 
 ### New in 1.12.7
 
@@ -295,10 +307,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.7
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.8
 ```
 
-This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.7-win-x64.zip` (~37 MB), which holds:
+This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.8-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.

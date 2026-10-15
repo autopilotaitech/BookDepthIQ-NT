@@ -399,6 +399,30 @@ public sealed class DomState
 
     private readonly string journalPath;
     private string JournalPath => journalPath;
+    /// <summary>Reset recorded SIM history only. Never sends broker commands or changes open trips.</summary>
+    public string ResetSimJournal(string account)
+    {
+        if (string.IsNullOrWhiteSpace(account) || JournalAnalytics.Environment(account) != "SIM")
+            throw new InvalidOperationException("Only a specific SIM account can be reset.");
+        var kept = Journal.Where(t => t.Account != account).ToList();
+        Directory.CreateDirectory(Path.GetDirectoryName(JournalPath)!);
+        var backup = JournalPath + ".before-" + Guid.NewGuid().ToString("N") + ".bak";
+        // Preserve the original bytes, and do not change memory unless replacement succeeds.
+        if (File.Exists(JournalPath)) File.Copy(JournalPath, backup, overwrite: false);
+        else File.WriteAllText(backup, JsonSerializer.Serialize(Journal));
+        var temporary = JournalPath + ".reset-" + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temporary, JsonSerializer.Serialize(kept));
+            File.Move(temporary, JournalPath, overwrite: true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        Journal.Clear(); Journal.AddRange(kept);
+        // TODAY and risk counters reconcile from these same records on the next UI refresh.
+        Raise();
+        return backup;
+    }
+
     private void LoadJournal()
     {
         try { if (File.Exists(JournalPath)) Journal.AddRange(JsonSerializer.Deserialize<List<JournalTrade>>(File.ReadAllText(JournalPath)) ?? new()); }

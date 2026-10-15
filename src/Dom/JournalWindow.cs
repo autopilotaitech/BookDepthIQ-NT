@@ -18,6 +18,7 @@ public sealed class JournalWindow : Window
     private readonly DatePicker fromDate = new(), toDate = new();
     private readonly StackPanel customRange = new() { Orientation=Orientation.Horizontal, Spacing=10 };
     private readonly ComboBox accounts = new(), instruments = new();
+    private readonly Button resetSim;
     private readonly StackPanel body = new() { Spacing = 10 };
     private readonly TextBlock context = Label("", Pal.Muted, 11);
     private readonly TextBlock status = Label("", Pal.Muted, 11);
@@ -29,6 +30,7 @@ public sealed class JournalWindow : Window
     public JournalWindow(DomState state)
     {
         this.state = state;
+        resetSim = Flight.HeadBtn("RESET SIM", ConfirmResetSim, "Select a specific SIM account, then back up and clear its recorded journal", danger: true);
         Title = "BookDepthIQ — Trading Journal"; Icon = Brand.Icon();
         Width = 1180; Height = 860; MinWidth = 760; MinHeight = 580;
         Background = Pal.B(Pal.Bg); Foreground = Pal.B(Pal.Text); FontFamily = Flight.Sans;
@@ -53,6 +55,7 @@ public sealed class JournalWindow : Window
             try { if (Clipboard != null) { await Clipboard.SetTextAsync(Journal.Csv(Filtered())); status.Text = "Filtered trades copied as CSV"; } }
             catch (Exception e) { status.Text = "Export failed: " + e.Message; }
         }, "copy the filtered trade history"));
+        toolbar.Children.Add(resetSim);
         var header = new StackPanel { Spacing = 8, Margin = new Thickness(18,14) };
         header.Children.Add(Label("TRADING JOURNAL", Pal.Accent, 18, true));
         header.Children.Add(toolbar); header.Children.Add(context); header.Children.Add(status);
@@ -80,7 +83,9 @@ public sealed class JournalWindow : Window
             var old = box.SelectedItem as string;
             box.ItemsSource = items; box.SelectedItem = old != null && items.Contains(old) ? old : items[0];
         }
-        Fill(accounts, new[] { "All accounts" }.Concat(source.Select(t => t.Account).Distinct().Order()).ToArray());
+        Fill(accounts, new[] { "All accounts" }.Concat(source.Select(t => t.Account)
+            .Concat(new[] { state.Account }.Where(a => JournalAnalytics.Environment(a) == environment.SelectedItem))
+            .Distinct().Order()).ToArray());
         Fill(instruments, new[] { "All instruments" }.Concat(source.Select(t => t.Inst).Distinct().Order()).ToArray());
         changing = false;
     }
@@ -125,6 +130,8 @@ public sealed class JournalWindow : Window
     private void RenderBody()
     {
         if (changing) return;
+        resetSim.IsVisible = environment.SelectedItem == "SIM";
+        resetSim.IsEnabled = resetSim.IsVisible && accounts.SelectedIndex > 0;
         lastCount = state.Journal.Count;
         body.Children.Clear();
         var trades = Filtered(); var a = JournalAnalytics.Compute(trades);
@@ -216,6 +223,31 @@ public sealed class JournalWindow : Window
             var index=offset+d-1; Grid.SetColumn(button,index%7); Grid.SetRow(button,index/7+1); grid.Children.Add(button);
         }
         panel.Children.Add(grid); return Flight.Card("MONTHLY PERFORMANCE",panel);
+    }
+
+    private void ConfirmResetSim()
+    {
+        if (accounts.SelectedIndex <= 0 || environment.SelectedItem != "SIM") return;
+        var account = (string)accounts.SelectedItem!;
+        var dialog = new Window { Title = "Reset SIM journal", Width = 520, SizeToContent = SizeToContent.Height,
+            Background = Pal.B(Pal.Bg), Foreground = Pal.B(Pal.Text), FontFamily = Flight.Sans,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        var panel = new StackPanel { Margin = new Thickness(20), Spacing = 16 };
+        panel.Children.Add(Label("RESET JOURNAL · " + account, Pal.Warn, 18, true));
+        panel.Children.Add(Label("Clear recorded trades for this SIM account across ALL dates and instruments? A backup is saved first. Other accounts and LIVE history are untouched.", Pal.Text));
+        panel.Children.Add(Label("This does not reset NinjaTrader, balances, drawdown limits or open positions. Open trades will still be recorded when they close.", Pal.Muted));
+        panel.Children.Add(Flight.Primary("RESET JOURNAL", () => {
+            try
+            {
+                var backup = state.ResetSimJournal(account);
+                FillSelectors(); RenderBody();
+                status.Text = account + " journal reset. Backup: " + backup;
+                dialog.Close();
+            }
+            catch (Exception e) { status.Text = "Reset failed: " + e.Message; dialog.Close(); }
+        }));
+        panel.Children.Add(Flight.HeadBtn("CANCEL", () => dialog.Close()));
+        dialog.Content = panel; dialog.ShowDialog(this);
     }
 
     private void EditTrade(JournalTrade trade)
