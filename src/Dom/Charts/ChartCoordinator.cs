@@ -31,7 +31,7 @@ public sealed class ChartCoordinator
             s.Cached=Array.Empty<ChartBar>();s.Last=null;s.Sequence=0;s.Dirty=true;s.Version++;s.Status="LOADING";return s.Generation;
         }
     }
-    public void Disconnected() {lock(gate) foreach(var s in slots) {s.Status="OFFLINE · chart bridge unavailable";s.Version++;}}
+    public void Disconnected(string reason="OFFLINE · chart bridge unavailable") {lock(gate) foreach(var s in slots) {s.Status=reason;s.Version++;}}
     public void Apply(string line)
     {
         using var doc=JsonDocument.Parse(line);var m=doc.RootElement;

@@ -123,7 +123,8 @@ loaded history is not all forced onto screen.
 
 The current bridge sends all DOM messages through one bounded outbox and one UI batch pump. Do not
 inject chart history into that FIFO: priority UI draining alone cannot bypass a big packet already
-in the TCP stream. Propose a separate, read-only CHART CHANNEL on127.0.0.1:36972. Keep the existing
+in the TCP stream. Use a separate, read-only CHART CHANNEL on127.0.0.1:36974. Beta2 corrects the
+original36972 proposal, which collided with the owner's Bubbles bridge; validate hello before subscribing. Keep the existing
 DOM/order channel36971 and orderVersion2 unchanged. No trading commands exist in the chart protocol.
 
 Native endpoint is a separately packaged BookDepthIQChartBridge.cs AddOn, compiled against the same

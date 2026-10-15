@@ -17,7 +17,7 @@ public sealed class ChartClient : IDisposable
     TcpClient? socket;
     Task? run;
     readonly int port;
-    public ChartClient(ChartCoordinator model,int port=36972) {this.model=model;this.port=port;}
+    public ChartClient(ChartCoordinator model,int port=36974) {this.model=model;this.port=port;}
     public void SetRequests(IEnumerable<Request> desired)
     {
         lock(gate)
@@ -48,13 +48,26 @@ public sealed class ChartClient : IDisposable
     {
         while(!stop.IsCancellationRequested)
         {
+            string failure="OFFLINE · chart bridge unavailable";
             try
             {
                 using var tcp=new TcpClient {NoDelay=true};socket=tcp;
                 await tcp.ConnectAsync("127.0.0.1",port,stop.Token);
+                using var stream=tcp.GetStream();
+                using var reader=new StreamReader(stream,Encoding.UTF8,false,4096,true);
+                var hello=await reader.ReadLineAsync(stop.Token).AsTask().WaitAsync(TimeSpan.FromSeconds(5),stop.Token);
+                using(var doc=JsonDocument.Parse(hello??"{}"))
+                {
+                    var root=doc.RootElement;
+                    if(!root.TryGetProperty("t",out var type)||type.GetString()!="hello" || !root.TryGetProperty("chartVersion",out var version)||!version.TryGetInt32(out var value)||value!=1)
+                    {
+                        failure="INCOMPATIBLE bridge · install the chart AddOn (port 36974)";
+                        model.Disconnected(failure);
+                        throw new IOException(failure);
+                    }
+                }
                 var queue=Channel.CreateBounded<string>(32);
                 lock(gate) {outgoing=queue;foreach(var request in requests.Values) SendSubscription(request);}
-                using var stream=tcp.GetStream();
                 using var connection=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
                 var writer=Task.Run(async ()=> {
                     using var w=new StreamWriter(stream,new UTF8Encoding(false),4096,true) {AutoFlush=true};
@@ -63,7 +76,6 @@ public sealed class ChartClient : IDisposable
                 });
                 try
                 {
-                    using var reader=new StreamReader(stream,Encoding.UTF8,false,4096,true);
                     while(await reader.ReadLineAsync(stop.Token) is {} line)
                     {
                         if(line.Length>1_048_576) throw new IOException("Oversized chart packet");
@@ -73,9 +85,10 @@ public sealed class ChartClient : IDisposable
                 finally {connection.Cancel();queue.Writer.TryComplete();await writer;}
             }
             catch(OperationCanceledException) {break;}
+            catch(TimeoutException) {failure="Chart bridge handshake timed out · retrying";}
             catch(Exception e) when(e is IOException or SocketException or ObjectDisposedException or JsonException or FormatException or InvalidOperationException or ArgumentException or KeyNotFoundException or OverflowException) {}
             lock(gate) outgoing=null;
-            model.Disconnected();
+            model.Disconnected(failure);
             try {await Task.Delay(2000,stop.Token);} catch(OperationCanceledException) {break;}
         }
     }

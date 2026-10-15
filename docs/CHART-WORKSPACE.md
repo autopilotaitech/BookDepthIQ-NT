@@ -1,6 +1,6 @@
 # Two-chart development build
 
-Branch: `codex/two-chart-workspace`. Local package version: `1.13.0-beta.1`.
+Branch: `codex/two-chart-workspace`. Local package version: `1.13.0-beta.2`.
 Not published, merged or installed into the owner's NinjaTrader instance.
 
 ## Controls
@@ -24,7 +24,10 @@ Not published, merged or installed into the owner's NinjaTrader instance.
 
 Package includes BOTH `BookDepthIQBridge.cs` and `BookDepthIQChartBridge.cs`.
 Close NT and install both into its Custom/AddOns directory, then compile in NinjaScript Editor.
-The existing order bridge stays on localhost36971; read-only charts use localhost36972.
+The existing order bridge stays on localhost36971; read-only charts use localhost36974.
+Port36972 belongs to Bubbles and is not changed. Beta2 fixes the beta1 port collision and requires
+a chartVersion1 handshake before sending subscriptions. Replace BOTH the beta1 app and chart AddOn;
+updating only one leaves charts unavailable. Recompile NT after replacing the AddOn.
 An old installation lacking the chart AddOn reports unavailable charts; the DOM remains independent.
 No installer or test in this change updates a running NT installation automatically.
 

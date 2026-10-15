@@ -38,7 +38,7 @@ BookDepthIQ DOM $Version - install
        Documents\NinjaTrader 8\bin\Custom\AddOns\
    - Start NinjaTrader, open New > NinjaScript Editor and press F5 to compile.
    - The bridge listens on 127.0.0.1:36971 (this PC only).
-   - The separate read-only chart bridge listens on 127.0.0.1:36972.
+   - The separate read-only chart bridge listens on 127.0.0.1:36974 (36972 belongs to Bubbles).
 
 2. The DOM
    - Unzip anywhere and run BookDepthIQ-DOM.exe (no install, no .NET needed).

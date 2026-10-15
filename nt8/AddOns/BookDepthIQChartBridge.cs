@@ -18,7 +18,7 @@ namespace NinjaTrader.NinjaScript.AddOns
 {
     public class BookDepthIQChartBridge : AddOnBase
     {
-        public const int Port=36972;
+        public const int Port=36974;
         static readonly object Gate=new object();
         static BookDepthIQChartBridge owner;
         static TcpListener listener;

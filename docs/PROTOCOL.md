@@ -5,7 +5,9 @@ connects. Loopback only: the bridge never listens on another interface.
 
 ## Independent chart channel (development v1)
 
-Chart AddOn listens separately on `127.0.0.1:36972`. Order protocol v2 above is unchanged.
+Chart AddOn listens separately on `127.0.0.1:36974`. Port36972 is reserved for Bubbles; order protocol v2 above is unchanged.
+Client must receive `hello` with `chartVersion:1` before sending any subscriptions. An incompatible
+service is disconnected with an explicit error; missing handshake times out after5seconds.
 Chart commands are read-only; there are no account/order commands on this channel.
 
 | Direction / `t` | Fields |

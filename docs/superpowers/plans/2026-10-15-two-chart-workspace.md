@@ -16,7 +16,8 @@
 - Initial charts32% / DOM68%; independent horizontal chart-height split50/50. Persist both.
 - Exact frames1m/3m/5m/15m/30m/1h/4h/Day; PAX disabled on1h/4h/Day in model and UI.
 - Maximum10000 bars/chart,20000 across slots; raw ring100000 events/instrument.
-- Chart channel127.0.0.1:36972, version1; existing order channel36971/orderVersion2 unchanged.
+- Chart channel127.0.0.1:36974, version1; existing order channel36971/orderVersion2 unchanged.
+  Beta2 correction:36972 belongs to Bubbles; require chartVersion1 hello before subscriptions.
 - No live installation changes, orders, third-party source redistribution, or release publication during implementation.
 - Run `dotnet test --nologo -v q` before every commit. Baseline254 passed on2026-10-15.
 
