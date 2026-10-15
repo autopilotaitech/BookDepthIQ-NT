@@ -24,6 +24,12 @@ public sealed class ChartWorkspace : Grid,IDisposable
     public string Instrument {get;set;}="";
     public double MinimumDomWidth {get;set;}=1060;
     public PaxOrCfg OpeningRangeConfig {get;set;}=new();
+    public Func<IReadOnlyList<ChartTradeLine>>? TradingLinesProvider {get;set;}
+    public void RefreshTradingLines()
+    {
+        var lines=TradingLinesProvider?.Invoke()??Array.Empty<ChartTradeLine>();
+        foreach(var pane in panes) pane.Chart.TradeLines=lines;
+    }
     record OverlayKey(long Version,PaxOrCfg Config,string Instrument,int TopFrame,int TopDays,bool TopOn,int BottomFrame,int BottomDays,bool BottomOn);
     OverlayKey? overlayKey;
     Task? overlayTask;
@@ -53,6 +59,7 @@ public sealed class ChartWorkspace : Grid,IDisposable
     {
         if(!ChartsVisible||timer!=null) return;
         timer=DispatcherTimer.Run(()=> {
+            RefreshTradingLines();
             for(int i=0;i<2;i++) if(panes[i].IsVisible)
             {
                 var pref=i==0?settings.Top:settings.Bottom;

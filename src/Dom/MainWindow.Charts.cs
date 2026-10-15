@@ -14,6 +14,7 @@ public sealed partial class MainWindow
         chartModel=new ChartCoordinator();
         chartWorkspace=new ChartWorkspace(existingDom,cfg.Charts,chartModel,cfg.Save) {Instrument=cfg.Instrument,OpeningRangeConfig=cfg.PaxOr,MinimumDomWidth=765+Math.Clamp(cfg.SideWidth,240,900)};
         chartWorkspace.RequestsChanged+=RefreshCharts;
+        chartWorkspace.TradingLinesProvider=()=>ChartOrderOverlay.Build(s,cfg.Account,cfg.Instrument);
         chartWorkspace.ReloadRequested+=()=>chartClient?.Reload();
         Closed+=(_,_)=> {chartClient?.Dispose();chartWorkspace.Dispose();};
         return chartWorkspace;

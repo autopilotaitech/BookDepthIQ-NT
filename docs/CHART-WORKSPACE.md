@@ -9,6 +9,28 @@ readouts wrap at narrower widths instead of moving entire titled groups onto tal
 Fonts, values, tooltips and room bar remain unchanged. Chart and trading behavior are unchanged.
 Upgrade from beta2 is app-only; the beta2 chart bridge on36974 is unchanged.
 
+## Next build: beta4 chart orders (feature branch)
+
+`codex/chart-order-overlays` adds display-only working entry/TP/SL lines and position-average lines
+to both charts. Labels include remaining quantity and price. Equal-price/type/side orders share a
+label with total remaining quantity and an order count. Stop-limit trigger and limit are distinct.
+MIT uses NT's stop trigger field, verified against the
+[official price-field documentation](https://ninjatrader.com/support/helpguides/nt8/price_selector.htm).
+TP is green, SL red, average cyan/accent, other buys/sells follow existing bid/ask colors.
+Offscreen levels use arrow tags; they do not force candles to zoom out. Crowded labels are spaced,
+and excess levels have a count indicator rather than silently overlapping every label.
+
+Only the selected account/instrument's fresh connected trading snapshot is projected. Account change,
+disconnect, fill/cancel or flat position clears the corresponding display on the next chart refresh.
+Pending cancellation remains displayed until the source snapshot confirms removal. No orders are
+created, moved, cancelled or managed from a chart: existing chart dragging still pans the viewport.
+Chart settings → Orders & position (display only) hides the overlay per pane; enabled by default.
+No new native bridge/protocol is required. Beta4 is app-only from beta2/beta3.
+
+Isolated tests cover projection, account/contract isolation, stale/disconnected state, remaining
+quantity, moves/cancel/flat lifecycle, invalid prices, stop-limit dual levels, both-pane clearing,
+render/toggle behavior and an empty real Ticket command sink. Native execution was not exercised.
+
 ## Controls
 
 - CHARTS toggles an optional left column. Initially off; top3m, bottom15m.
@@ -24,7 +46,8 @@ Upgrade from beta2 is app-only; the beta2 chart bridge on36974 is unchanged.
 - PAX uses shared DOM opening-time/timezone/step preferences; OFF initially and disabled on1h/4h/Day.
   This is a supported independent adapter, not a generic NinjaScript/DLL loader.
 - History defaults:1m3000,3m2000,5m2000,15m1500,30m1500,1h1500,4h1000,Day500; custom250–10000.
-  Gaps remain gaps. No automatic DOM level/order/position overlays, no chart order entry.
+  Gaps remain gaps. No automatic analytic DOM levels or chart order entry; beta4 adds optional
+  display-only order/position overlays as described above.
 
 ## Install and data path
 

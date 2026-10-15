@@ -9,6 +9,7 @@ public sealed class ChartPaneSettings
     public int Frame {get;set;}=3;
     public bool Pax {get;set;}
     public bool Volume {get;set;}
+    public bool ShowOrders {get;set;}=true;
     public bool Sma {get;set;}
     public bool Ema {get;set;}
     public int Period {get;set;}=20;
