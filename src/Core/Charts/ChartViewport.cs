@@ -1,0 +1,29 @@
+namespace BookDepthIQ.Core.Charts;
+
+public sealed class ChartViewport
+{
+    public double Start {get;private set;}
+    public double Count {get;private set;}=120;
+    public bool Follow {get;private set;}=true;
+    public bool Auto {get;private set;}=true;
+    double low,high;
+    public void Reset(int total) {Count=120; Follow=true; Auto=true; Update(total);}
+    public void Update(int total) {if(Follow) Start=Math.Max(0,total-Count+8); else Start=Math.Clamp(Start,0,Math.Max(0,total-1));}
+    public void Live(int total) {Follow=true; Update(total);}
+    public void AutoScale()=>Auto=true;
+    public void Zoom(double factor,double pointer,int total)
+    {
+        if(!double.IsFinite(factor)||factor<=0) return;
+        pointer=Math.Clamp(pointer,0,1); var anchor=Start+Count*pointer;
+        Count=Math.Clamp(Count*factor,10,10000); Start=Math.Max(0,anchor-Count*pointer); Follow=false;
+    }
+    public void Pan(double delta,int total) {Follow=false; Start=Math.Clamp(Start+delta,0,Math.Max(0,total-1));}
+    public void SetPriceRange(double min,double max) {if(double.IsFinite(min)&&double.IsFinite(max)&&max>min) {low=min;high=max;Auto=false;}}
+    public (double Low,double High) PriceRange(IReadOnlyList<ChartBar> visible)
+    {
+        if(!Auto) return (low,high);
+        if(visible.Count==0) return (0,4);
+        double a=visible.Min(b=>b.Low),b=visible.Max(b=>b.High); var padding=Math.Max(2,(b-a)*.08);
+        return (a-padding,b+padding);
+    }
+}
