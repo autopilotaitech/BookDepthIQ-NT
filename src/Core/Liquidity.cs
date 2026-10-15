@@ -21,7 +21,12 @@ public sealed class LiquidityTracker
     public long WindowMs { get; }
     public long BinMs { get; }
     public long FlowWindowMs { get; private set; }
-    public void SetFlowWindow(int seconds) => FlowWindowMs = Math.Clamp(seconds, 5, 60) * 1000L;
+    public void SetFlowWindow(int seconds)
+    {
+        var duration = Math.Clamp(seconds, 5, 60) * 1000L;
+        if (duration == FlowWindowMs) return;
+        FlowWindowMs = duration; InvalidateReads();
+    }
 
     public LiquidityTracker(long windowMs = Bins * DefaultBinMs)
     {
@@ -47,12 +52,52 @@ public sealed class LiquidityTracker
     private HashSet<long> edge = new();
     private List<Hit> hits = new();
     private long now;
+    private sealed class HitSummary
+    {
+        public long Buys, Sells;
+        public Hit? FirstBuy, FirstSell;
+        public int BuyIndex = int.MaxValue, SellIndex = int.MaxValue;
+    }
+    private readonly Dictionary<long, HitSummary> hitIndex = new();
+    private readonly Dictionary<(long Price, int Group, long Min), string?> absorbReads = new();
+    private readonly Dictionary<(long Price, int Group, long Min), FlowRead> flowReads = new();
+    private bool hitIndexReady;
+    private long[] hitTimes = Array.Empty<long>(), suffixLow = Array.Empty<long>(), suffixHigh = Array.Empty<long>();
+    private void InvalidateReads()
+    {
+        hitIndexReady = false; absorbReads.Clear(); flowReads.Clear();
+    }
+
+    private void PrepareHits()
+    {
+        if (hitIndexReady) return;
+        hitIndex.Clear();
+        var recent = new List<Hit>();
+        foreach (var h in hits)
+        {
+            if (now - h.At > FlowWindowMs) continue;
+            if (!hitIndex.TryGetValue(h.Price, out var row)) hitIndex[h.Price] = row = new HitSummary();
+            if (h.Side == 'b') { row.Buys += h.Qty; if (row.FirstBuy == null) { row.FirstBuy = h; row.BuyIndex = recent.Count; } }
+            else { row.Sells += h.Qty; if (row.FirstSell == null) { row.FirstSell = h; row.SellIndex = recent.Count; } }
+            recent.Add(h);
+        }
+        recent.Sort((a,b) => a.At.CompareTo(b.At));
+        hitTimes = new long[recent.Count]; suffixLow = new long[recent.Count]; suffixHigh = new long[recent.Count];
+        long low=long.MaxValue, high=long.MinValue;
+        for (var i=recent.Count-1;i>=0;i--)
+        {
+            hitTimes[i]=recent[i].At; low=Math.Min(low,recent[i].Price); high=Math.Max(high,recent[i].Price);
+            suffixLow[i]=low; suffixHigh[i]=high;
+        }
+        hitIndexReady = true;
+    }
 
     /// <summary>Largest resting size seen in the heat window (for colour scaling).</summary>
     public double MaxSize { get; private set; }
 
     public void OnTrade(long priceTicks, long qty, char side, long at)
     {
+        InvalidateReads();
         tradedSince[priceTicks] = (tradedSince.TryGetValue(priceTicks, out var v) ? v : 0) + qty;
         now = Math.Max(now, at);
         if (side is 'b' or 's') hits.Add(new Hit(at, priceTicks, qty, side, cur.TryGetValue(priceTicks, out var sh) ? sh : 0));
@@ -60,6 +105,7 @@ public sealed class LiquidityTracker
 
     public void OnBook(Book book, long at)
     {
+        InvalidateReads();
         now = Math.Max(now, at);
         var next = new Dictionary<long, long>();
         for (var i = 0; i < book.Bids.Ticks.Length; i++) next[book.Bids.Ticks[i]] = book.Bids.Sizes[i];
@@ -136,7 +182,7 @@ public sealed class LiquidityTracker
 
     private void Prune(long at)
     {
-        if (hits.Count > 0 && at - hits[0].At > FlowWindowMs) hits = hits.Where(h => at - h.At <= FlowWindowMs).ToList();
+        if (hits.Count > 0 && at - hits[0].At > Math.Max(60_000, FlowWindowMs)) hits = hits.Where(h => at - h.At <= Math.Max(60_000, FlowWindowMs)).ToList();
         foreach (var p in flows.Keys.ToList())
         {
             var keep = flows[p].Where(f => at - f.At <= Math.Max(60_000, FlowWindowMs)).ToList();
@@ -171,21 +217,37 @@ public sealed class LiquidityTracker
     /// </summary>
     public string? Absorb(long price, int group = 1, long absorbMin = 5)
     {
+        var key=(price,group,absorbMin);
+        if (absorbReads.TryGetValue(key,out var cached)) return cached;
+        var result=ReadAbsorb(price,group,absorbMin);
+        if (absorbReads.Count >= 4096) absorbReads.Clear();
+        absorbReads[key]=result;
+        return result;
+    }
+
+    private string? ReadAbsorb(long price, int group, long absorbMin)
+    {
+        PrepareHits();
         var top = price + group - 1;
-        var recent = hits.Where(h => now - h.At <= FlowWindowMs).ToList();
-        var here = recent.Where(h => h.Price >= price && h.Price <= top).ToList();
-        if (here.Count == 0) return null;
-        var sells = here.Where(h => h.Side == 's').Sum(h => h.Qty);
-        var buys = here.Where(h => h.Side == 'b').Sum(h => h.Qty);
+        long sells=0,buys=0;
+        for(var p=price;p<=top;p++) if(hitIndex.TryGetValue(p,out var row)) { sells+=row.Sells; buys+=row.Buys; }
         var side = sells >= absorbMin && sells >= 2 * buys ? "bid" : buys >= absorbMin && buys >= 2 * sells ? "ask" : null;
         if (side is null) return null;
-        var hitSide = side == "bid" ? 's' : 'b';
-        var first = here.First(h => h.Side == hitSide);
+        Hit? first=null; var firstIndex=int.MaxValue;
         var traded = side == "bid" ? sells : buys;
         long shown = 0;
-        for (var p = price; p <= top; p++) shown = Math.Max(shown, here.FirstOrDefault(h => h.Side == hitSide && h.Price == p)?.Shown ?? 0);
+        for (var p = price; p <= top; p++) if(hitIndex.TryGetValue(p,out var row))
+        {
+            var hit=side=="bid" ? row.FirstSell : row.FirstBuy;
+            var index=side=="bid" ? row.SellIndex : row.BuyIndex;
+            shown=Math.Max(shown,hit?.Shown ?? 0);
+            if(index<firstIndex) { first=hit; firstIndex=index; }
+        }
+        if(first==null) return null;
         if (traded < 1.5 * shown) return null;
-        if (recent.Any(h => h.At >= first.At && (side == "bid" ? h.Price < price : h.Price > top))) return null;
+        int lo=0,hi=hitTimes.Length;
+        while(lo<hi) { var mid=lo+(hi-lo)/2; if(hitTimes[mid]<first.At) lo=mid+1; else hi=mid; }
+        if(lo<hitTimes.Length && (side=="bid" ? suffixLow[lo]<price : suffixHigh[lo]>top)) return null;
         long rest = 0;
         for (var p = price; p <= top; p++) rest += cur.TryGetValue(p, out var v) ? v : 0;
         if (rest <= 0 || rest < 0.5 * shown) return null;
@@ -196,16 +258,22 @@ public sealed class LiquidityTracker
     /// when the net is under 20% of the churn (re-quoting moves size without anyone pulling or adding).</summary>
     public FlowRead FlowAt(long price, int group = 1, long absorbMin = 5)
     {
+        var key=(price,group,absorbMin);
+        if(flowReads.TryGetValue(key,out var cached)) return cached;
         long pulled = 0, stacked = 0, traded = 0;
         for (var k = 0; k < group; k++)
             if (flows.TryGetValue(price + k, out var list))
-                foreach (var f in list.Where(f => now - f.At <= FlowWindowMs)) { pulled += f.Pull; stacked += f.Stack; traded += f.Traded; }
+                foreach (var f in list) if(now-f.At<=FlowWindowMs) { pulled += f.Pull; stacked += f.Stack; traded += f.Traded; }
         var net = stacked - pulled;
-        return new FlowRead(net, pulled, stacked, traded, Absorb(price, group, absorbMin), Math.Abs(net) > 0 && Math.Abs(net) >= 0.2 * (pulled + stacked));
+        var result=new FlowRead(net, pulled, stacked, traded, Absorb(price, group, absorbMin), Math.Abs(net) > 0 && Math.Abs(net) >= 0.2 * (pulled + stacked));
+        if(flowReads.Count>=4096) flowReads.Clear();
+        flowReads[key]=result;
+        return result;
     }
 
     public void Reset()
     {
+        InvalidateReads(); hitIndex.Clear(); hitTimes=Array.Empty<long>(); suffixLow=Array.Empty<long>(); suffixHigh=Array.Empty<long>();
         cur.Clear(); bins.Clear(); binStart = null; lastBookAt = null; curSigned.Clear(); acc.Clear();
         edge.Clear(); tradedSince.Clear(); flows.Clear(); hits.Clear(); now = 0; MaxSize = 0;
     }

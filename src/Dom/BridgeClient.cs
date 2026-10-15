@@ -15,11 +15,20 @@ public sealed class BridgeClient : IDisposable
     private TcpClient? tcp;
     private StreamWriter? writer;
     private readonly object writeGate = new();
+    private sealed record Pending(Action Apply, JsonDocument? Document = null);
+    private readonly UiBatchPump<Pending> incoming;
 
     /// <summary>Called on the UI thread after each (re)connect, to re-subscribe.</summary>
     public event Action? Connected;
 
-    public BridgeClient(DomState state) => this.state = state;
+    public BridgeClient(DomState state)
+    {
+        this.state = state;
+        incoming = new UiBatchPump<Pending>(action => Dispatcher.UIThread.Post(action), item => {
+            try { item.Apply(); }
+            catch(Exception e) { state.Note(OrderLogStatus.Error,"bridge message failed: " + e.Message); }
+        },state.Raise,item=>item.Document?.Dispose());
+    }
 
     public void Start() => _ = Task.Run(RunAsync);
 
@@ -34,7 +43,7 @@ public sealed class BridgeClient : IDisposable
                 tcp = c;
                 var stream = c.GetStream();
                 lock (writeGate) writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
-                Dispatcher.UIThread.Post(() => { state.Note(BookDepthIQ.Core.OrderLogStatus.Ok, "connected to the NinjaTrader bridge"); Connected?.Invoke(); state.Raise(); });
+                await incoming.Enqueue(new Pending(() => { state.Note(OrderLogStatus.Ok, "connected to the NinjaTrader bridge"); Connected?.Invoke(); }),cts.Token);
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 string? line;
                 while ((line = await reader.ReadLineAsync(cts.Token)) != null)
@@ -43,22 +52,18 @@ public sealed class BridgeClient : IDisposable
                     JsonDocument doc;
                     try { doc = JsonDocument.Parse(line); }
                     catch (JsonException) { continue; }
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        using (doc) state.Apply(doc.RootElement);
-                        state.Raise();
-                    });
+                    try { await incoming.Enqueue(new Pending(()=>state.Apply(doc.RootElement),doc),cts.Token); }
+                    catch { doc.Dispose(); throw; }
                 }
             }
             catch (OperationCanceledException) { return; }
             catch (Exception) { /* not running yet / dropped: retry below */ }
             lock (writeGate) writer = null;
-            Dispatcher.UIThread.Post(() =>
+            try { await incoming.Enqueue(new Pending(() =>
             {
                 if (state.Connected) state.Note(BookDepthIQ.Core.OrderLogStatus.Error, "lost the NinjaTrader bridge — reconnecting");
                 state.Connected = false;
-                state.Raise();
-            });
+            }),cts.Token); } catch(OperationCanceledException) { return; }
             try { await Task.Delay(2000, cts.Token); } catch (OperationCanceledException) { return; }
         }
     }
@@ -77,6 +82,7 @@ public sealed class BridgeClient : IDisposable
     public void Dispose()
     {
         cts.Cancel();
+        incoming.Dispose();
         tcp?.Dispose();
     }
 }

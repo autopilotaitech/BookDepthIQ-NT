@@ -21,6 +21,7 @@ public sealed class TapeControl : Control
     private readonly Settings cfg;
     private int scroll;
     private readonly Dictionary<Trade, long> firstSeen = new(ReferenceEqualityComparer.Instance);
+    private long lastCleanup;
 
     public TapeControl(DomState state, Settings settings)
     {
@@ -69,8 +70,12 @@ public sealed class TapeControl : Control
             Text(ctx, big && side != 0 ? $"{(side > 0 ? "B" : "S")} {t.Size}" : t.Size.ToString(CultureInfo.InvariantCulture), c2, y, w - c2 - 8, h, col, size, TextAlignment.Right, bold);
             y += h;
         }
-        if (firstSeen.Count > 600)
-            foreach (var k in firstSeen.Keys.Where(k => !s.Tape.Contains(k)).ToList()) firstSeen.Remove(k);
+        if (firstSeen.Count > 600 && now-lastCleanup>=1000)
+        {
+            lastCleanup=now;
+            var retained=new HashSet<Trade>(s.Tape,ReferenceEqualityComparer.Instance);
+            foreach (var k in firstSeen.Keys.Where(k => !retained.Contains(k)).ToList()) firstSeen.Remove(k);
+        }
         if (s.Tape.Count == 0) Text(ctx, "waiting for trades…", 6, 4, w - 12, 16, Pal.Muted, 11.5, TextAlignment.Left, false);
         else if (y == 0) Text(ctx, $"no prints of {min}+ contracts yet (Settings › Tape & log)", 6, 4, w - 12, 16, Pal.Muted, 11.5, TextAlignment.Left, false);
     }
