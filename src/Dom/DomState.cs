@@ -3,7 +3,10 @@ using BookDepthIQ.Core;
 
 namespace BookDepthIQ.Dom;
 
-public sealed record AccountInfo(string Name, string Conn);
+public sealed record AccountInfo(string Name, string Conn)
+{
+    public override string ToString() => Name + " · " + Conn;
+}
 public sealed record WorkingOrder(string Id, string Inst, string Action, string Type, int Qty, int Filled, double Limit, double Stop, string State, string Oco, string Name)
 {
     public bool IsBuy => Action is "Buy" or "BuyToCover";
@@ -196,6 +199,8 @@ public sealed class DomState
         {
             case "hello":
                 Connected = true;
+                goto case "accounts";
+            case "accounts":
                 Accounts.Clear();
                 if (m.TryGetProperty("accounts", out var al))
                     foreach (var a in al.EnumerateArray()) Accounts.Add(new AccountInfo(S(a, "name"), S(a, "conn")));

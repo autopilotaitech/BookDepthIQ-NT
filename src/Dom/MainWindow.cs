@@ -159,7 +159,8 @@ public sealed partial class MainWindow : Window
         instBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) SwitchInstrument(); };
         acctBox.SelectionChanged += (_, _) =>
         {
-            if (acctBox.SelectedItem is not string a || a == cfg.Account) return;
+            if (loading || acctBox.SelectedItem is not AccountInfo selected || selected.Name == cfg.Account) return;
+            var a = selected.Name;
             cfg.Account = a; s.Account = a; s.Positions.Clear(); s.Orders.Clear(); cfg.Save();
             dd = NewTracker();
             bridge.Send(Protocol.SelectAccount(a));
@@ -177,6 +178,10 @@ public sealed partial class MainWindow : Window
         left.Children.Add(instBox);
         left.Children.Add(Flight.HeadBtn("GO", SwitchInstrument, "load this instrument"));
         left.Children.Add(acctBox);
+        acctBox.Width = 220;
+        left.Children.Add(Flight.HeadBtn("↻", () => {
+            if (!bridge.Send(Protocol.RefreshAccounts())) Notice("Account refresh unavailable — bridge disconnected");
+        }, "refresh NinjaTrader accounts"));
         left.Children.Add(new Border { Width = 8 });
         left.Children.Add(bridgePill);
         left.Children.Add(feedPill);

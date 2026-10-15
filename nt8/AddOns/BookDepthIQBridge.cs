@@ -102,6 +102,8 @@ namespace NinjaTrader.NinjaScript.AddOns
             private double[][] bookBids = new double[0][], bookAsks = new double[0][];
             private bool bookDirty;
             private Timer bookTimer;
+            private Timer accountTimer;
+            private string accountSignature;
 
             // Entries sent with a bracket. Like NT's ATM, each target gets its own stop as one OCO pair;
             // every execution of the entry is allocated to the targets in order, so a partial fill is
@@ -123,6 +125,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 new Thread(AcceptLoop) { IsBackground = true, Name = "BDIQ bridge accept" }.Start();
                 new Thread(WriteLoop) { IsBackground = true, Name = "BDIQ bridge write" }.Start();
                 bookTimer = new Timer(_ => FlushBook(), null, BookMs, BookMs);
+                accountTimer = new Timer(_ => OnUi(() => SendAccounts(false, false)), null, 2000, 2000);
             }
 
             // ───────────── socket ─────────────
@@ -134,6 +137,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 try { if (listener != null) listener.Stop(); } catch { }
                 lock (clientGate) { if (client != null) try { client.Close(); } catch { } client = null; }
                 if (bookTimer != null) bookTimer.Dispose();
+                if (accountTimer != null) accountTimer.Dispose();
                 outbox.CompleteAdding();
                 var inst = instrument;
                 var d = depth;
@@ -248,6 +252,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     case "sub": OnUi(() => Subscribe(Str(m, "inst"))); break;
                     case "acct": OnUi(() => SelectAccount(Str(m, "name"))); break;
+                    case "accounts": OnUi(() => SendAccounts(false, true)); break;
                     case "order": OnUi(() => PlaceOrder(m, cid)); break;
                     case "cancel": OnUi(() => CancelOrder(m, cid)); break;
                     case "move": OnUi(() => MoveOrder(m, cid)); break;
@@ -275,13 +280,22 @@ namespace NinjaTrader.NinjaScript.AddOns
 
             private void SendHello()
             {
-                var accts = new List<object>();
-                lock (Account.All)
-                    foreach (var a in Account.All)
-                        accts.Add(new Dictionary<string, object> { { "name", a.Name }, { "conn", a.ConnectionStatus.ToString() } });
-                Send(new Dictionary<string, object> { { "t", "hello" }, { "v", 2 }, { "accounts", accts } });
+                SendAccounts(true, true);
                 if (instrument != null) SendInstrument();
                 if (account != null) { SendAccount(); SendPositions(); SendOrders(); }
+            }
+
+            private void SendAccounts(bool hello, bool force)
+            {
+                lock (clientGate) { if (client == null || stopped) return; }
+                var accts = new List<object>();
+                lock (Account.All)
+                    foreach (var a in Account.All.OrderBy(a => a.Name))
+                        accts.Add(new Dictionary<string, object> { { "name", a.Name }, { "conn", a.ConnectionStatus.ToString() } });
+                var signature = json.Serialize(accts);
+                if (!force && signature == accountSignature) return;
+                accountSignature = signature;
+                Send(new Dictionary<string, object> { { "t", hello ? "hello" : "accounts" }, { "v", 2 }, { "accounts", accts } });
             }
 
             private void Subscribe(string name)

@@ -17,6 +17,7 @@ public static class Protocol
     // ── app → bridge ──
     public static string Subscribe(string instrument) => Line(new() { ["t"] = "sub", ["inst"] = instrument });
     public static string SelectAccount(string account) => Line(new() { ["t"] = "acct", ["name"] = account });
+    public static string RefreshAccounts() => Line(new() { ["t"] = "accounts" });
 
     /// <summary>An entry from a click. type: market | limit | stop. tp/sl in ticks (0 = none); the bridge
     /// places them as an OCO pair when the entry fills.</summary>

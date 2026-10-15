@@ -290,12 +290,12 @@ public sealed partial class MainWindow
         resultBar.Text = s.LastResult is null ? "" : (s.LastOk ? "✓ " : "✗ ") + s.LastResult;
         resultBar.Foreground = Pal.B(s.LastOk ? Pal.Pos : Pal.Neg);
 
-        var names = s.Accounts.Select(a => a.Name).ToList();
-        if (!names.SequenceEqual(acctBox.ItemsSource?.Cast<string>() ?? Enumerable.Empty<string>()))
+        var accounts = s.Accounts.ToArray();
+        if (!accounts.SequenceEqual(acctBox.ItemsSource?.Cast<AccountInfo>() ?? Enumerable.Empty<AccountInfo>()))
         {
             loading = true;
-            acctBox.ItemsSource = names;
-            acctBox.SelectedItem = names.Contains(cfg.Account) ? cfg.Account : null;
+            acctBox.ItemsSource = accounts;
+            acctBox.SelectedItem = accounts.FirstOrDefault(a => a.Name == cfg.Account);
             loading = false;
         }
         armBtn.Content = cfg.HotkeysArmed ? "HOTKEYS ARMED" : "HOTKEYS SAFE";

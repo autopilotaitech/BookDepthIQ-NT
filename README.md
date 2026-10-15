@@ -214,6 +214,11 @@ Ported from BookDepthIQ's IB layer (v1.0.146/147). **Off by default:** SETTINGS 
 
 ## Package to share
 
+The top account selector lists all accounts NinjaTrader exposes, including prop accounts, with
+connection status. Account-list changes refresh automatically within two seconds; the adjacent
+↻ button requests a fresh list immediately. Selecting an account remains a manual action.
+Install and compile the updated bridge for automatic discovery.
+
 The performance preview indexes recent trades for absorption and caches row reads until the next
 trade/book/window change. Bridge delivery uses ordered, bounded batches (2,048 pending messages)
 with short UI time slices; it preserves every event and applies backpressure rather than dropping
@@ -239,10 +244,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.1
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.3
 ```
 
-This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.1-win-x64.zip` (~37 MB), which holds:
+This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.3-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
