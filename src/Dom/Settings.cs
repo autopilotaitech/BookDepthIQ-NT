@@ -51,6 +51,7 @@ public sealed class Columns
 /// user's own; nothing is hard-coded into an order.</summary>
 public sealed class Settings
 {
+    public Charts.ChartWorkspaceSettings Charts {get;set;}=new();
     // ── market / account ──
     public string Instrument { get; set; } = "NQ 12-26";
     public string Account { get; set; } = "Sim101";

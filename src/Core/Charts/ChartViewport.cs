@@ -18,6 +18,7 @@ public sealed class ChartViewport
         Count=Math.Clamp(Count*factor,10,10000); Start=Math.Max(0,anchor-Count*pointer); Follow=false;
     }
     public void Pan(double delta,int total) {Follow=false; Start=Math.Clamp(Start+delta,0,Math.Max(0,total-1));}
+    public void Evicted(int count,int total) {if(!Follow) Start=Math.Clamp(Start-Math.Max(0,count),0,Math.Max(0,total-1));else Update(total);}
     public void SetPriceRange(double min,double max) {if(double.IsFinite(min)&&double.IsFinite(max)&&max>min) {low=min;high=max;Auto=false;}}
     public (double Low,double High) PriceRange(IReadOnlyList<ChartBar> visible)
     {

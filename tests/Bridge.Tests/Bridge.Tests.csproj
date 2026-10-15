@@ -10,5 +10,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <Reference Include="System.Web.Extensions" />
     <Compile Include="../../nt8/AddOns/BookDepthIQBridge.cs" Link="BookDepthIQBridge.cs" />
+    <Compile Include="../../nt8/AddOns/BookDepthIQChartBridge.cs" Link="BookDepthIQChartBridge.cs" />
   </ItemGroup>
 </Project>

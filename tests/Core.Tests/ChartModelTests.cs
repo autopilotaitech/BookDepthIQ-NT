@@ -33,4 +33,9 @@ public class ChartModelTests
         var span=v.PriceRange(new[]{Bar(1) with {Open=-10,High=-10,Low=-10,Close=-10}});
         Assert.True(span.High-span.Low>=4);
     }
+    [Fact] public void Manual_view_remains_on_same_bar_when_old_history_is_evicted()
+    {
+        var v=new ChartViewport();v.Reset(500);v.Pan(-100,500);var prior=v.Start;
+        v.Evicted(10,500);Assert.Equal(prior-10,v.Start);Assert.False(v.Follow);
+    }
 }

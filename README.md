@@ -41,6 +41,10 @@ the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.10.md) passes.
 
 ### New in 1.12.13 — hide the no-chase guide
 
+> Development branch `codex/two-chart-workspace` adds optional native two-chart overviews.
+> This is not a replacement for the published release above. See the
+> [chart development build notes](docs/CHART-WORKSPACE.md) for controls, installation and verification limits.
+
 The yellow NO CHASE line and label are **OFF by default**, including when loading older settings.
 ST1/ST2 lines remain unchanged. An optional **Settings › Indicators › Chart lines › Show no-chase
 level** switch can restore it (SuperTrend lines must also be enabled).

@@ -6,7 +6,7 @@ public sealed class ChartStore
     readonly SortedDictionary<int,ChartBar> bars=new();
     readonly int capacity;
     long generation;
-    public ChartStore(int capacity) {this.capacity=Math.Clamp(capacity,250,10000);}
+    public ChartStore(int capacity,int limit=10000) {this.capacity=Math.Clamp(capacity,250,Math.Clamp(limit,10000,75000));}
     public void Reset(long value) {generation=value; bars.Clear();}
     public bool Apply(long value,ChartBar bar)
     {

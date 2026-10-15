@@ -14,7 +14,7 @@ namespace System.Windows
         public void Drain() {while(queue.Count>0) queue.Dequeue()();}
     }
 }
-namespace NinjaTrader.Core { public static class Globals { public static DateTime MaxDate = DateTime.MaxValue; } }
+namespace NinjaTrader.Core { public static class Globals { public static DateTime MaxDate = DateTime.MaxValue; public static GeneralOptions GeneralOptions=new GeneralOptions(); } public class GeneralOptions {public TimeZoneInfo TimeZoneInfo=TimeZoneInfo.Utc;} }
 namespace NinjaTrader.NinjaScript
 {
     public enum State { SetDefaults, Active, Configure, Terminated }
@@ -123,12 +123,24 @@ namespace NinjaTrader.Data
     public enum MarketDataType { Bid, Ask, Last }
     public class MarketDataEventArgs : EventArgs { public Instrument Instrument; public MarketDataType MarketDataType; public double Price; public long Volume; public DateTime Time; }
     public class MarketData { public MarketData(Instrument i) {} public event EventHandler<MarketDataEventArgs> Update { add {} remove {} } }
-    public enum BarsPeriodType { Tick }
+    public enum BarsPeriodType { Tick,Minute,Second,Day }
     public class BarsPeriod { public BarsPeriodType BarsPeriodType; public int Value; }
-    public class Bars { public int Count=>0; public double GetClose(int i)=>0; public double GetAsk(int i)=>0; public double GetBid(int i)=>0; public long GetVolume(int i)=>0; public DateTime GetTime(int i)=>DateTime.UtcNow; }
+    public class Bars
+    {
+        public class Row {public DateTime Time;public double Open,High,Low,Close;public long Volume;}
+        public List<Row> Rows=new List<Row>();public int Count=>Rows.Count;
+        public double GetOpen(int i)=>Rows[i].Open;public double GetHigh(int i)=>Rows[i].High;public double GetLow(int i)=>Rows[i].Low;public double GetClose(int i)=>Rows[i].Close;
+        public double GetAsk(int i)=>0;public double GetBid(int i)=>0;public long GetVolume(int i)=>Rows[i].Volume;public DateTime GetTime(int i)=>Rows[i].Time;
+    }
+    public class BarsUpdateEventArgs : EventArgs {public int MinIndex,MaxIndex;}
     public class BarsRequest
     {
-        public BarsRequest(Instrument i,DateTime from,DateTime to) {} public BarsPeriod BarsPeriod; public object TradingHours; public Bars Bars;
+        [ThreadStatic] public static Bars NextBars;
+        [ThreadStatic] public static BarsRequest LastCreated;
+        public BarsRequest(Instrument i,DateTime from,DateTime to) {} public BarsRequest(Instrument i,int count) {Bars=NextBars??new Bars();NextBars=null;LastCreated=this;} public BarsPeriod BarsPeriod; public object TradingHours; public Bars Bars;
+        public event EventHandler<BarsUpdateEventArgs> Update;
+        public void Raise(int min,int max)=>Update?.Invoke(this,new BarsUpdateEventArgs {MinIndex=min,MaxIndex=max});
+        public void Dispose() {}
         public void Request(Action<BarsRequest,ErrorCode,string> callback) { callback(this,ErrorCode.NoError,""); }
     }
 }

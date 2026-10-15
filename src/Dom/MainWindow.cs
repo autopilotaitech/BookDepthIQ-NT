@@ -117,7 +117,7 @@ public sealed partial class MainWindow : Window
         ladder.PreviewDropped += PreviewDropped;
         ladder.Hint += t => Notice(t);
 
-        Content = Build();
+        Content = WrapCharts(Build());
         LoadFields();
         bridge.Connected += () =>
         {
@@ -208,6 +208,7 @@ public sealed partial class MainWindow : Window
         reads.Children.Add(trendPill);
         reads.Children.Add(statePill);
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        right.Children.Add(Flight.HeadBtn("CHARTS", () => chartWorkspace?.SetEnabled(!cfg.Charts.Enabled), "show/hide charts; drag divider to resize; requires at least 1390px workspace width"));
         right.Children.Add(Flight.HeadBtn("SETTINGS", () => new SettingsWindow(cfg, OnSettingsSaved).Show(this), "account rules, protect my day, indicators, SuperTrend, ladder columns, fees"));
         right.Children.Add(new Border { Width = 10 });
         right.Children.Add(Flight.HeadBtn("KILL ⏻", Kill, "closes every position and cancels every order on this account (Ctrl+K). Never blocked.", danger: true));
@@ -556,6 +557,7 @@ public sealed partial class MainWindow : Window
 
     private void OnSettingsSaved()
     {
+        RefreshCharts();
         dd = NewTracker();
         s.ResetAnalytics();
         bridge.Send(Protocol.History(s.Instrument, cfg.EffectiveHistoryHours));
@@ -568,6 +570,7 @@ public sealed partial class MainWindow : Window
         if (name.Length == 0) return;
         cfg.Instrument = name;
         cfg.Save();
+        RefreshCharts();
         bridge.Send(Protocol.Subscribe(name));
         bridge.Send(Protocol.History(name, cfg.EffectiveHistoryHours));
         ClearManagement();

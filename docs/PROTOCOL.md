@@ -3,6 +3,31 @@
 TCP `127.0.0.1:36971`, one JSON object per line (UTF-8, `\n`). The bridge AddOn listens; the DOM app
 connects. Loopback only: the bridge never listens on another interface.
 
+## Independent chart channel (development v1)
+
+Chart AddOn listens separately on `127.0.0.1:36972`. Order protocol v2 above is unchanged.
+Chart commands are read-only; there are no account/order commands on this channel.
+
+| Direction / `t` | Fields |
+|---|---|
+| server `hello` | `chartVersion:1`, `timezone` (NT application timezone ID) |
+| client `subscribe` | `slot` (0/1 candles,2 internal OR), `generation`, `instrument`, `frame`, `count` |
+| client `unsubscribe` | `slot` |
+| server `bars` | slot/generation/instrument/frame, `tickSize`, `bars` (at most256 records) |
+| server `complete` | slot/generation; initial snapshot finished |
+| server `last` | slot/generation, integer-tick `price`, `volume`, UTC `ms`, monotonic local `received`, `sequence` |
+| server `error` | slot/generation, `message` |
+
+Frame is minutes1/3/5/15/30/60/240/1440; internal slot2 uses `-30` for native Second30 bars.
+Each bar has `index`, UTC `ms`, native `date` (`yyyy-MM-dd`), integer-tick `open/high/low/close`,
+native `volume`, monotonic request-local `revision`, and `forming`. Last native bar is conservatively
+marked forming. Daily date remains separate from UTC display time; daily bars may use settlement.
+Reconnect/reload/context changes create fresh generations; packets from old generations are rejected.
+Native bars are authoritative. Raw Last changes current-price display, never native candle volume.
+Server outbox is bounded4096 objects; overflow closes the chart socket, forcing authoritative history
+on reconnect instead of trusting a silently incomplete stream. It never closes the order socket.
+See [development verification limits](CHART-WORKSPACE.md) before assuming native parity or latency.
+
 ## Bridge → app
 
 | `t` | Fields | When |
