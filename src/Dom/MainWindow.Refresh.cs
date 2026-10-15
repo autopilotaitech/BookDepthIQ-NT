@@ -305,24 +305,9 @@ public sealed partial class MainWindow
     {
         lastLogCount = s.OrderLog.Entries.Count;
         lastJournalCount = s.Journal.Count;
-        sideTitle.Text = cfg.ShowLog ? "LOG" : cfg.ShowJournal ? "JOURNAL" : cfg.TapeMinSize > 1 ? $"TAPE ≥{cfg.TapeMinSize}" : "TAPE";
+        sideTitle.Text = cfg.ShowLog ? "LOG" : cfg.TapeMinSize > 1 ? $"TAPE ≥{cfg.TapeMinSize}" : "TAPE";
         logButtons.IsVisible = cfg.ShowLog;
         if (cfg.ShowLog) { if (side.Content != logView) side.Content = logView; }
-        else if (cfg.ShowJournal)
-        {
-            var st = Journal.Stats(s.Journal);
-            journalSum.Text = $"{st.N} trades · {Pct(st.WinRate)} won · {LadderControl.Usd(st.TotalUsd)} net · avg {(st.AvgR is double r ? $"{r:+0.00;-0.00}R" : "—")} · fees ${st.FeesUsd:N2}" +
-                              $"{(st.AvgSlipTicks is double sl ? $" · slip avg {sl:+0.0;-0.0}t" : "")}" + Environment.NewLine + string.Join("  ", st.BySetup.Select(x => $"{x.Setup} {x.N}: {LadderControl.Usd(x.TotalUsd)}"));
-            journalList.Children.Clear();
-            journalList.Children.Add(Ui.Pad(journalSum, 4));
-            journalList.Children.Add(Ui.Row(Ui.Btn("copy CSV", async () => { if (Clipboard is { } cb) await cb.SetTextAsync(Journal.Csv(s.Journal)); Notice("journal CSV copied"); }),
-                Ui.Btn("clear", () => { s.Journal.Clear(); s.SaveJournal(); RefreshSide(); })));
-            foreach (var t in Enumerable.Reverse(s.Journal).Take(80))
-                journalList.Children.Add(Ui.Label($"{DateTimeOffset.FromUnixTimeMilliseconds(t.Close).LocalDateTime:HH:mm} {CmeSpecs.RootOf(t.Inst),-4} {(t.Long ? "L" : "S")} {t.Qty,2} {(t.R is double rr ? $"{rr:+0.0;-0.0}R" : "  — "),6} {LadderControl.Usd(t.Pnl),10} {t.Setup}",
-                    t.Pnl >= 0 ? Pal.Pos : Pal.Neg, size: 11));
-            journalScroll ??= new ScrollViewer { Content = journalList };
-            if (side.Content != journalScroll) side.Content = journalScroll;
-        }
         else if (side.Content != tapeView) side.Content = tapeView;
     }
 }

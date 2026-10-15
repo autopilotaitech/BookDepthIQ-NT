@@ -176,6 +176,7 @@ public sealed class Settings
         catch { s = new(); }
         Pal.Apply(s.Colors);
         s.MigrateIndicators();
+        s.ShowJournal = false; // legacy embedded journal was replaced by the dedicated window
         return s;
     }
 

@@ -53,9 +53,7 @@ public sealed partial class MainWindow : Window
     private ScrollViewer ticketPanel = null!;
     private Control bracketPad = null!;
     private Control roomTile = null!;
-    private readonly StackPanel journalList = new();
     private readonly ContentControl side = new();
-    private ScrollViewer? journalScroll;
     private JournalWindow? journalWindow;
     private void OpenJournal()
     {
@@ -64,7 +62,6 @@ public sealed partial class MainWindow : Window
         journalWindow.Closed += (_, _) => journalWindow = null;
         journalWindow.Show(this);
     }
-    private readonly TextBlock journalSum = Ui.Label("", Pal.Text, size: 11.5, wrap: true);
 
     // ticket
     private readonly Seg sizeMode = new(new[] { "CONTRACTS", "$ RISK", "% ROOM" }, "how size is set: a fixed number of contracts, $ lost at the stop (fees in), or % of the room left to your fail floor");
@@ -269,6 +266,7 @@ public sealed partial class MainWindow : Window
         logButtons.Children.Add(Chip("CLEAR", () => { s.OrderLog.Clear(); logView.InvalidateVisual(); }, "clear the order log"));
         logButtons.Children.Add(new Border { Width = 1, Height = 14, Background = Pal.B(Pal.Edge), Margin = new Thickness(8, 0, 4, 0) });
         toggles.Children.Add(logButtons);
+        toggles.Children.Add(Chip("TAPE", () => { cfg.ShowLog = false; cfg.ShowJournal = false; cfg.Save(); RefreshSide(); }, "show live time and sales", () => !cfg.ShowLog));
         toggles.Children.Add(Chip("JOURNAL", OpenJournal, "open the calendar, trade timeline and performance analytics", () => journalWindow != null));
         toggles.Children.Add(Chip("LOG", () => { cfg.ShowLog = !cfg.ShowLog; cfg.ShowJournal = false; cfg.Save(); RefreshSide(); }, "order log: every click, NinjaTrader's answer, rejections and fills (click again for the tape)", () => cfg.ShowLog));
         toggles.Children.Add(new Border { Width = 1, Height = 14, Background = Pal.B(Pal.Edge), Margin = new Thickness(8, 0, 4, 0) });
