@@ -346,6 +346,8 @@ public sealed class LadderControl : Control
             }
         }
 
+        DrawHeatEdge(ctx, top, rows, g);
+
         // Off-screen markers: right-aligned in the Δ column (the far right), top for above, bottom for
         // below, nearest first — never over BUY or the heatmap. On-screen tags that would land inside a
         // pin stack step left of it.
@@ -393,6 +395,29 @@ public sealed class LadderControl : Control
             var (alpha, wall) = HeatShade.Shade(v, scale, cfg.HeatContrast);
             var c = wall ? Pal.HeatHot : v > 0 ? Pal.HeatBid : Pal.HeatAsk;
             ctx.FillRectangle(Pal.B(c, alpha), new Rect(x + 1 + i * cellW, y + 1, Math.Max(1, cellW - 0.5), RowH - 3));
+        }
+    }
+
+    /// <summary>The thin silver line through HEAT where the best bid / ask sat in each slice (HeatShade.Boundary): a
+    /// step per slice, joined by a vertical where it moved.</summary>
+    private void DrawHeatEdge(DrawingContext ctx, long top, int rows, int g)
+    {
+        if (!cfg.Columns.Heat || ColRect(Col.Heat) is not (double x, double cw)) return;
+        var heat = new List<double[]>(rows);
+        for (var r = 0; r < rows; r++) heat.Add(s.Liquidity.Heat(top - r * g, g));
+        var edge = HeatShade.Boundary(heat);
+        if (edge.Length == 0) return;
+        var cellW = Math.Max(0, cw) / edge.Length;
+        var pen = new Pen(Pal.B(Pal.HeatEdge, 0.7), 1.2);
+        double? prevY = null;
+        for (var i = 0; i < edge.Length; i++)
+        {
+            if (edge[i] is not double e) { prevY = null; continue; }
+            var yy = Math.Round(RowH + e * RowH) - 0.5;
+            double x0 = x + 1 + i * cellW, x1 = x + 1 + (i + 1) * cellW;
+            if (prevY is double py && Math.Abs(py - yy) > 0.1) ctx.DrawLine(pen, new Point(x0, py), new Point(x0, yy));
+            ctx.DrawLine(pen, new Point(x0, yy), new Point(x1, yy));
+            prevY = yy;
         }
     }
 

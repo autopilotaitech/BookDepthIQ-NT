@@ -70,6 +70,7 @@ public static class Pal
         new("heatBid", "Profile · Δ · heat", "Heat bid size", Color.Parse("#22d3ee")),
         new("heatAsk", "Profile · Δ · heat", "Heat offer size", Color.Parse("#fb923c")),
         new("heatHot", "Profile · Δ · heat", "Heat outsized level", Color.Parse("#fbbf24")),
+        new("heatEdge", "Profile · Δ · heat", "Heat bid/ask line", Color.Parse("#c0c7d2"), "where the best bid / ask sat over time"),
 
         new("buyBtn", "Buttons", "BUY MKT", Color.Parse("#0e3a44")),
         new("sellBtn", "Buttons", "SELL MKT", Color.Parse("#44250e")),
@@ -219,6 +220,7 @@ public static class Pal
     public static Color HeatBid => Get("heatBid");
     public static Color HeatAsk => Get("heatAsk");
     public static Color HeatHot => Get("heatHot");
+    public static Color HeatEdge => Get("heatEdge");
     public static Color BuyBtn => Get("buyBtn");
     public static Color SellBtn => Get("sellBtn");
     public static Color FlatBtn => Get("flatBtn");

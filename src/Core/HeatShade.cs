@@ -36,4 +36,39 @@ public static class HeatShade
         var gamma = Gammas[Math.Clamp(contrast, 0, Gammas.Length - 1)];
         return (Floor + (Ceiling - Floor) * Math.Pow(n, gamma), a >= WallMultiple * s.Typical);
     }
+
+    /// <summary>
+    /// Where the best bid/ask sat in each heat time slice (owner, 2026-10-14: a thin silver line so buy and sell
+    /// sides are easy to tell apart once ordinary levels fade). <paramref name="rows"/> are the screen rows top
+    /// (highest price) to bottom, each the row's heat per slice (+ bid, − offer). Returns, per slice, the edge
+    /// between rows (0 = top of row 0 … rows = bottom of the last) that best separates the offers above from the
+    /// bids below — the split that leaves the least size on the wrong side, the middle of ties — or null when the
+    /// slice does not show both sides.
+    /// </summary>
+    public static double?[] Boundary(IReadOnlyList<double[]> rows)
+    {
+        var slices = rows.Count == 0 ? 0 : rows.Max(r => r.Length);
+        var res = new double?[slices];
+        for (var i = 0; i < slices; i++)
+        {
+            double V(int r) => i < rows[r].Length ? rows[r][i] : 0;
+            bool anyBid = false, anyAsk = false;
+            for (var r = 0; r < rows.Count; r++) { if (V(r) > 0) anyBid = true; else if (V(r) < 0) anyAsk = true; }
+            if (!anyBid || !anyAsk) continue;
+            // wrong(e) = bid size above edge e + offer size below it; start with e = 0 (everything below).
+            double wrong = 0;
+            for (var r = 0; r < rows.Count; r++) if (V(r) < 0) wrong += -V(r);
+            double best = wrong;
+            int first = 0, last = 0;
+            for (var e = 1; e <= rows.Count; e++)
+            {
+                var v = V(e - 1);
+                if (v > 0) wrong += v; else if (v < 0) wrong -= -v;
+                if (wrong < best - 1e-9) { best = wrong; first = last = e; }
+                else if (Math.Abs(wrong - best) <= 1e-9) last = e;
+            }
+            res[i] = (first + last) / 2.0;
+        }
+        return res;
+    }
 }

@@ -30,10 +30,16 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.5](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.5).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.5/BookDepthIQ-DOM-1.12.5-win-x64.zip).
+**Current release: [1.12.6](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.6).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.6/BookDepthIQ-DOM-1.12.6-win-x64.zip).
 Upgrading from 1.10.6 or earlier requires replacing **both the DOM and the NinjaTrader bridge** and
 compiling the bridge with F5. This includes the prop-account discovery fix.
+
+### New in 1.12.6
+
+A thin silver line runs through the HEAT column where the best bid / ask sat in each time slice, so the
+bid side (below) and the offer side (above) are easy to tell apart now that ordinary levels fade. It steps
+with the market; its colour is **Settings › Colours › Heat bid/ask line**. DOM only; bridge unchanged.
 
 ### New in 1.12.5
 
@@ -279,10 +285,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.5
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.6
 ```
 
-This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.5-win-x64.zip` (~37 MB), which holds:
+This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.6-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
