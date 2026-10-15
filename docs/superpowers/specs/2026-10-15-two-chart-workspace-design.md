@@ -1,8 +1,10 @@
 # Two-chart workspace — design for review
 
 Status: research and design only. Application implementation has not started. No release change.
-Owner approved the concept, native theme, and disabling PAX on 1h/4h/Day; this written design is the
-next review gate before the detailed implementation plan and application changes.
+Owner approved the concept, native theme, candle styling, PAX disabled on 1h/4h/Day, and LEFT stacked
+charts / RIGHT existing DOM at roughly one-third/two-thirds with a draggable, persisted splitter.
+The DOM is the main feature and must not be redesigned or simplified. This remains a design document,
+not a claim of implemented application behavior.
 
 ## 1. Outcome and hard boundaries
 
@@ -25,15 +27,22 @@ frames; calculation must not sample away the high/low/volume/path information ne
 ## 2. Theme and workspace
 
 - Keep existing Pal surfaces/text/market tokens and Flight.Sans/Pal.Mono typography. No new theme.
-- One application header and telemetry strip across the workspace. A compact CHARTS toggle in the
-  main header shows/hides the chart column. Hiding returns all of its width to the existing ladder.
+- Keep the ENTIRE existing DOM workspace on the RIGHT: header, telemetry/account/position strips,
+  heatmap, ladder columns, profile, tape, Outlook, ticket and trading buttons in their existing layout.
+  Its header and strips remain above the DOM, not stretched across the left charts. Wrap that existing
+  workspace with a left chart column and draggable vertical splitter; do not rebuild or simplify it.
+  A compact CHARTS toggle shows/hides the chart column, returning its width to the DOM when hidden.
 - Charts are OFF by default for existing installations; opening them is deliberate. Default choices
   when enabled: top3m, bottom15m. Remember the enabled state, individual chart visibility, width,
   divider ratio, timeframe, PAX preference, volume preference and viewport preferences.
-- Chart column starts at420 DIP; draggable range320–800 DIP, constrained by current window space.
+- Initial allocation: LEFT charts32%, RIGHT existing DOM68%, approximating the owner's screenshot.
+  Persist the proportional split, not a fixed chart width. Dragging the main vertical splitter resizes
+  both regions using the existing DOM splitter interaction style. Window resizing preserves the chosen
+  ratio where possible, clamping to readable minimums without overwriting the saved ratio.
   Vertical divider ratio starts0.5, clamped0.2–0.8. One hidden chart lets the other fill the column.
   Hiding both collapses the column; CHARTS restores the last nonempty configuration.
-- Preserve ladder minimum760 DIP and side minimum300 DIP while charts are visible. Below available
+- Preserve chart-column minimum320 DIP, ladder minimum760 DIP and side minimum300 DIP while charts
+  are visible. Keep the existing tape/DOM splitter independent of the new chart/DOM splitter. Below available
   width1390 DIP, temporarily collapse charts and explain via CHARTS tooltip; do not overwrite the
   saved preference or squeeze the ladder into unreadable columns. Reopen when sufficient width returns.
 - Per-chart header: instrument, timeframe, Follow/Live, Auto scale and overflow menu. Local overflow
@@ -43,6 +52,8 @@ frames; calculation must not sample away the high/low/volume/path information ne
   intraday-only support. No warning paragraph floating over candles.
 - Current-price axis tag, restrained grid and crosshair OHLC/time readout. Optional volume OFF by
   default; volume and indicators must not force a second permanent chart-status row.
+- The earlier interactive preview's candle styling is approved; its simplified DOM and full-width
+  header are superseded by the preservation requirements above. It is not the exact application layout.
 
 ## 3. Timeframes and navigation
 
