@@ -27,7 +27,7 @@ Copy-Item (Join-Path $root "DISCLAIMER.md") "$stage\DISCLAIMER.txt"
 BookDepthIQ DOM $Version - install
 ====================================
 
-1. NinjaTrader AddOn (replace when upgrading to 1.12.9)
+1. NinjaTrader AddOn (replace when upgrading to $Version)
    - Close NinjaTrader.
    - Copy NinjaTrader\BookDepthIQBridge.cs into
        Documents\NinjaTrader 8\bin\Custom\AddOns\

@@ -68,6 +68,7 @@ public class BridgeOrderTests : IDisposable
         Command("{\"t\":\"order\",\"cid\":\"1\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":4,\"targets\":[[32,2],[64,2]],\"sl\":16}");
         account.Fill(Entry,4,30000);
         Command("{\"t\":\"closePart\",\"cid\":\"2\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"qty\":2}");
+        account.Fill(account.Orders.Single(o=>o.Name=="BDIQ close"),2,30000);
         Assert.Equal(2,Legs.Where(o=>o.OrderType==OrderType.StopMarket).Sum(o=>o.Quantity));
         Assert.DoesNotContain(Legs,o=>o.Name=="BDIQ TP2"); Assert.Contains(Legs,o=>o.Name=="BDIQ TP1");
     }
@@ -90,5 +91,189 @@ public class BridgeOrderTests : IDisposable
         account.Fill(Entry,1,30000);
         Assert.Equal(stops,Legs.Count(o=>o.OrderType==OrderType.StopMarket)); Assert.Equal(limits,Legs.Count(o=>o.OrderType==OrderType.Limit));
     }
-    public void Dispose() { Call("SelectAccount",""); Account.All.Clear(); }
+    [Fact]
+    public void Native_tp_fill_to_flat_cancels_its_stop_and_creates_no_new_orders()
+    {
+        Command("{\"t\":\"order\",\"cid\":\"open\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":2,\"targets\":[[32,2]],\"sl\":16}");
+        account.Fill(Entry,2,30000);
+        var tp=Legs.Single(o=>o.Name=="BDIQ TP1"); var stop=Legs.Single(o=>o.Name=="BDIQ SL1");
+        var before=account.Orders.Count;
+        account.Fill(tp,2,30008);
+        Assert.Equal(0,account.Positions.Single().Quantity);
+        Assert.Equal(OrderState.Cancelled,stop.OrderState);
+        Assert.Equal(before,account.Orders.Count);
+        Assert.DoesNotContain(account.Orders,Account.Working);
+    }
+
+    [Fact]
+    public void Long_ten_ladder_sell_four_does_not_create_short_side_brackets()
+    {
+        OpenLongAndReduceFour();
+        Assert.Equal(6,account.Positions.Single().Quantity);
+        Assert.Equal(MarketPosition.Long,account.Positions.Single().MarketPosition);
+        Assert.DoesNotContain(account.Orders,o=>o.Name.StartsWith("BDIQ SL") && o.OrderAction==OrderAction.BuyToCover);
+        Assert.DoesNotContain(account.Orders,o=>o.Name.StartsWith("BDIQ TP") && o.OrderAction==OrderAction.BuyToCover);
+    }
+
+    [Fact]
+    public void Long_ten_ladder_sell_four_leaves_exactly_six_contracts_of_long_protection()
+    {
+        OpenLongAndReduceFour();
+        Assert.Equal(6,account.Orders.Where(o=>Account.Working(o) && o.Name.StartsWith("BDIQ SL") && o.OrderAction==OrderAction.Sell)
+            .Sum(o=>o.Quantity-o.Filled));
+    }
+
+    void OpenLongAndReduceFour()
+    {
+        Command("{\"t\":\"order\",\"cid\":\"open\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":10,\"targets\":[[32,10]],\"sl\":16}");
+        account.Fill(Entry,10,30000);
+        Command("{\"t\":\"order\",\"cid\":\"reduce\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"sell\",\"type\":\"limit\",\"price\":30002,\"qty\":4,\"targets\":[[32,4]],\"sl\":16}");
+        account.Fill(account.Orders.Last(o=>o.Name=="BDIQ entry"),4,30002);
+    }
+
+    [Theory]
+    [InlineData("buy","sell",MarketPosition.Long)]
+    [InlineData("sell","buy",MarketPosition.Short)]
+    public void Reducing_limit_partial_fills_keep_only_remaining_position_protected(string opening,string closing,MarketPosition side)
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\""+opening+"\",\"type\":\"market\",\"qty\":10,\"targets\":[[32,10]],\"sl\":16}");
+        account.Fill(Entry,10,30000);
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\""+closing+"\",\"type\":\"limit\",\"price\":30002,\"qty\":10,\"targets\":[[32,10]],\"sl\":16}");
+        var reduce=account.Orders.Last(o=>o.Name=="BDIQ entry");
+        foreach(var qty in new[]{4,2,3,1})
+        {
+            account.Fill(reduce,qty,30002);
+            var remaining=account.Positions.Single().Quantity;
+            Assert.Equal(remaining,account.Orders.Where(o=>Account.Working(o) && o.Name.StartsWith("BDIQ SL")).Sum(o=>o.Quantity-o.Filled));
+            Assert.DoesNotContain(account.Orders,o=>o.Name.StartsWith("BDIQ SL") && (side==MarketPosition.Long?o.OrderAction==OrderAction.BuyToCover:o.OrderAction==OrderAction.Sell));
+        }
+        Assert.DoesNotContain(account.Orders,Account.Working);
+    }
+
+    [Fact]
+    public void Queued_opening_brackets_are_not_submitted_after_position_already_flat()
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":2,\"targets\":[[32,2]],\"sl\":16}");
+        var app=new System.Windows.Application(); app.Dispatcher.Deferred=true;
+        System.Windows.Application.Current=app;
+        try
+        {
+            account.Fill(Entry,2,30000); account.Flatten(new[]{instrument});
+            app.Dispatcher.Drain();
+            Assert.DoesNotContain(account.Orders,o=>o.Name.StartsWith("BDIQ SL"));
+            Assert.DoesNotContain(account.Orders,o=>o.Name.StartsWith("BDIQ TP"));
+        }
+        finally {System.Windows.Application.Current=null;}
+    }
+
+    [Fact]
+    public void Close_half_does_not_remove_protection_before_the_close_fills()
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":4,\"targets\":[[32,4]],\"sl\":16}");
+        account.Fill(Entry,4,30000);
+        Command("{\"t\":\"closePart\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"qty\":2}");
+        Assert.Equal(4,Legs.Where(o=>o.OrderType==OrderType.StopMarket).Sum(o=>o.Quantity-o.Filled));
+    }
+
+    [Fact]
+    public void Stale_reduce_only_command_cannot_open_from_flat()
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"sell\",\"type\":\"limit\",\"price\":30002,\"qty\":4,\"reduceOnly\":true,\"targets\":[[32,4]],\"sl\":16}");
+        Assert.Empty(account.Orders);
+    }
+
+    [Fact]
+    public void Pending_reduction_shrinks_when_a_target_fills_first()
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":4,\"targets\":[[32,2],[64,2]],\"sl\":16}");
+        account.Fill(Entry,4,30000);
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"sell\",\"type\":\"limit\",\"price\":30002,\"qty\":4,\"reduceOnly\":true}");
+        var reduce=account.Orders.Last(o=>o.Name=="BDIQ entry");
+        account.Fill(Legs.Single(o=>o.Name=="BDIQ TP1"),2,30008);
+        Assert.Equal(2,reduce.Quantity-reduce.Filled);
+        account.Fill(reduce,2,30002);
+        Assert.Equal(MarketPosition.Flat,account.Positions.Single().MarketPosition);
+        Assert.DoesNotContain(account.Orders,Account.Working);
+    }
+
+    [Fact]
+    public void Queued_old_brackets_do_not_attach_to_a_reopened_position()
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":2,\"targets\":[[32,2]],\"sl\":16}");
+        var app=new System.Windows.Application(); app.Dispatcher.Deferred=true; System.Windows.Application.Current=app;
+        account.Fill(Entry,2,30000); account.Flatten(new[]{instrument});
+        var reopen=account.CreateOrder(instrument,OrderAction.Buy,OrderType.Market,OrderEntry.Manual,TimeInForce.Gtc,2,0,0,"","manual",DateTime.MaxValue,null);
+        account.Submit(new[]{reopen}); account.Fill(reopen,2,30100);
+        app.Dispatcher.Drain();
+        Assert.DoesNotContain(account.Orders,o=>o.Name.StartsWith("BDIQ SL") || o.Name.StartsWith("BDIQ TP"));
+    }
+
+    [Fact]
+    public void New_fill_protection_is_retained_until_old_quantity_change_confirms()
+    {
+        OpenLongAndReduceFour();
+        // OpenLongAndReduceFour has already reconciled to six; defer a further reduction's changes.
+        account.DeferChanges=true;
+        Command("{\"t\":\"closePart\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"qty\":2}");
+        account.Fill(account.Orders.Last(o=>o.Name=="BDIQ close"),2,30002);
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":2,\"targets\":[[32,2]],\"sl\":16}");
+        account.Fill(account.Orders.Last(o=>o.Name=="BDIQ entry"),2,30100);
+        account.ConfirmChanges();
+        Assert.Equal(6,Legs.Where(o=>o.Name.StartsWith("BDIQ SL")).Sum(o=>o.Quantity-o.Filled));
+        Assert.Contains(Legs,o=>o.Name.StartsWith("BDIQ SL") && o.StopPrice==30096);
+    }
+
+    [Fact]
+    public void Nonselected_account_remains_watched_during_queued_bracket_submission()
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":2,\"targets\":[[32,2]],\"sl\":16}");
+        Account.All.Add(new Account {Name="Sim102"}); Call("SelectAccount","Sim102");
+        var app=new System.Windows.Application(); app.Dispatcher.Deferred=true; System.Windows.Application.Current=app;
+        account.Fill(Entry,2,30000); app.Dispatcher.Drain();
+        var manual=account.CreateOrder(instrument,OrderAction.Sell,OrderType.Market,OrderEntry.Manual,TimeInForce.Gtc,2,0,0,"","manual",DateTime.MaxValue,null);
+        account.Submit(new[]{manual}); account.Fill(manual,2,30001); app.Dispatcher.Drain();
+        Assert.DoesNotContain(account.Orders,Account.Working);
+    }
+
+    [Fact]
+    public void New_position_protection_waits_for_old_cancel_confirmation_without_being_lost()
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":2,\"targets\":[[32,2]],\"sl\":16}");
+        account.Fill(Entry,2,30000); account.DeferCancels=true; account.Flatten(new[]{instrument});
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":2,\"targets\":[[32,2]],\"sl\":16}");
+        account.Fill(account.Orders.Last(o=>o.Name=="BDIQ entry"),2,30100);
+        account.ConfirmCancels();
+        Assert.Equal(2,Legs.Where(o=>o.Name.StartsWith("BDIQ SL")).Sum(o=>o.Quantity-o.Filled));
+        Assert.All(Legs.Where(o=>o.Name.StartsWith("BDIQ SL")),o=>Assert.Equal(30096,o.StopPrice));
+    }
+
+    [Theory]
+    [InlineData("BDIQ TP1")] [InlineData("BDIQ SL1")]
+    public void Partially_filled_protective_leg_shrinks_its_oco_sibling(string leg)
+    {
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":4,\"targets\":[[32,4]],\"sl\":16}");
+        account.Fill(Entry,4,30000);
+        account.Fill(Legs.Single(o=>o.Name==leg),1,30000);
+        Assert.Equal(3,Legs.Where(o=>o.Name.StartsWith("BDIQ SL")).Sum(o=>o.Quantity-o.Filled));
+        Assert.Equal(3,Legs.Where(o=>o.Name.StartsWith("BDIQ TP")).Sum(o=>o.Quantity-o.Filled));
+    }
+
+    [Theory]
+    [InlineData("[[32,1],[64,2]]")] [InlineData("[[32,3]]")]
+    public void Partially_submitted_batch_resumes_without_losing_slices_or_sharing_oco_fragments(string targets)
+    {
+        OpenLongAndReduceFour(); account.DeferChanges=true;
+        Command("{\"t\":\"closePart\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"qty\":2}");
+        account.Fill(account.Orders.Last(o=>o.Name=="BDIQ close"),2,30002);
+        Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\"buy\",\"type\":\"market\",\"qty\":3,\"targets\":"+targets+",\"sl\":16}");
+        account.Fill(account.Orders.Last(o=>o.Name=="BDIQ entry"),3,30100);
+        account.ConfirmChanges();
+        Assert.Equal(7,Legs.Where(o=>o.Name.StartsWith("BDIQ SL")).Sum(o=>o.Quantity-o.Filled));
+        Assert.All(Legs.GroupBy(o=>o.Oco),g=>Assert.Equal(2,g.Count()));
+        Command("{\"t\":\"closePart\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"qty\":2}");
+        account.Fill(account.Orders.Last(o=>o.Name=="BDIQ close"),2,30100);
+        Assert.Equal(5,Legs.Where(o=>o.Name.StartsWith("BDIQ SL")).Sum(o=>o.Quantity-o.Filled));
+    }
+
+    public void Dispose() { Call("SelectAccount",""); Account.All.Clear(); System.Windows.Application.Current=null; }
 }

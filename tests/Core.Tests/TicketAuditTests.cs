@@ -47,7 +47,7 @@ sealed class TicketHarness : IDisposable
         State.CommandAcknowledged += (cid,ok)=>Call("OnCommandAcknowledged",cid,ok);
         State.TradingSessionReset += ()=>Call("ClearManagement");
         State.AccountChanged += ()=>Call("ClearManagement");
-        Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":1,\"accounts\":[]}");
+        Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":2,\"accounts\":[]}");
         Message("{\"t\":\"account\",\"name\":\"Sim101\",\"cash\":50000}");
         FlatSnapshot(); EmptyOrders();
     }
@@ -84,6 +84,25 @@ public class TicketAuditTests
     }
 
     [AvaloniaFact]
+    public void Ladder_reduction_has_no_entry_brackets_or_new_management_watch()
+    {
+        using var h=new TicketHarness(); h.Position(4); h.Config.SizeInput=2;
+        h.Config.BeAfterTp1=true; h.Config.Trail=TrailMode.R;
+        h.Call("Place",false,120010L,false);
+        var c=Assert.Single(h.Commands);
+        Assert.True(c.GetProperty("reduceOnly").GetBoolean());
+        Assert.Equal(0,c.GetProperty("sl").GetInt32()); Assert.Equal(0,c.GetProperty("targets").GetArrayLength());
+        Assert.Null(h.Be.Inst); Assert.False(h.Trail.Has(h.State.Instrument));
+    }
+
+    [AvaloniaFact]
+    public void Reduction_is_not_blocked_by_invalid_new_entry_target_split()
+    {
+        using var h=new TicketHarness(); h.Position(4); h.Config.SizeInput=1;
+        h.Call("Market",false); Assert.Single(h.Commands);
+    }
+
+    [AvaloniaFact]
     public void Individual_ladder_cancel_aborts_waiting_reverse()
     {
         using var h=new TicketHarness(); h.Position(4); h.Call("Reverse");
@@ -116,7 +135,7 @@ public class TicketAuditTests
     {
         using var h=new TicketHarness(); h.Position(4); h.Call("Reverse");
         h.State.Connected=false;
-        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":1,\"accounts\":[]}");
+        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":2,\"accounts\":[]}");
         h.Message("{\"t\":\"account\",\"name\":\"Sim101\",\"cash\":50000}");
         h.FlatSnapshot(); h.EmptyOrders(); h.Ack(true); h.Manage(); Assert.Single(h.Commands);
     }
@@ -125,7 +144,7 @@ public class TicketAuditTests
     public void Balance_only_message_is_not_a_complete_trading_snapshot()
     {
         using var h=new TicketHarness();
-        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":1,\"accounts\":[]}");
+        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":2,\"accounts\":[]}");
         h.Message("{\"t\":\"account\",\"name\":\"Sim101\",\"cash\":50000}");
         h.Call("Market",true); Assert.Empty(h.Commands);
         h.FlatSnapshot(); h.EmptyOrders(); h.Call("Market",true); Assert.Single(h.Commands);
@@ -140,17 +159,26 @@ public class TicketAuditTests
     }
 
     [AvaloniaFact]
-    public void Bracket_off_warning_remains_visible_when_ticket_is_hidden()
+    public void Order_buttons_do_not_add_an_extra_bracket_off_warning()
     {
         using var h=new TicketHarness(); h.Config.BracketOn=false; h.Config.ShowTicket=false;
-        foreach(var name in new[]{"riskLine","checkLine","costLine","lockLine","resultBar","protectionLine"}) TicketHarness.Set(h.Window,name,new TextBlock());
+        foreach(var name in new[]{"riskLine","checkLine","costLine","lockLine","resultBar"}) TicketHarness.Set(h.Window,name,new TextBlock());
+        if(typeof(MainWindow).GetField("protectionLine",BindingFlags.NonPublic|BindingFlags.Instance) is {} oldWarning)
+            oldWarning.SetValue(h.Window,new TextBlock());
         TicketHarness.Set(h.Window,"readout",new Dictionary<string,TextBlock>());
         TicketHarness.Set(h.Window,"acctBox",new ComboBox());
         TicketHarness.Set(h.Window,"armBtn",new Avalonia.Controls.Primitives.ToggleButton());
         TicketHarness.Set(h.Window,"bracketBtn",new Avalonia.Controls.Primitives.ToggleButton());
         h.Call("RefreshTicket");
-        var warning=(TextBlock)typeof(MainWindow).GetField("protectionLine",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(h.Window)!;
-        Assert.True(warning.IsVisible); Assert.Contains("OFF",warning.Text); Assert.Contains("no TP/SL",warning.Text);
+        var buttons=(Control)h.Call("BuildButtons")!;
+        var window=new Window {Content=buttons};
+        try
+        {
+            window.Show();
+            Assert.DoesNotContain(Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<TextBlock>(),
+                text=>text.Text?.Contains("new entries have no TP/SL")==true);
+        }
+        finally {window.Close();}
     }
     [AvaloniaFact]
     public void Reverse_waits_for_ack_fresh_flat_and_empty_orders_then_sends_exact_protected_size_once()

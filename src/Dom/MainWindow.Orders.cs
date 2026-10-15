@@ -143,12 +143,21 @@ public sealed partial class MainWindow
 
     // ───────────── entries ─────────────
 
+    private bool Reducing(bool buy) => (s.PosQty>0 && !buy) || (s.PosQty<0 && buy);
+    private string? ReductionNotReady(int qty)
+    {
+        if(!s.Connected || !s.HasTradingSnapshot) return "waiting for NinjaTrader position and order snapshots";
+        if(s.BridgeOrderVersion<Protocol.OrderVersion) return "update and compile the bridge before submitting reductions";
+        if(qty<=0 || qty>Math.Abs(s.PosQty)) return "exit size must be between 1 and the remaining position; use REVERSE to change direction";
+        return null;
+    }
+
     private void Market(bool buy)
     {
         if(reverseIntent!=null) { Refuse("REVERSE is waiting for flat — cancel or flatten to abort"); return; }
         var tk = Ticket.For(cfg, s, dd, buy);
-        if (NotReady(tk) is string why) { s.Note(OrderLogStatus.Click, $"{(buy ? "BUY" : "SELL")} MKT"); Refuse(why); return; }
-        Warn(tk, null);
+        if ((Reducing(buy) ? ReductionNotReady(tk.Contracts) : NotReady(tk)) is string why) { s.Note(OrderLogStatus.Click, $"{(buy ? "BUY" : "SELL")} MKT"); Refuse(why); return; }
+        if(!Reducing(buy)) Warn(tk, null);
         var exp = buy ? s.Book.BestAsk : s.Book.BestBid;
         if (exp is long e) s.LastIntent = (e * s.TickSize, DomState.NowMs(), buy);
         Entry(buy, "market", null, tk);
@@ -159,16 +168,17 @@ public sealed partial class MainWindow
         if(reverseIntent!=null) { Refuse("REVERSE is waiting for flat — cancel or flatten to abort"); return; }
         var price = row * s.TickSize;
         var tk = Ticket.For(cfg, s, dd, buy, row);
-        if (NotReady(tk) is string why) { s.Note(OrderLogStatus.Click, $"{(buy ? "BUY" : "SELL")} {(stop ? "STOP" : "LIMIT")} @ {Px(price)}"); Refuse(why); return; }
+        var reducing=Reducing(buy);
+        if ((reducing ? ReductionNotReady(tk.Contracts) : NotReady(tk)) is string why) { s.Note(OrderLogStatus.Click, $"{(buy ? "BUY" : "SELL")} {(stop ? "STOP" : "LIMIT")} @ {Px(price)}"); Refuse(why); return; }
         var mid = s.LastTick ?? s.Book.BestBid;
-        Warn(tk, mid is long m ? row - m : null);
+        if(!reducing) Warn(tk, mid is long m ? row - m : null);
         s.LastIntent = (price, DomState.NowMs(), buy);
         if (!stop && cfg.ScaleOn)
         {
             var end = row + (buy ? -1 : 1) * cfg.ScaleSpanTicks;
             var plan = Targets.ScaleOrders(tk.Contracts, row, end, cfg.ScaleCount, cfg.ScaleSkew, cfg.ScaleDir);
             if (!plan.Ok) { Refuse(plan.Message); return; }
-            var slices=tk.Slices(cfg.BracketOn);
+            var slices=reducing ? Array.Empty<Piece>() : tk.Slices(cfg.BracketOn);
             var target=0; var allocated=0; var sent=false;
             foreach (var leg in plan.Legs)
             {
@@ -180,10 +190,10 @@ public sealed partial class MainWindow
                     left-=take; allocated+=take;
                     if(allocated==slices[target].Qty) { target++; allocated=0; }
                 }
-                if(!Send($"SCALE {(buy ? "BUY" : "SELL")} {leg.Qty} ct @ {Px(leg.Ticks * s.TickSize)}", cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", "limit", leg.Qty, leg.Ticks * s.TickSize, child, cfg.BracketOn ? tk.StopTicks : 0,numbers))) break;
+                if(!Send($"SCALE {(reducing ? "OUT" : "IN")} {(buy ? "BUY" : "SELL")} {leg.Qty} ct @ {Px(leg.Ticks * s.TickSize)}", cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", "limit", leg.Qty, leg.Ticks * s.TickSize, child, !reducing && cfg.BracketOn ? tk.StopTicks : 0,numbers,reduceOnly:reducing))) break;
                 sent=true;
             }
-            if(sent) ArmManagement(tk,slices,buy);
+            if(sent && !reducing) ArmManagement(tk,slices,buy);
             return;
         }
         Entry(buy, stop ? "stop" : "limit", price, tk);
@@ -191,12 +201,13 @@ public sealed partial class MainWindow
 
     private void Entry(bool buy, string type, double? price, Ticket tk)
     {
-        var slices = tk.Slices(cfg.BracketOn);
-        var sl = cfg.BracketOn ? tk.StopTicks : 0;
+        var reducing=Reducing(buy);
+        var slices = reducing ? Array.Empty<Piece>() : tk.Slices(cfg.BracketOn);
+        var sl = !reducing && cfg.BracketOn ? tk.StopTicks : 0;
         var what = $"{(buy ? "BUY" : "SELL")} {type.ToUpperInvariant()} {tk.Contracts} ct{(price is double p ? " @ " + Px(p) : "")}" +
                    (slices.Count > 0 ? $" · {string.Join(" ", slices.Where(x => x.Ticks > 0).Select((x, i) => $"TP{i + 1} {x.Ticks}t×{x.Qty}"))} SL {sl}t" : " · no bracket");
-        if (!Send(what, cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", type, tk.Contracts, price, slices, sl))) return;
-        ArmManagement(tk,slices,buy);
+        if (!Send(what, cid => Protocol.Order(cid, s.Account, s.Instrument, buy ? "buy" : "sell", type, tk.Contracts, price, slices, sl,reduceOnly:reducing))) return;
+        if(!reducing) ArmManagement(tk,slices,buy);
     }
 
     private void ArmManagement(Ticket tk,IReadOnlyList<Piece> slices,bool buy)

@@ -88,7 +88,6 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock costLine = Ui.Label("", Pal.Muted, size: 11.5, wrap: true);
     private readonly TextBlock resultBar = Ui.Label("", Pal.Muted, size: 12, wrap: true);
     private readonly TextBlock notice = Ui.Label("", Pal.Warn, size: 12, wrap: true);
-    private readonly TextBlock protectionLine = Ui.Label("", Pal.Warn, size: 11.5, wrap: true);
     private long noticeUntil;
 
     public MainWindow()
@@ -438,7 +437,7 @@ public sealed partial class MainWindow : Window
         // Why a click did or didn't send sits right above the buttons, always in view (the ticket can be
         // hidden or scrolled): no silent no-ops.
         var status = new StackPanel { Spacing = 2, Margin = new Thickness(6, 4, 6, 0) };
-        foreach (var line in new[] { protectionLine, notice, resultBar })
+        foreach (var line in new[] { notice, resultBar })
         {
             line.FontFamily = Flight.Sans;
             line.FontSize = 11.5;

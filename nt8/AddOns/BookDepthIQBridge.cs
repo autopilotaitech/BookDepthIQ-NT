@@ -120,15 +120,27 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             private readonly ConcurrentDictionary<Order, Bracket> brackets = new ConcurrentDictionary<Order, Bracket>();
             private readonly HashSet<Account> executionAccounts = new HashSet<Account>();
+            private sealed class Reduction { public Account Owner; public Instrument Instrument; public bool Long; }
+            private readonly ConcurrentDictionary<Order,Reduction> reductions = new ConcurrentDictionary<Order,Reduction>();
+            private readonly HashSet<Account> reconciling = new HashSet<Account>();
+            private readonly ConcurrentDictionary<Order,int> changingQuantity = new ConcurrentDictionary<Order,int>();
+            private readonly ConcurrentDictionary<Tuple<Account,Instrument>,long> positionEpochs = new ConcurrentDictionary<Tuple<Account,Instrument>,long>();
+            private sealed class ProtectionBatch
+            { public Account Owner; public Instrument Instrument; public bool Long; public long Epoch; public List<ProtectionSlice> Slices; }
+            private readonly ConcurrentDictionary<ProtectionBatch,byte> pendingProtection = new ConcurrentDictionary<ProtectionBatch,byte>();
+            private readonly HashSet<Account> flushingProtection = new HashSet<Account>();
 
             private void WatchExecutions(Account a)
             {
-                lock(executionAccounts) if(executionAccounts.Add(a)) a.ExecutionUpdate += OnExecutionUpdate;
+                lock(executionAccounts) if(executionAccounts.Add(a))
+                { a.ExecutionUpdate += OnExecutionUpdate; a.PositionUpdate += OnPositionUpdate; a.OrderUpdate += OnOrderUpdate; }
             }
             private void ReleaseExecutions(Account a)
             {
-                if(a==account || brackets.Values.Any(b=>b.Owner==a)) return;
-                lock(executionAccounts) if(executionAccounts.Remove(a)) a.ExecutionUpdate -= OnExecutionUpdate;
+                if(a==account || brackets.Values.Any(b=>b.Owner==a) || reductions.Values.Any(r=>r.Owner==a) || pendingProtection.Keys.Any(b=>b.Owner==a)) return;
+                lock(a.Orders) if(a.Orders.Any(o=>Active(o) && OwnedBracket(o))) return;
+                lock(executionAccounts) if(executionAccounts.Remove(a))
+                { a.ExecutionUpdate -= OnExecutionUpdate; a.PositionUpdate -= OnPositionUpdate; a.OrderUpdate -= OnOrderUpdate; }
             }
             private int ocoSeq;
 
@@ -160,13 +172,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var a = account;
                 if (a != null)
                 {
-                    a.OrderUpdate -= OnOrderUpdate;
-                    a.PositionUpdate -= OnPositionUpdate;
                     a.AccountItemUpdate -= OnAccountItemUpdate;
                 }
                 lock(executionAccounts)
                 {
-                    foreach(var watched in executionAccounts) watched.ExecutionUpdate -= OnExecutionUpdate;
+                    foreach(var watched in executionAccounts)
+                    { watched.ExecutionUpdate -= OnExecutionUpdate; watched.PositionUpdate -= OnPositionUpdate; watched.OrderUpdate -= OnOrderUpdate; }
                     executionAccounts.Clear();
                 }
                 Log("BookDepthIQ bridge stopped");
@@ -313,7 +324,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var signature = json.Serialize(accts);
                 if (!force && signature == accountSignature) return;
                 accountSignature = signature;
-                Send(new Dictionary<string, object> { { "t", hello ? "hello" : "accounts" }, { "v", 2 }, { "orderVersion", 1 }, { "accounts", accts } });
+                Send(new Dictionary<string, object> { { "t", hello ? "hello" : "accounts" }, { "v", 2 }, { "orderVersion", 2 }, { "accounts", accts } });
                 if(!hello && account!=null) { SendAccount(); SendPositions(); SendOrders(); }
             }
 
@@ -368,16 +379,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (a == null) { Send(new Dictionary<string, object> { { "t", "log" }, { "msg", "no account named '" + name + "'" } }); return; }
                 if (account != null)
                 {
-                    account.OrderUpdate -= OnOrderUpdate;
-                    account.PositionUpdate -= OnPositionUpdate;
                     account.AccountItemUpdate -= OnAccountItemUpdate;
                 }
                 var previous=account;
                 account = a;
                 if(previous!=null) ReleaseExecutions(previous);
-                a.OrderUpdate += OnOrderUpdate;
                 WatchExecutions(a);
-                a.PositionUpdate += OnPositionUpdate;
                 a.AccountItemUpdate += OnAccountItemUpdate;
                 SendAccount();
                 SendPositions();
@@ -413,6 +420,15 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var px = ot == OrderType.Market ? 0 : mi.RoundToTickSize(price);
                 var pos = a.Positions.FirstOrDefault(p => p.Instrument == inst);
                 var posQty = pos == null ? 0 : pos.MarketPosition == MarketPosition.Long ? pos.Quantity : pos.MarketPosition == MarketPosition.Short ? -pos.Quantity : 0;
+                var reducing = (posQty > 0 && !buy) || (posQty < 0 && buy);
+                object reductionFlag;
+                if(m.TryGetValue("reduceOnly",out reductionFlag) && reductionFlag is bool && (bool)reductionFlag && !reducing)
+                { Ack(cid,false,"reduction refused: the original position is flat or has changed direction"); return; }
+                if(reducing)
+                {
+                    var reserved=reductions.Where(r=>r.Value.Owner==a && r.Value.Instrument==inst && Active(r.Key)).Sum(r=>Math.Max(0,r.Key.Quantity-r.Key.Filled));
+                    if(qty>Math.Abs(posQty)-reserved) { Ack(cid,false,"exit quantity exceeds the unreserved position — use REVERSE to change direction"); return; }
+                }
                 var action = buy ? (posQty < 0 ? OrderAction.BuyToCover : OrderAction.Buy) : (posQty > 0 ? OrderAction.Sell : OrderAction.SellShort);
                 var o = a.CreateOrder(inst, action, ot, OrderEntry.Manual, TimeInForce.Day, qty, ot == OrderType.Limit ? px : 0, ot == OrderType.StopMarket ? px : 0, "", "BDIQ entry", Core.Globals.MaxDate, null);
                 var sl = Int(m, "sl");
@@ -432,7 +448,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (tps.Count == 0 && Int(m, "tp") > 0) { tps.Add(Int(m, "tp")); qs.Add(qty); numbers.Add(1); }
                 if (tps.Count == 0 && sl > 0) { tps.Add(0); qs.Add(qty); numbers.Add(1); }
                 if (tps.Count > 0 && qs.Sum() != qty) { Ack(cid, false, "target sizes add up to " + qs.Sum() + ", not " + qty); return; }
-                if (tps.Count > 0) brackets[o] = new Bracket { Owner=a, TpTicks = tps.ToArray(), Qty = qs.ToArray(), Numbers=numbers.ToArray(), Done = new int[tps.Count], SlTicks = sl };
+                // Opposite-side orders REDUCE current exposure: their fills must never open a bracket.
+                if(reducing) reductions[o]=new Reduction {Owner=a,Instrument=inst,Long=posQty>0};
+                else if (tps.Count > 0) brackets[o] = new Bracket { Owner=a, TpTicks = tps.ToArray(), Qty = qs.ToArray(), Numbers=numbers.ToArray(), Done = new int[tps.Count], SlTicks = sl };
                 WatchExecutions(a);
                 a.Submit(new[] { o });
                 Ack(cid, true, string.Format("{0} {1} {2} {3}{4} sent to {5}", action, qty, inst.FullName, ot, ot == OrderType.Market ? "" : " @ " + px, a.Name));
@@ -487,52 +505,24 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Ack(cid, true, "cancel all sent: " + inst.FullName);
             }
 
-            /// <summary>Close part of a position at market, then trim the panel's bracket legs from the last
-            /// target backwards so no leg is larger than what is left. An exit: never gated.</summary>
+            /// <summary>Submit a reduction; resize protection only after ACTUAL fills.</summary>
             private void ClosePart(Dictionary<string, object> m, string cid)
             {
-                var a = AccountFor(m);
-                var inst = InstrumentFor(m);
-                if (a == null || inst == null) { Ack(cid, false, "no account or instrument"); return; }
-                var pos = a.Positions.FirstOrDefault(p => p.Instrument == inst);
-                if (pos == null || pos.MarketPosition == MarketPosition.Flat) { Ack(cid, false, "flat — nothing to close"); return; }
-                var qty = Math.Min(Int(m, "qty"), pos.Quantity);
-                if (qty <= 0) { Ack(cid, false, "quantity must be > 0"); return; }
-                if (qty >= pos.Quantity) { a.Flatten(new[] { inst }); Ack(cid, true, "that is the whole position: flatten sent"); return; }
-                var isLong = pos.MarketPosition == MarketPosition.Long;
-                var o = a.CreateOrder(inst, isLong ? OrderAction.Sell : OrderAction.BuyToCover, OrderType.Market, OrderEntry.Manual, TimeInForce.Day, qty, 0, 0, "", "BDIQ close", Core.Globals.MaxDate, null);
-                a.Submit(new[] { o });
-                // Trim legs: the panel's working TP/SL pairs, furthest target first.
-                var left = qty;
-                List<Order> legs;
-                lock (a.Orders) legs = a.Orders.Where(x => x.Instrument == inst && IsWorking(x) && x.Name != null && x.Name.StartsWith("BDIQ TP")).OrderByDescending(x => x.Name).ToList();
-                var change = new List<Order>();
-                var cancel = new List<Order>();
-                foreach (var tp in legs)
-                {
-                    if (left <= 0) break;
-                    var stop = FindPair(a, tp);
-                    var cut = Math.Min(left, tp.Quantity - tp.Filled);
-                    left -= cut;
-                    if (cut >= tp.Quantity - tp.Filled) { cancel.Add(tp); if (stop != null) cancel.Add(stop); }
-                    else { tp.QuantityChanged = tp.Quantity - cut; change.Add(tp); if (stop != null) { stop.QuantityChanged = stop.Quantity - cut; change.Add(stop); } }
-                }
-                if (left > 0)
-                {
-                    // Stops without targets: shrink them too.
-                    List<Order> stops;
-                    lock (a.Orders) stops = a.Orders.Where(x => x.Instrument == inst && IsWorking(x) && x.Name != null && x.Name.StartsWith("BDIQ SL") && !change.Contains(x) && !cancel.Contains(x)).ToList();
-                    foreach (var st in stops)
-                    {
-                        if (left <= 0) break;
-                        var cut = Math.Min(left, st.Quantity);
-                        left -= cut;
-                        if (cut >= st.Quantity) cancel.Add(st); else { st.QuantityChanged = st.Quantity - cut; change.Add(st); }
-                    }
-                }
-                if (cancel.Count > 0) a.Cancel(cancel);
-                if (change.Count > 0) a.Change(change);
-                Ack(cid, true, "close " + qty + " of " + pos.Quantity + " sent; bracket legs trimmed");
+                var a=AccountFor(m); var inst=InstrumentFor(m);
+                if(a==null || inst==null) { Ack(cid,false,"no account or instrument"); return; }
+                Position pos;
+                lock(a.Positions) pos=a.Positions.FirstOrDefault(p=>p.Instrument==inst && p.MarketPosition!=MarketPosition.Flat);
+                if(pos==null) { Ack(cid,false,"flat — nothing to close"); return; }
+                var qty=Math.Min(Int(m,"qty"),pos.Quantity);
+                if(qty<=0) { Ack(cid,false,"quantity must be > 0"); return; }
+                if(qty==pos.Quantity) { a.Flatten(new[]{inst}); Ack(cid,true,"flatten sent"); return; }
+                var reserved=reductions.Where(r=>r.Value.Owner==a && r.Value.Instrument==inst && Active(r.Key)).Sum(r=>Math.Max(0,r.Key.Quantity-r.Key.Filled));
+                if(qty>pos.Quantity-reserved) { Ack(cid,false,"exit quantity exceeds the unreserved position"); return; }
+                var isLong=pos.MarketPosition==MarketPosition.Long;
+                var o=a.CreateOrder(inst,isLong?OrderAction.Sell:OrderAction.BuyToCover,OrderType.Market,OrderEntry.Manual,TimeInForce.Day,qty,0,0,"","BDIQ close",Core.Globals.MaxDate,null);
+                reductions[o]=new Reduction {Owner=a,Instrument=inst,Long=isLong};
+                WatchExecutions(a); a.Submit(new[]{o});
+                Ack(cid,true,"close "+qty+" sent; protection reconciles on confirmed fills");
             }
 
             /// <summary>KILL: every position on the account closed at market and every order cancelled. Never gated.</summary>
@@ -657,10 +647,121 @@ namespace NinjaTrader.NinjaScript.AddOns
 
             // ───────────── account ─────────────
 
+            private static bool OwnedBracket(Order o)
+            { return o.Name!=null && (o.Name.StartsWith("BDIQ TP") || o.Name.StartsWith("BDIQ SL")); }
+            private static bool Active(Order o)
+            { return IsWorking(o) || (o.OrderState.ToString().StartsWith("Cancel") && o.OrderState.ToString()!="Cancelled"); }
+
+            /// <summary>Only shrink/cancel owned protection to match ACTUAL remaining exposure.
+            /// Never attach a new bracket to a reduction or modify unrelated native orders.</summary>
+            private void ReconcileProtection(Account a)
+            {
+                lock(reconciling) if(!reconciling.Add(a)) return;
+                try
+                {
+                    List<Order> all;
+                    lock(a.Orders) all=a.Orders.ToList();
+                    foreach(var instrumentGroup in all.Where(o=>OwnedBracket(o) || reductions.ContainsKey(o)).GroupBy(o=>o.Instrument))
+                    {
+                        Position pos;
+                        lock(a.Positions) pos=a.Positions.FirstOrDefault(p=>p.Instrument==instrumentGroup.Key && p.MarketPosition!=MarketPosition.Flat);
+                        var remaining=pos==null ? 0 : pos.Quantity;
+                        var isLong=pos!=null && pos.MarketPosition==MarketPosition.Long;
+                        var cancel=new List<Order>(); var change=new List<Order>();
+                        var reductionCapacity=remaining;
+                        foreach(var pending in instrumentGroup.Where(o=>reductions.ContainsKey(o) && Active(o)))
+                        {
+                            Reduction r;
+                            if(!reductions.TryGetValue(pending,out r)) continue;
+                            var keep=r.Long!=isLong ? 0 : Math.Min(reductionCapacity,Math.Max(0,pending.Quantity-pending.Filled));
+                            reductionCapacity-=keep;
+                            if(keep==0) {cancel.Add(pending); continue;}
+                            var wanted=pending.Filled+keep;
+                            if(wanted!=pending.Quantity && !changingQuantity.ContainsKey(pending))
+                            {changingQuantity[pending]=wanted; pending.QuantityChanged=wanted; change.Add(pending);}
+                        }
+                        // An OCO pair consumes ONE allocation, not TP + SL quantities separately.
+                        foreach(var pair in instrumentGroup.Where(o=>OwnedBracket(o) && Active(o))
+                            .GroupBy(o=>string.IsNullOrEmpty(o.Oco) ? (object)o : o.Oco)
+                            .OrderBy(g=>g.Select(o=>o.Name).OrderBy(n=>n).First()))
+                        {
+                            var members=pair.ToList();
+                            var closed=!string.IsNullOrEmpty(members[0].Oco) && all.Any(o=>o.Oco==members[0].Oco && o.OrderState==OrderState.Filled);
+                            var rightSide=members.All(o=>isLong ? o.OrderAction==OrderAction.Sell : o.OrderAction==OrderAction.BuyToCover);
+                            var available=members.Min(o=>Math.Max(0,o.Quantity-o.Filled));
+                            var keep=closed || !rightSide ? 0 : Math.Min(remaining,available);
+                            remaining-=keep;
+                            foreach(var leg in members)
+                            {
+                                if(keep==0) { cancel.Add(leg); continue; }
+                                var wanted=leg.Filled+keep;
+                                if(wanted==leg.Quantity || changingQuantity.ContainsKey(leg)) continue;
+                                changingQuantity[leg]=wanted; leg.QuantityChanged=wanted; change.Add(leg);
+                            }
+                        }
+                        if(cancel.Count>0) a.Cancel(cancel.Where(o=>!o.OrderState.ToString().StartsWith("Cancel")).Distinct().ToArray());
+                        if(change.Count>0) a.Change(change);
+                    }
+                }
+                finally { lock(reconciling) reconciling.Remove(a); }
+                FlushProtection(a);
+            }
+
+            private sealed class ProtectionSlice
+            { public int Qty,Number; public double Target,Stop; public string Oco; }
+
+            private void FlushProtection(Account a)
+            {
+                lock(flushingProtection) if(!flushingProtection.Add(a)) return;
+                try {foreach(var batch in pendingProtection.Keys.Where(b=>b.Owner==a).ToList()) SubmitProtection(batch);}
+                finally {lock(flushingProtection) flushingProtection.Remove(a);}
+            }
+
+            private void SubmitProtection(ProtectionBatch batch)
+            {
+                var a=batch.Owner; var inst=batch.Instrument; var isLong=batch.Long; var slices=batch.Slices;
+                Position pos;
+                lock(a.Positions) pos=a.Positions.FirstOrDefault(p=>p.Instrument==inst && p.MarketPosition!=MarketPosition.Flat);
+                long epoch; positionEpochs.TryGetValue(Tuple.Create(a,inst),out epoch);
+                if(pos==null || (pos.MarketPosition==MarketPosition.Long)!=isLong || epoch!=batch.Epoch)
+                {byte ignored; pendingProtection.TryRemove(batch,out ignored); return;}
+                List<Order> existing;
+                lock(a.Orders) existing=a.Orders.Where(o=>o.Instrument==inst && Active(o) && OwnedBracket(o)).ToList();
+                var withStop=slices.Any(x=>x.Stop>0);
+                var used=existing.Where(o=>withStop ? o.Name.StartsWith("BDIQ SL") : o.Name.StartsWith("BDIQ TP"))
+                    .Sum(o=>Math.Max(0,o.Quantity-o.Filled));
+                var capacity=Math.Max(0,pos.Quantity-used);
+                var legs=new List<Order>(); var action=isLong ? OrderAction.Sell : OrderAction.BuyToCover;
+                foreach(var slice in slices)
+                {
+                    if(slice.Qty<=0) continue;
+                    var qty=Math.Min(capacity,slice.Qty); if(qty<=0) break; capacity-=qty; slice.Qty-=qty;
+                    var oco=slice.Target>0 && slice.Stop>0 ? "BDIQ-"+Interlocked.Increment(ref ocoSeq)+"-"+NowMs() : "";
+                    if(slice.Target>0) legs.Add(a.CreateOrder(inst,action,OrderType.Limit,OrderEntry.Manual,TimeInForce.Gtc,qty,slice.Target,0,oco,"BDIQ TP"+slice.Number,Core.Globals.MaxDate,null));
+                    if(slice.Stop>0) legs.Add(a.CreateOrder(inst,action,OrderType.StopMarket,OrderEntry.Manual,TimeInForce.Gtc,qty,0,slice.Stop,oco,"BDIQ SL"+slice.Number,Core.Globals.MaxDate,null));
+                }
+                if(slices.All(s=>s.Qty==0)) {byte ignored; pendingProtection.TryRemove(batch,out ignored);}
+                if(legs.Count>0) {WatchExecutions(a); a.Submit(legs);}
+            }
+
             private void OnAccountItemUpdate(object sender, AccountItemEventArgs e) { SendAccount(); }
-            private void OnPositionUpdate(object sender, PositionEventArgs e) { SendPositions(); }
+            private void OnPositionUpdate(object sender, PositionEventArgs e)
+            {
+                var a=e.Position!=null ? e.Position.Account : sender as Account;
+                if(a!=null && e.Position!=null && e.Position.MarketPosition==MarketPosition.Flat)
+                    positionEpochs.AddOrUpdate(Tuple.Create(a,e.Position.Instrument),1,(key,old)=>old+1);
+                if(a!=null) OnUi(()=>ReconcileProtection(a));
+                SendPositions();
+            }
             private void OnOrderUpdate(object sender, OrderEventArgs e)
             {
+                if(e.Order!=null)
+                {
+                    int wanted;
+                    if(changingQuantity.TryGetValue(e.Order,out wanted) && (e.Order.Quantity==wanted || !Active(e.Order) || e.Error!=ErrorCode.NoError))
+                        changingQuantity.TryRemove(e.Order,out wanted);
+                    if(!Active(e.Order)) { Reduction gone; reductions.TryRemove(e.Order,out gone); }
+                }
                 // A rejection says why, in the DOM's result bar and order log (NinjaTrader's own text).
                 if (e.OrderState == OrderState.Rejected && e.Order != null)
                     Send(new Dictionary<string, object>
@@ -669,6 +770,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                         { "type", e.Order.OrderType.ToString() }, { "qty", e.Order.Quantity }, { "error", e.Error.ToString() }, { "msg", e.Comment ?? "" },
                     });
                 SendOrders();
+                var a=e.Order!=null ? e.Order.Account : sender as Account;
+                if(a!=null) OnUi(()=>ReconcileProtection(a));
             }
 
             private void OnExecutionUpdate(object sender, ExecutionEventArgs e)
@@ -689,9 +792,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var inst = ex.Instrument;
                 var mi = inst.MasterInstrument;
                 var isLong = ex.Order.OrderAction == OrderAction.Buy || ex.Order.OrderAction == OrderAction.BuyToCover;
-                var exitAction = isLong ? OrderAction.Sell : OrderAction.BuyToCover;
                 var left = ex.Quantity;
-                var legs = new List<Order>();
+                var legs = new List<ProtectionSlice>();
                 lock (br)
                 {
                     if(!string.IsNullOrEmpty(ex.ExecutionId) && !br.Executions.Add(ex.ExecutionId)) return;
@@ -703,21 +805,20 @@ namespace NinjaTrader.NinjaScript.AddOns
                         left -= take;
                         var both = br.TpTicks[i] > 0 && br.SlTicks > 0;
                         var oco = both ? "BDIQ-" + Interlocked.Increment(ref ocoSeq) + "-" + NowMs() : "";
-                        if (br.TpTicks[i] > 0)
-                        {
-                            var tpPx = mi.RoundToTickSize(ex.Price + (isLong ? 1 : -1) * br.TpTicks[i] * mi.TickSize);
-                            legs.Add(a.CreateOrder(inst, exitAction, OrderType.Limit, OrderEntry.Manual, TimeInForce.Gtc, take, tpPx, 0, oco, "BDIQ TP" + br.Numbers[i], Core.Globals.MaxDate, null));
-                        }
-                        if (br.SlTicks > 0)
-                        {
-                            var slPx = mi.RoundToTickSize(ex.Price - (isLong ? 1 : -1) * br.SlTicks * mi.TickSize);
-                            legs.Add(a.CreateOrder(inst, exitAction, OrderType.StopMarket, OrderEntry.Manual, TimeInForce.Gtc, take, 0, slPx, oco, "BDIQ SL" + br.Numbers[i], Core.Globals.MaxDate, null));
-                        }
+                        legs.Add(new ProtectionSlice {Qty=take,Number=br.Numbers[i],Oco=oco,
+                            Target=br.TpTicks[i]>0 ? mi.RoundToTickSize(ex.Price+(isLong?1:-1)*br.TpTicks[i]*mi.TickSize) : 0,
+                            Stop=br.SlTicks>0 ? mi.RoundToTickSize(ex.Price-(isLong?1:-1)*br.SlTicks*mi.TickSize) : 0});
                     }
                     if (br.Done.Sum() >= br.Qty.Sum()) { Bracket gone; brackets.TryRemove(ex.Order, out gone); }
                 }
-                if (legs.Count > 0) OnUi(() => a.Submit(legs));
-                ReleaseExecutions(a);
+                if (legs.Count > 0)
+                {
+                    long epoch; positionEpochs.TryGetValue(Tuple.Create(a,inst),out epoch);
+                    var batch=new ProtectionBatch {Owner=a,Instrument=inst,Long=isLong,Epoch=epoch,Slices=legs};
+                    pendingProtection[batch]=0;
+                    OnUi(() => {FlushProtection(a); ReleaseExecutions(a);});
+                }
+                else ReleaseExecutions(a);
             }
 
             private void SendAccount()

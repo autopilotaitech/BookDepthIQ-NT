@@ -30,11 +30,30 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.9](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.9).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.9/BookDepthIQ-DOM-1.12.9-win-x64.zip).
-**1.12.9 requires replacing BOTH the DOM and NinjaTrader bridge, then compiling the bridge with F5.**
+**Current release: [1.12.10](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.10).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.10/BookDepthIQ-DOM-1.12.10-win-x64.zip).
+**1.12.10 requires replacing BOTH the DOM and NinjaTrader bridge, then compiling the bridge with F5.**
 New entries are refused with an older bridge; emergency exits remain available. Keep beta on until
-the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.9.md) passes.
+the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.10.md) passes.
+
+### New in 1.12.10 — reduction fills and cleaner order buttons (still beta)
+
+- Removed the extra yellow BRACKET OFF warning above the buttons. The existing bracket toggle
+  remains; saved settings are unchanged.
+- Opposite-side ladder/market clicks against an existing position are treated as reductions:
+  no new entry TP/SL or B/E/trailing watch is attached. Oversized reductions are refused.
+- Owned TP/SL OCO pairs reconcile to actual remaining exposure after fills. Pending reductions
+  also shrink when another exit fills first. CLOSE HALF leaves protection in place until its fill.
+- Queued entry protection is discarded after flat rather than attached to a later reopened position.
+  Unsubmitted protection waits for pending changes/cancellations; each submitted fragment has its
+  own OCO pair. Monitoring survives account selection changes during queued submission.
+
+**Verification:** 219 isolated automated tests (191 core/DOM + 28 actual-bridge-source tests),
+including deferred dispatcher, quantity-change and cancellation acknowledgment cases. BridgeCheck
+compiles against installed NinjaTrader DLLs. These are not native SIM orders or broker OCO certification.
+`reduceOnly` is a bridge intent/check, **not exchange-enforced reduce-only**: competing native fills
+can still race cancellation/change acknowledgments. This patch is not the larger proposed transactional
+SCALE IN/OUT redesign. Remain on SIM until the native checklist passes.
 
 ### New in 1.12.9 — Ticket safety fixes (still beta)
 
@@ -50,8 +69,8 @@ the [native SIM checklist](docs/TICKET-VERIFICATION-1.12.9.md) passes.
   CLOSE HALF or cancelled targets cannot fake a TP1 fill.
 - Entries wait for fresh balances, selected-instrument position and orders. Account changes clear old
   balances. Pending bridge entries retain bracket handling even if another account is selected.
-- BRACKET OFF is explicitly labeled and warns beside the order buttons, even with TICKET hidden.
-  Your saved setting is not silently switched on.
+- BRACKET OFF is explicitly labeled. The extra warning originally added in this version is removed
+  in 1.12.10; your saved setting is not silently switched on.
 
 **Proof:** 200 automated tests pass (189 core/DOM plus 11 tests of the actual bridge source against
 an isolated test-only NinjaTrader API simulator and the real .NET Framework JSON parser). BridgeCheck
@@ -330,10 +349,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.9
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.10
 ```
 
-This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.9-win-x64.zip` (~37 MB), which holds:
+This runs both test suites, then builds `dist\BookDepthIQ-DOM-1.12.10-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
@@ -372,7 +391,7 @@ and segmented choices. **SAVE** (Ctrl+S) applies everything; **CANCEL** (Esc) di
 
 ```
 dotnet build                                   # Core, DOM, tests, fake bridge
-dotnet test                                    # 200 tests, including isolated Ticket/bridge regression cases; no broker orders
+dotnet test                                    # 219 tests, including isolated Ticket/bridge regression cases; no broker orders
 BDIQ_PORT=36972 dotnet run --project tools/FakeBridge -- --position   # simulated NQ, never sends orders
 BDIQ_PORT=36972 dotnet run --project src/Dom   # the DOM against the fake (NinjaTrader is not touched)
 dotnet build nt8/BridgeCheck                   # compiles the AddOn against C:\Program Files\NinjaTrader 8\bin

@@ -7,7 +7,7 @@ connects. Loopback only: the bridge never listens on another interface.
 
 | `t` | Fields | When |
 |---|---|---|
-| `hello` | `v`, `orderVersion`, `accounts: [{name, conn}]` | on connect; `orderVersion >= 1` is required for new Ticket entries |
+| `hello` | `v`, `orderVersion`, `accounts: [{name, conn}]` | on connect; `orderVersion >= 2` is required for new Ticket orders |
 | `accounts` | `v`, `orderVersion`, `accounts: [{name, conn}]` | discovery reply and account/connection changes; not a new bridge session |
 | `inst` | `name`, `tick` (TickSize), `pv` (PointValue), `desc` | after `sub` |
 | `book` | `bids: [[price, size]…]`, `asks: […]`, `ms` | depth changed (coalesced, ≤ 20/s, every level NinjaTrader holds, up to 1000 a side) |
@@ -28,7 +28,7 @@ connects. Loopback only: the bridge never listens on another interface.
 |---|---|
 | `sub` | `inst` — NT instrument name, e.g. `NQ 12-26` |
 | `acct` | `name` — account to stream (`pos`, `orders`, `account`) |
-| `order` | `cid`, `acct`, `inst`, `side` (`buy`/`sell`), `type` (`market`/`limit`/`stop`), `qty`, `price` (limit/stop), `targets: [[ticks, qty, optionalOriginalTargetNumber]…]`, `sl` (ticks, 0 = none) |
+| `order` | `cid`, `acct`, `inst`, `side` (`buy`/`sell`), `type` (`market`/`limit`/`stop`), `qty`, `price` (limit/stop), `targets: [[ticks, qty, optionalOriginalTargetNumber]…]`, `sl` (ticks, 0 = none), `reduceOnly` (bridge reduction intent, not a native/exchange flag) |
 | `closePart` | `cid`, `acct`, `inst`, `qty` — market exit of part of the position; bracket legs trimmed from the last target |
 | `addStop` | `cid`, `acct`, `inst`, `price`, `qty` (0 = whole position) |
 | `hist` | `inst`, `hours` (1–48) — past prints from NT's tick history |
@@ -44,9 +44,16 @@ priced in ticks from that execution's fill, so a partial fill is protected at on
 
 SCALE child slices optionally include their original 1-based target number: `[64,1,2]` remains
 `BDIQ TP2` / `BDIQ SL2` even when it is the child's only target. Legacy pairs retain their list index.
-The DOM requires `orderVersion >= 1` before new entries, and complete fresh balance, selected-instrument
+The DOM requires `orderVersion >= 2` before new orders, and complete fresh balance, selected-instrument
 position and orders snapshots. Session loss or a new `hello` invalidates readiness and pending reverse
 intent synchronously. Every instrument subscription also re-sends position/order snapshots.
+
+Opposite-side orders that reduce existing exposure do not receive entry brackets. `reduceOnly:true`
+rejects a command when the original reducing direction is no longer valid, and pending reduction
+quantities are checked against remaining exposure. Owned protection shrinks/cancels after confirmed
+position changes, and pending protection retries after order acknowledgments. Flat invalidates queued
+protection for that account/instrument. None of this provides atomic native reduce-only execution;
+simultaneous fills can race native cancellations/changes. Emergency flatten/cancel remain available.
 
 The bridge never decides to trade. It executes what the app sends: a click, or a management feature
 the user turned on in the DOM (B/E after TP1, trailing stop, stop guard, weekend close, close at the

@@ -5,8 +5,14 @@ using System.Linq;
 
 namespace System.Windows
 {
-    public class Application { public static Application Current => null; public TestDispatcher Dispatcher = new TestDispatcher(); }
-    public class TestDispatcher { public void InvokeAsync(Action action) { action(); } }
+    public class Application { public static Application Current {get;set;} public TestDispatcher Dispatcher = new TestDispatcher(); }
+    public class TestDispatcher
+    {
+        public bool Deferred;
+        readonly Queue<Action> queue=new Queue<Action>();
+        public void InvokeAsync(Action action) {if(Deferred) queue.Enqueue(action); else action();}
+        public void Drain() {while(queue.Count>0) queue.Dequeue()();}
+    }
 }
 namespace NinjaTrader.Core { public static class Globals { public static DateTime MaxDate = DateTime.MaxValue; } }
 namespace NinjaTrader.NinjaScript
@@ -39,17 +45,17 @@ namespace NinjaTrader.Cbi
         public System.Windows.TestDispatcher Dispatcher=new System.Windows.TestDispatcher();
         public static Instrument GetInstrument(string name,bool ignored) { if(!items.TryGetValue(name,out var i)) items[name]=i=new Instrument {FullName=name}; return i; }
     }
-    public class Position { public Instrument Instrument; public MarketPosition MarketPosition; public int Quantity; public double AveragePrice; }
+    public class Position { public Account Account; public Instrument Instrument; public MarketPosition MarketPosition; public int Quantity; public double AveragePrice; }
     public class Order
     {
-        public string OrderId=Guid.NewGuid().ToString("N"), Name,Oco; public int Id;
+        public Account Account; public string OrderId=Guid.NewGuid().ToString("N"), Name,Oco; public int Id;
         public Instrument Instrument; public OrderAction OrderAction; public OrderType OrderType; public OrderState OrderState;
         public int Quantity,Filled,QuantityChanged; public double LimitPrice,StopPrice,LimitPriceChanged,StopPriceChanged;
         public TimeInForce TimeInForce;
     }
     public class Execution { public Account Account; public Instrument Instrument; public string ExecutionId; public Order Order; public int Quantity; public double Price,Commission,Fee; public DateTime Time; }
     public class ExecutionEventArgs : EventArgs { public Execution Execution; public MarketPosition MarketPosition; }
-    public class PositionEventArgs : EventArgs {}
+    public class PositionEventArgs : EventArgs {public Position Position;}
     public class AccountItemEventArgs : EventArgs {}
     public class OrderEventArgs : EventArgs { public Order Order; public OrderState OrderState; public ErrorCode Error; public string Comment; }
     public class Account
@@ -63,19 +69,27 @@ namespace NinjaTrader.Cbi
         public event EventHandler<AccountItemEventArgs> AccountItemUpdate { add {} remove {} }
         public double Get(AccountItem item,Currency currency) => 50000;
         public Order CreateOrder(Instrument inst,OrderAction action,OrderType type,OrderEntry entry,TimeInForce tif,int qty,double limit,double stop,string oco,string name,DateTime expiry,object custom) =>
-            new Order {Instrument=inst,OrderAction=action,OrderType=type,TimeInForce=tif,Quantity=qty,LimitPrice=limit,StopPrice=stop,Oco=oco,Name=name,OrderState=OrderState.Initialized};
+            new Order {Account=this,Instrument=inst,OrderAction=action,OrderType=type,TimeInForce=tif,Quantity=qty,LimitPrice=limit,StopPrice=stop,Oco=oco,Name=name,OrderState=OrderState.Initialized};
         public void Submit(IEnumerable<Order> orders) { foreach(var o in orders) { Orders.Add(o); o.OrderState=OrderState.Working; Notify(o); } }
         void Notify(Order o) => OrderUpdate?.Invoke(this,new OrderEventArgs {Order=o,OrderState=o.OrderState});
-        public void Cancel(IEnumerable<Order> orders) { foreach(var o in orders.Distinct()) { o.OrderState=OrderState.Cancelled; Notify(o); } }
+        public bool DeferCancels;
+        readonly List<Order> pendingCancels=new List<Order>();
+        public void ConfirmCancels() {var copy=pendingCancels.ToArray(); pendingCancels.Clear(); DeferCancels=false; Cancel(copy);}
+        public void Cancel(IEnumerable<Order> orders) { foreach(var o in orders.Distinct()) {
+            if(DeferCancels) {pendingCancels.Add(o); o.OrderState=OrderState.CancelPending;} else o.OrderState=OrderState.Cancelled; Notify(o); } }
+        public bool DeferChanges;
+        readonly List<Order> pendingChanges=new List<Order>();
+        public void ConfirmChanges() {var copy=pendingChanges.ToArray(); pendingChanges.Clear(); DeferChanges=false; Change(copy);}
         public void Change(IEnumerable<Order> orders)
         {
+            if(DeferChanges) {foreach(var o in orders) {pendingChanges.Add(o); o.OrderState=OrderState.ChangePending; Notify(o);} return;}
             foreach(var o in orders) { if(o.QuantityChanged>0) o.Quantity=o.QuantityChanged;
                 if(o.LimitPriceChanged>0) o.LimitPrice=o.LimitPriceChanged; if(o.StopPriceChanged>0) o.StopPrice=o.StopPriceChanged; Notify(o); }
         }
         public void Flatten(IEnumerable<Instrument> instruments)
         {
-            foreach(var i in instruments) { CancelAllOrders(i); Positions.RemoveAll(p=>p.Instrument==i); }
-            PositionUpdate?.Invoke(this,new PositionEventArgs());
+            foreach(var i in instruments) { CancelAllOrders(i); Positions.RemoveAll(p=>p.Instrument==i);
+                PositionUpdate?.Invoke(this,new PositionEventArgs {Position=new Position {Account=this,Instrument=i,MarketPosition=MarketPosition.Flat}}); }
         }
         public void CancelAllOrders(Instrument instrument) => Cancel(Orders.Where(o=>o.Instrument==instrument && Working(o)).ToArray());
         public static bool Working(Order o) => o.OrderState!=OrderState.Cancelled && o.OrderState!=OrderState.Filled && o.OrderState!=OrderState.Rejected;
@@ -85,11 +99,11 @@ namespace NinjaTrader.Cbi
             var p=Positions.FirstOrDefault(x=>x.Instrument==order.Instrument);
             var before=p==null?0:p.Quantity*(p.MarketPosition==MarketPosition.Long?1:-1);
             var signed=qty*(order.OrderAction==OrderAction.Buy || order.OrderAction==OrderAction.BuyToCover?1:-1);
-            if(p==null) Positions.Add(p=new Position {Instrument=order.Instrument});
+            if(p==null) Positions.Add(p=new Position {Account=this,Instrument=order.Instrument});
             var after=before+signed; p.Quantity=Math.Abs(after); p.MarketPosition=after==0?MarketPosition.Flat:after>0?MarketPosition.Long:MarketPosition.Short; p.AveragePrice=price;
             Notify(order);
             ExecutionUpdate?.Invoke(this,new ExecutionEventArgs {Execution=new Execution {Account=this,Instrument=order.Instrument,ExecutionId=id??Guid.NewGuid().ToString(),Order=order,Quantity=qty,Price=price,Time=DateTime.UtcNow},MarketPosition=p.MarketPosition});
-            PositionUpdate?.Invoke(this,new PositionEventArgs());
+            PositionUpdate?.Invoke(this,new PositionEventArgs {Position=p});
             if(order.OrderState==OrderState.Filled && !string.IsNullOrEmpty(order.Oco)) Cancel(Orders.Where(o=>o!=order && o.Oco==order.Oco && Working(o)).ToArray());
         }
         public void Replay(Order order,int qty,double price,string id) => ExecutionUpdate?.Invoke(this,new ExecutionEventArgs

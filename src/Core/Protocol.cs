@@ -13,7 +13,7 @@ public static class Protocol
     /// NinjaTrader is never touched by a test.</summary>
     public static readonly int Port = int.TryParse(Environment.GetEnvironmentVariable("BDIQ_PORT"), out var p) && p > 0 ? p : 36971;
     public const int Version = 2;
-    public const int OrderVersion = 1; // bracket identities and account-switch-safe pending fills
+    public const int OrderVersion = 2; // explicit reduction intent and position-sized protection
 
     // ── app → bridge ──
     public static string Subscribe(string instrument) => Line(new() { ["t"] = "sub", ["inst"] = instrument });
@@ -27,7 +27,7 @@ public static class Protocol
 
     /// <summary>An entry with one or more targets: each (ticks, contracts) slice gets its own TP limit and an
     /// SL stop slTicks away as one OCO pair, on every fill (like NT's ATM). Contracts must add up to qty.</summary>
-    public static string Order(string cid, string account, string instrument, string side, string type, int qty, double? price, IReadOnlyList<Piece> targets, int slTicks, IReadOnlyList<int>? targetNumbers = null)
+    public static string Order(string cid, string account, string instrument, string side, string type, int qty, double? price, IReadOnlyList<Piece> targets, int slTicks, IReadOnlyList<int>? targetNumbers = null, bool reduceOnly = false)
     {
         var t = new JsonArray();
         for (var i=0;i<targets.Count;i++)
@@ -38,7 +38,7 @@ public static class Protocol
         return Line(new()
         {
             ["t"] = "order", ["cid"] = cid, ["acct"] = account, ["inst"] = instrument, ["side"] = side, ["type"] = type,
-            ["qty"] = qty, ["price"] = price, ["targets"] = t, ["sl"] = slTicks,
+            ["qty"] = qty, ["price"] = price, ["targets"] = t, ["sl"] = slTicks, ["reduceOnly"] = reduceOnly,
         });
     }
 
