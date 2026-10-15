@@ -20,6 +20,25 @@ public class JournalTestApplication : Application
 public class JournalUiTests
 {
     [AvaloniaFact]
+    public void Directional_flow_heatmap_renders_signed_values()
+    {
+        var cfg=new Settings { Group=1,RowHeight=26,Columns=new Columns { Heat=true,Orders=false,Footprint=false,Pnl=false,Profile=false,Delta=false } };
+        var state=new DomState(cfg,Path.Combine(Path.GetTempPath(),Guid.NewGuid()+".json")) { LastTick=120000,TickSize=.25 };
+        Book B(long firstBid,long secondBid,long firstAsk,long secondAsk) => new(
+            new BookSide(new long[]{120000,119999,119998,119997,119996,119995},new long[]{firstBid,secondBid,10,10,10,10}),
+            new BookSide(new long[]{120001,120002,120003,120004,120005,120006},new long[]{firstAsk,secondAsk,10,10,10,10}),0);
+        state.Liquidity.OnBook(B(10,10,10,10),0);
+        state.Book=B(15,5,15,5); state.Liquidity.OnBook(state.Book,1000);
+        var window=new Window { Width=1100,Height=600,Content=new LadderControl(state,cfg) };
+        try
+        {
+            window.Show(); using var frame=window.CaptureRenderedFrame(); Assert.NotNull(frame);
+            frame!.Save(Path.Combine(Path.GetTempPath(),"bdiq-flow-directional-preview.png"));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void Calendar_and_analytics_render_and_select_simulated_trades()
     {
         var state = new DomState(new Settings(), Path.Combine(Path.GetTempPath(), Guid.NewGuid()+".json"));

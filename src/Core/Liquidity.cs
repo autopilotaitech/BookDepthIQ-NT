@@ -9,6 +9,9 @@ public sealed record FlowRead(long Net, long Pulled, long Stacked, long Traded, 
 {
     /// <summary>Signed raw net pull/stack text for an eligible row, or null when the net is zero.</summary>
     public string? DisplayText => Net == 0 ? null : (Net > 0 ? "+" : "") + Net;
+    /// <summary>Bid additions / ask removals positive; ask additions / bid removals negative.</summary>
+    public long Pressure { get; init; }
+    public double PressureStrength => Pulled + Stacked > 0 ? Math.Clamp(Math.Abs((double)Pressure) / (Pulled + Stacked), 0, 1) : 0;
 }
 
 public sealed class LiquidityTracker
@@ -38,7 +41,7 @@ public sealed class LiquidityTracker
     public const int EdgeLevels = 3;
 
     private sealed record Hit(long At, long Price, long Qty, char Side, long Shown);
-    private sealed record Flow(long At, long Pull, long Stack, long Traded);
+    private sealed record Flow(long At, long Pull, long Stack, long Traded, long Pressure);
 
     private Dictionary<long, long> cur = new();
     /// <summary>Finished 10 s bins: per price, time-averaged resting size, signed (+ bid, − offer), oldest first.</summary>
@@ -108,8 +111,9 @@ public sealed class LiquidityTracker
         InvalidateReads();
         now = Math.Max(now, at);
         var next = new Dictionary<long, long>();
-        for (var i = 0; i < book.Bids.Ticks.Length; i++) next[book.Bids.Ticks[i]] = book.Bids.Sizes[i];
-        for (var i = 0; i < book.Asks.Ticks.Length; i++) next[book.Asks.Ticks[i]] = book.Asks.Sizes[i];
+        var nextSigned = new Dictionary<long, long>();
+        for (var i = 0; i < book.Bids.Ticks.Length; i++) { next[book.Bids.Ticks[i]] = book.Bids.Sizes[i]; nextSigned[book.Bids.Ticks[i]] = book.Bids.Sizes[i]; }
+        for (var i = 0; i < book.Asks.Ticks.Length; i++) { next[book.Asks.Ticks[i]] = book.Asks.Sizes[i]; nextSigned[book.Asks.Ticks[i]] = -book.Asks.Sizes[i]; }
         // Only prices inside the range BOTH snapshots cover count, and not the flickering edge levels.
         static (long lo, long hi) Range(Dictionary<long, long> m)
         {
@@ -137,7 +141,11 @@ public sealed class LiquidityTracker
             if (pull > 0 || stack > 0 || traded > 0)
             {
                 if (!flows.TryGetValue(p, out var list)) flows[p] = list = new List<Flow>();
-                list.Add(new Flow(at, pull, stack, traded));
+                var oldSide = Math.Sign(curSigned.GetValueOrDefault(p));
+                var newSide = Math.Sign(nextSigned.GetValueOrDefault(p));
+                if(newSide==0) newSide=oldSide;
+                if(oldSide==0) oldSide=newSide;
+                list.Add(new Flow(at, pull, stack, traded, stack*newSide-pull*oldSide));
             }
         }
         tradedSince.Clear();
@@ -171,9 +179,7 @@ public sealed class LiquidityTracker
         binStart = bs;
         lastBookAt = at;
         cur = next;
-        curSigned = new Dictionary<long, long>();
-        for (var i = 0; i < book.Bids.Ticks.Length; i++) curSigned[book.Bids.Ticks[i]] = book.Bids.Sizes[i];
-        for (var i = 0; i < book.Asks.Ticks.Length; i++) curSigned[book.Asks.Ticks[i]] = -book.Asks.Sizes[i];
+        curSigned = nextSigned;
         MaxSize = 0;
         foreach (var bin in bins) foreach (var v in bin.Values) MaxSize = Math.Max(MaxSize, v);
         foreach (var v in cur.Values) MaxSize = Math.Max(MaxSize, v);
@@ -260,12 +266,12 @@ public sealed class LiquidityTracker
     {
         var key=(price,group,absorbMin);
         if(flowReads.TryGetValue(key,out var cached)) return cached;
-        long pulled = 0, stacked = 0, traded = 0;
+        long pulled = 0, stacked = 0, traded = 0, pressure = 0;
         for (var k = 0; k < group; k++)
             if (flows.TryGetValue(price + k, out var list))
-                foreach (var f in list) if(now-f.At<=FlowWindowMs) { pulled += f.Pull; stacked += f.Stack; traded += f.Traded; }
+                foreach (var f in list) if(now-f.At<=FlowWindowMs) { pulled += f.Pull; stacked += f.Stack; traded += f.Traded; pressure += f.Pressure; }
         var net = stacked - pulled;
-        var result=new FlowRead(net, pulled, stacked, traded, Absorb(price, group, absorbMin), Math.Abs(net) > 0 && Math.Abs(net) >= 0.2 * (pulled + stacked));
+        var result=new FlowRead(net, pulled, stacked, traded, Absorb(price, group, absorbMin), Math.Abs(net) > 0 && Math.Abs(net) >= 0.2 * (pulled + stacked)) { Pressure=pressure };
         if(flowReads.Count>=4096) flowReads.Clear();
         flowReads[key]=result;
         return result;

@@ -277,10 +277,16 @@ public sealed class LadderControl : Control
                     case Col.Flow:
                     {
                         var f = s.Liquidity.FlowAt(t, g);
-                        if (f.DisplayText is { } value)
+                        if (f.DisplayText != null || f.Pressure != 0)
                         {
-                            var color = f.Net > 0 ? Pal.Pos : Pal.Neg;
-                            Text(ctx, value, x, y, cw - 2, RowH, f.Signal ? color : Pal.Mix(color, Pal.Muted, 0.6), 9.5, TextAlignment.Right, bold: f.Signal);
+                            var value=f.DisplayText ?? "0";
+                            // Colour expresses directional pressure; +/- still expresses stacking/pulling.
+                            var color = f.Pressure > 0 ? Pal.HeatBid : f.Pressure < 0 ? Pal.HeatAsk : Pal.Muted;
+                            var strength=f.PressureStrength;
+                            ctx.FillRectangle(Pal.B(Pal.Bg),new Rect(x+1,y+1,Math.Max(0,cw-2),RowH-2));
+                            if(f.Pressure!=0)
+                                ctx.FillRectangle(Pal.B(color,0.14+0.34*strength),new Rect(x+1,y+1,Math.Max(0,cw-2)*strength,RowH-2));
+                            Text(ctx, value, x, y, cw - 3, RowH, Pal.Text, 10, TextAlignment.Right, bold: true);
                         }
                         break;
                     }

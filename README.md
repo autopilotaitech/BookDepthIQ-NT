@@ -30,12 +30,20 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current release: [1.12.3](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.3).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.3/BookDepthIQ-DOM-1.12.3-win-x64.zip).
+**Current release: [1.12.4](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.4).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.12.4/BookDepthIQ-DOM-1.12.4-win-x64.zip).
 Upgrading from 1.10.6 or earlier requires replacing **both the DOM and the NinjaTrader bridge** and
 compiling the bridge with F5. This includes the prop-account discovery fix.
 
-### New in 1.12.3 (since 1.10.6)
+### New in 1.12.4
+
+FLOW cells now have a directional heatmap behind readable signed numbers. Cyan indicates bullish
+pressure (bid stacking or ask pulling); orange indicates bearish pressure (ask stacking or bid pulling).
+Bar width and brightness reflect directional net flow relative to total adding/removing activity.
+Numbers retain their raw meaning: positive = net stacking, negative = net pulling. Direction uses
+the bid/ask side when the flow occurred and aggregates across grouped ladder rows.
+
+### Included since 1.10.6
 
 - Live/prop account discovery refreshes automatically; the top selector shows connection status and a refresh button.
 - TAPE has its own toolbar button; JOURNAL opens a separate calendar and analytics window.
@@ -262,10 +270,10 @@ Observed holds are recorded to `%APPDATA%\BookDepthIQ-NT\outlook-observations.js
 No calibrated probability is displayed yet; these observations are not trade returns.
 
 ```
-powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.3
+powershell -ExecutionPolicy Bypass -File tools\package.ps1 -Version 1.12.4
 ```
 
-This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.3-win-x64.zip` (~37 MB), which holds:
+This runs the tests, then builds `dist\BookDepthIQ-DOM-1.12.4-win-x64.zip` (~37 MB), which holds:
 - `BookDepthIQ-DOM.exe`: one self-contained file, so the user needs no .NET install.
 - `NinjaTrader\BookDepthIQBridge.cs`: the AddOn.
 - `INSTALL.txt`: the install steps.
