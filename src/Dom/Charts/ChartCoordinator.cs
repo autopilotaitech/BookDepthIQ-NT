@@ -3,14 +3,14 @@ using BookDepthIQ.Core.Charts;
 
 namespace BookDepthIQ.Dom.Charts;
 
-public sealed record ChartSnapshot(IReadOnlyList<ChartBar> Bars,double TickSize,string Status,long? LastPrice,long Version);
+public sealed record ChartSnapshot(IReadOnlyList<ChartBar> Bars,double TickSize,string Status,long? LastPrice,long Version,long ReceivedAtMs=0);
 
 /// <summary>Chart worker state only. No account, order, DOM state or UI-thread dependency.</summary>
 public sealed class ChartCoordinator
 {
     sealed class Slot
     {
-        public long Generation,Version,Sequence;
+        public long Generation,Version,Sequence,ReceivedAtMs;
         public ChartStore Store=new(2000);
         public double TickSize=.25;
         public string Status="OFFLINE";
@@ -28,7 +28,7 @@ public sealed class ChartCoordinator
         lock(gate)
         {
             var s=slots[slot];s.Generation++;s.Store=new ChartStore(count,slot==2?75000:10000);s.Store.Reset(s.Generation);
-            s.Cached=Array.Empty<ChartBar>();s.Last=null;s.Sequence=0;s.Dirty=true;s.Version++;s.Status="LOADING";return s.Generation;
+            s.Cached=Array.Empty<ChartBar>();s.Last=null;s.Sequence=0;s.ReceivedAtMs=0;s.Dirty=true;s.Version++;s.Status="LOADING";return s.Generation;
         }
     }
     public void Disconnected(string reason="OFFLINE · chart bridge unavailable") {lock(gate) foreach(var s in slots) {s.Status=reason;s.Version++;}}
@@ -60,11 +60,12 @@ public sealed class ChartCoordinator
                 case "error":s.Status=m.GetProperty("message").GetString()??"Chart error";break;
             }
             s.Version++;
+            s.ReceivedAtMs=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         }
     }
     public ChartSnapshot Snapshot(int slot)
     {
-        lock(gate) {var s=slots[shared.TryGetValue(slot,out var source)?source:slot];if(s.Dirty) {s.Cached=s.Store.Snapshot();s.Dirty=false;}return new(s.Cached,s.TickSize,s.Status,s.Last,s.Version);}
+        lock(gate) {var s=slots[shared.TryGetValue(slot,out var source)?source:slot];if(s.Dirty) {s.Cached=s.Store.Snapshot();s.Dirty=false;}return new(s.Cached,s.TickSize,s.Status,s.Last,s.Version,s.ReceivedAtMs);}
     }
     public long Version(int slot) {lock(gate) return slots[slot].Version;}
 }

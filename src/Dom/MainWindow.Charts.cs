@@ -30,11 +30,6 @@ public sealed partial class MainWindow
         s.ChartTrades.SetCapture(slots.Any(slot=>(slot==0?cfg.Charts.Top:cfg.Charts.Bottom).ShowLargeTrades),DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         if(slots.Length==0) {chartClient?.Dispose();chartClient=null;return;}
         chartClient??=new ChartClient(chartModel);
-        var requests=slots.Select(slot=> {
-            var pane=slot==0?cfg.Charts.Top:cfg.Charts.Bottom;
-            return new ChartClient.Request(slot,cfg.Instrument,pane.Frame,pane.Lookback(pane.Frame));
-        }).ToList();
-        if(slots.Any(slot=>(slot==0?cfg.Charts.Top:cfg.Charts.Bottom).PaxActive)) requests.Add(new ChartClient.Request(2,cfg.Instrument,-30,75000));
-        chartClient.SetRequests(requests);
+        chartClient.SetRequests(ChartRequests.Build(cfg.Instrument,slots,cfg.Charts));
     }
 }

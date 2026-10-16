@@ -16,6 +16,8 @@ public sealed partial class CandleChartControl : Control
     public IReadOnlyList<ChartTradeLine> TradeLines {get;set;}=Array.Empty<ChartTradeLine>();
     public ChartTradeSnapshot CapturedTrades {get;set;}=ChartTradeSnapshot.Empty;
     public LargeTradeProfile TradeProfile {get;set;}=new();
+    public SessionZoneSnapshot SessionZones {get;set;}=SessionZoneSnapshot.Empty;
+    public SessionZoneSettings SessionStyle {get;set;}=new();
     double?[] sma=Array.Empty<double?>(),ema=Array.Empty<double?>();
     IReadOnlyList<ChartBar>? studyBars;
     (bool Sma,bool Ema,int Period) studySettings;
