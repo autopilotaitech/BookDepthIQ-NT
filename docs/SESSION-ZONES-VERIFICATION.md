@@ -54,7 +54,10 @@ Owner checklist: enable zones on a Sim101-connected chart without placing orders
 H/L to native 30-second history; switch contracts/timeframes; reconnect the feed; toggle PAX
 and zones independently; check custom sessions across DST and restart persistence.
 
-Main and the published beta7 release are intentionally unchanged during feature testing.
+The feature was merged into main after the owner's testing approval on October 16, 2026,
+including the subsequent beta.9 live-update and beta.10 PAX corrections. The published beta7
+release remains unchanged. The acceptance limits above describe the recorded automated checks;
+owner testing approval is not a claim of exhaustive provider/latency certification.
 
 ## Review disposition
 

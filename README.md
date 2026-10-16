@@ -32,9 +32,9 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Session-zone development build: 1.13.0-beta.10**, on `codex/chart-session-zones`.
-This feature is not yet merged into main or published as a GitHub release. The current
-published download below remains beta.7; it does not contain session zones.
+**Main branch: 1.13.0-beta.10 source**, including session zones, live candle updates and PAX corrections.
+Merged after the owner's testing approval on October 16, 2026. The current published download
+below remains beta.7; it does not contain these newer corrections or session zones.
 
 **Current beta prerelease: [1.13.0-beta.7](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.13.0-beta.7).**
 Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.7/BookDepthIQ-DOM-1.13.0-beta.7-win-x64.zip)
@@ -46,7 +46,7 @@ See [release/upgrade notes](docs/RELEASE-1.13.0-beta.7.md).
 Still beta: broader owner testing, native parity and latency checks remain pending.
 The previous [1.12.13 DOM-only release](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13) remains available.
 
-### Session-zone preview — 1.13.0-beta.10 feature branch
+### Main branch updates — 1.13.0-beta.10
 
 Beta.10 corrects chart PAX extension activation and same-day plot endpoints against the supplied
 PAX source. Previous sessions can be **0 (today only)**; zero step hides extensions without hiding
