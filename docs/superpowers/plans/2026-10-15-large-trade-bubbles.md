@@ -1,5 +1,8 @@
 # Large Trade Bubbles Implementation Plan
 
+Implementation completed on `codex/chart-large-trades`; see `docs/LARGE-TRADES-VERIFICATION.md`
+for tests, screenshots, measured limits and the necessary additive chart-timestamp bridge correction.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
 **Goal:** Build the approved live executed-trade bubble overlay with per-instrument preferences.

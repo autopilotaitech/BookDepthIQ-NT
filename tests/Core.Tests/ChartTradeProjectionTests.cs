@@ -2,6 +2,22 @@ using BookDepthIQ.Core.Charts;
 using Xunit;
 public class ChartTradeProjectionTests
 {
+    [Fact] public void Fifty_thousand_print_query_allocates_only_bounded_marker_candidates()
+    {
+        var input=Enumerable.Range(1,50000).Select(i=>Print(i,1000,i)).ToArray();var bars=new[]{Bar(0,0),Bar(1,60000)};
+        ChartTradeProjection.Build(input,bars,1,0,60000,1,12,42);
+        var before=GC.GetAllocatedBytesForCurrentThread();var result=ChartTradeProjection.Build(input,bars,1,0,60000,1,12,42);
+        var allocated=GC.GetAllocatedBytesForCurrentThread()-before;
+        Assert.Equal(500,result.Markers.Count);Assert.True(allocated<500000,$"Projection allocated {allocated:N0} bytes for a 500-marker output");
+    }
+    [Fact] public void Dense_view_budget_preserves_largest_prints_without_summing_or_changing_source()
+    {
+        var source=new ChartBubbleProjection(Enumerable.Range(1,500).Select(i=>new ChartBubble(Print(i,1000,i),i/5d,42)).ToArray(),1);
+        var result=ChartTradeProjection.LimitDensity(source,new ChartGeometry(600,420,0,120,90,110),42);
+        Assert.InRange(result.Markers.Count,1,113);Assert.Contains(result.Markers,m=>m.Print.Quantity==500);
+        Assert.Equal(501-result.Markers.Count,result.Omitted);Assert.Equal(500,source.Markers.Count);
+        Assert.All(result.Markers,m=>Assert.Equal(m.Print.Id,m.Print.Quantity));
+    }
     static ChartBar Bar(int i,long ms)=>new(i,DateTimeOffset.FromUnixTimeMilliseconds(ms),new(2026,10,15),100,110,90,100,1,1,false);
     static ChartPrint Print(long id,long ms,long qty=50)=>new(id,"NQ TEST",100,qty,'b',ms);
     [Fact] public void Threshold_size_and_native_end_boundaries_use_individual_prints()

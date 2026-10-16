@@ -42,6 +42,9 @@ Still beta: broader owner testing, native parity and latency checks remain pendi
 Development branch `codex/chart-navigation-polish` adds clearer price/crosshair displays and
 recenter/scale controls; see [chart verification](docs/CHART-NAVIGATION-VERIFICATION.md).
 This does not change the published beta3 download above.
+Development branch `codex/chart-large-trades` adds optional live executed-trade bubbles with
+per-instrument colors/thresholds. It requires the updated DOM bridge for chart-aligned timestamps;
+see [actual preview, verification and limitations](docs/LARGE-TRADES-VERIFICATION.md).
 The previous [1.12.13 DOM-only release](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13) remains available.
 
 ### New in 1.13.0-beta.3 — two charts and compact DOM telemetry

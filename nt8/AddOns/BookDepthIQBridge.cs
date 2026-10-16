@@ -638,7 +638,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 else if (e.MarketDataType == MarketDataType.Last)
                 {
                     var side = lastAsk > 0 && e.Price >= lastAsk ? "b" : lastBid > 0 && e.Price <= lastBid ? "s" : "?";
-                    Send(new Dictionary<string, object> { { "t", "trade" }, { "p", e.Price }, { "v", e.Volume }, { "side", side }, { "ms", ToMs(e.Time) } });
+                    Send(LiveTradePacket(e, side));
                     return;
                 }
                 else return;
@@ -646,6 +646,19 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
 
             // ───────────── account ─────────────
+
+            // Additive chart metadata only. Legacy analytics/execution timestamps remain unchanged.
+            private static Dictionary<string, object> LiveTradePacket(MarketDataEventArgs e, string side)
+            {
+                var packet = new Dictionary<string, object> { { "t", "trade" }, { "p", e.Price }, { "v", e.Volume }, { "side", side }, { "ms", ToMs(e.Time) }, { "inst", e.Instrument.FullName } };
+                try
+                {
+                    var utc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(e.Time, DateTimeKind.Unspecified), Core.Globals.GeneralOptions.TimeZoneInfo);
+                    packet["chartMs"] = (long)(utc - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+                }
+                catch (ArgumentException) { } // Unproved DST time: omit chart marker, keep legacy feed running.
+                return packet;
+            }
 
             private static bool OwnedBracket(Order o)
             { return o.Name!=null && (o.Name.StartsWith("BDIQ TP") || o.Name.StartsWith("BDIQ SL")); }

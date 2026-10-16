@@ -37,6 +37,8 @@ public sealed class ChartSettingsWindow : Window
             settings.ShowLastPrice=lastPrice.IsChecked==true;settings.ShowCrosshair=crosshair.IsChecked==true;settings.SnapCrosshair=snap.IsChecked==true;
             if(workspaceSettings!=null) workspaceSettings.LinkCrosshair=link.IsChecked==true;
             settings.Sma=sma.IsChecked==true;settings.Ema=ema.IsChecked==true;settings.Period=(int)(period.Value??20);settings.Pax=pax.IsChecked==true;settings.PaxDays=(int)(days.Value??8);changed();Close();}));
-        actions.Children.Add(Flight.HeadBtn("CANCEL",Close));panel.Children.Add(actions);Content=new ScrollViewer {Content=panel};
+        actions.Children.Add(Flight.HeadBtn("CANCEL",Close));
+        var root=new DockPanel();var footer=new Border {Background=Pal.B(Pal.Panel),BorderBrush=Pal.B(Pal.Line),BorderThickness=new Thickness(0,1,0,0),Padding=new Thickness(18,10),Child=actions};
+        DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);root.Children.Add(new ScrollViewer {Content=panel});Content=root;
     }
 }

@@ -71,6 +71,22 @@ public sealed class PreviewWindow : Window
             var bars=Fixture(settings.Frame,requested);
             panes[i].Update("NQ · PREVIEW",new(bars,.25,"LIVE",bars[^1].Close+3,1));
             var last=bars[^1].Close;
+            if(Program.Options.Contains("--bubbles"))
+            {
+                settings.ShowLargeTrades=true;
+                panes[i].Chart.TradeProfile=new() {MinDiameter=32,MaxDiameter=54,Labels=TradeQuantityLabels.All};
+                var indexes=new[]{bars.Length-100,bars.Length-80,bars.Length-58,bars.Length-35,bars.Length-14};
+                var quantities=new long[]{85,120,65,210,95};
+                var prints=indexes.Select((index,j)=>new ChartPrint(j+1,"NQ · PREVIEW",bars[index].Close,quantities[j],j is 1 or 4?'s':'b',bars[index].Time.AddMinutes(-settings.Frame*.5).ToUnixTimeMilliseconds())).ToArray();
+                panes[i].Chart.CapturedTrades=new(prints,new[]{new ChartTradeCoverage(bars[indexes[0]].Time.ToUnixTimeMilliseconds(),null)},0,1);
+            }
+            if(Program.Options.Contains("--trade-load"))
+            {
+                var prints=Enumerable.Range(0,50000).Select(j=> {
+                    var index=1+j%(bars.Length-1);return new ChartPrint(j+1,"NQ · PREVIEW",bars[index].Close,50+j%500,j%3==0?'s':j%3==1?'b':'?',bars[index].Time.AddMinutes(-settings.Frame*.5).ToUnixTimeMilliseconds());
+                }).OrderBy(p=>p.TimeMs).ThenBy(p=>p.Id).ToArray();
+                panes[i].Chart.CapturedTrades=new(prints,Array.Empty<ChartTradeCoverage>(),0,1);
+            }
             panes[i].Chart.TradeLines=new[]{new ChartTradeLine("target",(last+45)*.25,2,false,ChartTradeKind.Target,"TP SELL"),new ChartTradeLine("stop",(last-50)*.25,2,false,ChartTradeKind.Stop,"SL SELL"),new ChartTradeLine("position",(last-8)*.25,2,true,ChartTradeKind.Position,"AVG LONG")};
             if(Program.Options.Contains("--center")) panes[i].Chart.Recenter();
             if(Program.Options.Contains("--all")) panes[i].Chart.Viewport.Zoom(100,1,bars.Length);
@@ -96,11 +112,27 @@ public sealed class PreviewWindow : Window
         var timings=new List<double>();long allocation=0;
         if(Program.Options.Contains("--benchmark"))
         {
+            ChartTradeStore? liveStore=null;long clock=0;
+            if(Program.Options.Contains("--stream")&&panes[0].Chart.CapturedTrades.Prints.Count>0)
+            {
+                liveStore=new();liveStore.Reset("NQ · PREVIEW");liveStore.SetCapture(true,0);
+                clock=panes[0].Chart.CapturedTrades.Prints.Max(p=>p.TimeMs);
+                foreach(var p in panes[0].Chart.CapturedTrades.Prints) liveStore.Add(p.Instrument,p.Tick,p.Quantity,p.Side,p.TimeMs,clock);
+            }
             bitmap.Render(this);var before=GC.GetAllocatedBytesForCurrentThread();
-            for(int i=0;i<60;i++) {var watch=Stopwatch.StartNew();bitmap.Render(this);timings.Add(watch.Elapsed.TotalMilliseconds);}
+            for(int i=0;i<60;i++)
+            {
+                var watch=Stopwatch.StartNew();
+                if(liveStore!=null)
+                {
+                    clock+=10;for(int j=0;j<20;j++) liveStore.Add("NQ · PREVIEW",120700+i%8,50+j*10,j%2==0?'b':'s',clock,clock);
+                    var data=liveStore.Snapshot(clock);foreach(var pane in panes) pane.Chart.CapturedTrades=data;
+                }
+                bitmap.Render(this);timings.Add(watch.Elapsed.TotalMilliseconds);
+            }
             allocation=GC.GetAllocatedBytesForCurrentThread()-before;timings.Sort();
         }
-        Console.WriteLine(JsonSerializer.Serialize(new {snapshot=Path.GetFullPath(output),width=Bounds.Width,height=Bounds.Height,scale,synthetic=true,networkConnections=0,renderP50Ms=timings.Count>0?timings[30]:0,renderP95Ms=timings.Count>0?timings[56]:0,managedBytesFor60Renders=allocation}));
+        Console.WriteLine(JsonSerializer.Serialize(new {snapshot=Path.GetFullPath(output),width=Bounds.Width,height=Bounds.Height,scale,synthetic=true,streamUpdates=Program.Options.Contains("--stream"),networkConnections=0,renderP50Ms=timings.Count>0?timings[30]:0,renderP95Ms=timings.Count>0?timings[56]:0,managedBytesFor60Renders=allocation}));
         Close();
     }
 }

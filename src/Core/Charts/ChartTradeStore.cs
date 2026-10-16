@@ -2,7 +2,7 @@ namespace BookDepthIQ.Core.Charts;
 
 public sealed record ChartPrint(long Id,string Instrument,long Tick,long Quantity,char Side,long TimeMs);
 public sealed record ChartTradeCoverage(long StartMs,long? EndMs);
-public sealed record ChartTradeSnapshot(IReadOnlyList<ChartPrint> Prints,IReadOnlyList<ChartTradeCoverage> Coverage,long Evicted,long Version)
+public sealed record ChartTradeSnapshot(IReadOnlyList<ChartPrint> Prints,IReadOnlyList<ChartTradeCoverage> Coverage,long Evicted,long Version,string Note="")
 {
     public static readonly ChartTradeSnapshot Empty=new(Array.Empty<ChartPrint>(),Array.Empty<ChartTradeCoverage>(),0,0);
 }
@@ -14,11 +14,13 @@ public sealed class ChartTradeStore
     readonly Queue<(ChartPrint Print,long Received)> prints=new();
     readonly List<ChartTradeCoverage> coverage=new();
     string instrument="";bool enabled,active;long id,version,evicted;ChartTradeSnapshot? cached;
+    string note="Waiting for verified live print timestamps.";
+    public void SetStatus(string value) {if(note==value) return;note=value;Dirty();}
     public ChartTradeStore(int capacity=50000,long retentionMs=3600000)
     {this.capacity=Math.Clamp(capacity,1,50000);this.retentionMs=Math.Clamp(retentionMs,1,3600000);}
     void Dirty() {version++;cached=null;}
     public void Reset(string value)
-    {instrument=value;prints.Clear();coverage.Clear();evicted=0;active=false;Dirty();}
+    {instrument=value;prints.Clear();coverage.Clear();evicted=0;active=false;note="Waiting for verified live print timestamps.";Dirty();}
     public void SetCapture(bool value,long nowMs)
     {
         if(value==enabled) return;enabled=value;
@@ -50,6 +52,6 @@ public sealed class ChartTradeStore
     {
         Trim(nowMs);
         return cached??=new(Array.AsReadOnly(prints.Select(p=>p.Print).OrderBy(p=>p.TimeMs).ThenBy(p=>p.Id).ToArray()),
-            Array.AsReadOnly(coverage.ToArray()),evicted,version);
+            Array.AsReadOnly(coverage.ToArray()),evicted,version,note);
     }
 }

@@ -7,18 +7,19 @@ namespace BookDepthIQ.Dom.Charts;
 public sealed partial class CandleChartControl
 {
     ChartTradeSnapshot? projectedTrades;IReadOnlyList<ChartBar>? projectedBars;
-    (double Start,double Count,double Low,double High,int Frame,LargeTradeProfile Profile) projectedKey;
+    (double Start,double Count,double Low,double High,double Width,double Height,int Frame,LargeTradeProfile Profile) projectedKey;
     ChartBubbleProjection projected=new(Array.Empty<ChartBubble>(),0);
     ChartBubbleProjection Bubbles(ChartGeometry plot)
     {
         if(!settings.ShowLargeTrades||snapshot.Bars.Count==0) return new(Array.Empty<ChartBubble>(),0);
-        var key=(Viewport.Start,Viewport.Count,plot.Low,plot.High,settings.Frame,TradeProfile);
+        var key=(Viewport.Start,Viewport.Count,plot.Low,plot.High,plot.PlotWidth,plot.PlotHeight,settings.Frame,TradeProfile);
         if(ReferenceEquals(projectedTrades,CapturedTrades)&&ReferenceEquals(projectedBars,snapshot.Bars)&&projectedKey==key) return projected;
         var first=Math.Clamp((int)Math.Floor(Viewport.Start),0,snapshot.Bars.Count-1);
         var last=Math.Clamp((int)Math.Ceiling(Viewport.Start+Viewport.Count),first,snapshot.Bars.Count-1);
         projected=ChartTradeProjection.Build(CapturedTrades.Prints,snapshot.Bars,settings.Frame,
             snapshot.Bars[Math.Max(0,first-1)].Time.ToUnixTimeMilliseconds(),snapshot.Bars[last].Time.ToUnixTimeMilliseconds(),
             TradeProfile.MinContracts,TradeProfile.MinDiameter,TradeProfile.MaxDiameter,plot.Low,plot.High);
+        projected=ChartTradeProjection.LimitDensity(projected,plot,TradeProfile.MaxDiameter);
         projectedTrades=CapturedTrades;projectedBars=snapshot.Bars;projectedKey=key;
         return projected;
     }
@@ -28,7 +29,7 @@ public sealed partial class CandleChartControl
         {
             var data=CapturedTrades;var first=data.Coverage.FirstOrDefault();var last=data.Coverage.LastOrDefault();
             var coverage=first==null?"Waiting for live prints":$"Captured since {DateTimeOffset.FromUnixTimeMilliseconds(first.StartMs).ToLocalTime():HH:mm:ss} · {data.Coverage.Count} coverage segments · {(last!.EndMs==null?"active":"paused")}";
-            return $"{coverage}\n{data.Prints.Count:N0} retained · {data.Evicted:N0} evicted · {Bubbles(Geometry).Omitted:N0} omitted by visible cap";
+            return $"{data.Note}{(data.Note.Length>0?"\n":"")}{coverage}\n{data.Prints.Count:N0} retained · {data.Evicted:N0} evicted · {Bubbles(Geometry).Omitted:N0} omitted by cap/density";
         }
     }
     void DrawBubbles(DrawingContext context,ChartGeometry plot)

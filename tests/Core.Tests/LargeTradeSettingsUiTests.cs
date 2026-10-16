@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
@@ -6,6 +7,20 @@ using BookDepthIQ.Dom.Charts;
 using Xunit;
 public class LargeTradeSettingsUiTests
 {
+    [AvaloniaFact] public void Apply_and_cancel_remain_visible_without_scrolling_past_all_settings()
+    {
+        var cfg=new ChartWorkspaceSettings();var window=new ChartSettingsWindow(cfg.Top,()=>{},workspaceSettings:cfg,instrument:"NQ TEST");window.Show();
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            foreach(var button in window.GetVisualDescendants().OfType<Button>().Where(c=>c.Content is string s&&s is "APPLY" or "CANCEL"))
+            {
+                var point=button.TranslatePoint(default,window)!.Value;
+                Assert.True(point.Y>=0&&point.Y+button.Bounds.Height<=window.Bounds.Height,$"{button.Content} outside settings viewport at {point.Y}");
+            }
+        }
+        finally {window.Close();}
+    }
     [AvaloniaFact] public void Cancel_and_invalid_apply_preserve_settings_and_both_chart_apply_does_not_reload()
     {
         var cfg=new ChartWorkspaceSettings();int changes=0;

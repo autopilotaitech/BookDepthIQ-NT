@@ -280,6 +280,13 @@ public sealed class DomState
             {
                 LastFeedMs = Environment.TickCount64;
                 var side = S(m, "side") is { Length: > 0 } sd ? sd[0] : '?';
+                if(Connected && S(m,"inst")==Instrument && m.TryGetProperty("chartMs",out var chartTime) && chartTime.TryGetInt64(out var chartMs) && chartMs is >=-62135596800000L and <=253402300799999L)
+                {
+                    var price=D(m,"p",0);var volume=(long)D(m,"v",0);
+                    if(double.IsFinite(price)&&price>0&&volume>0)
+                    {ChartTrades.SetStatus("");ChartTrades.Add(Instrument,Book.ToTicks(price,TickSize),volume,side,chartMs,NowMs());}
+                }
+                else if(!m.TryGetProperty("chartMs",out _)) ChartTrades.SetStatus("Update BookDepthIQBridge.cs and recompile NT for verified trade-bubble timestamps.");
                 OnPrint((long)D(m, "ms", NowMs()), D(m, "p", 0), (long)D(m, "v", 0), side, live: true);
                 break;
             }
@@ -364,7 +371,6 @@ public sealed class DomState
         LastTick = t;
         if (live)
         {
-            if(Connected) ChartTrades.Add(Instrument,t,size,side,ms,NowMs());
             if (FeedAgeMs > 2000) Outlook.Reset();
             if (Outlook.OnTrade(t, ms) is { } outcome)
             {

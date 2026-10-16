@@ -108,3 +108,12 @@ Do not bypass desktop-control failure with unobserved UI inputs.
 Deliver on a feature branch based on current chart work, unique local test version, verification
 notes and screenshot. No merge to main, published release or forced installed-app restart in this
 scope. Historical backfill/grouped mode require a separate follow-up design and verification.
+
+## Implementation correction
+
+Independent review found legacy DOM ms and chart-bar timestamps use different timezone conversions.
+The build therefore adds chart-only chartMs/inst metadata to live trade packets, preserving legacy
+analytics/execution timestamps and all order behavior. Exact instrument metadata is required; older
+bridges do not draw bubbles and explain the needed upgrade in settings. This supersedes the original
+app-only assumption. No installed bridge is automatically replaced. Density budgeting may show fewer
+than500 markers; hidden quantities are not summed and omission counts are available.
