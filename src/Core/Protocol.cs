@@ -13,7 +13,7 @@ public static class Protocol
     /// NinjaTrader is never touched by a test.</summary>
     public static readonly int Port = int.TryParse(Environment.GetEnvironmentVariable("BDIQ_PORT"), out var p) && p > 0 ? p : 36971;
     public const int Version = 2;
-    public const int OrderVersion = 2; // explicit reduction intent and position-sized protection
+    public const int OrderVersion = 3; // independent manual stop/target coverage, reconciled on actual fills
 
     // ── app → bridge ──
     public static string Subscribe(string instrument) => Line(new() { ["t"] = "sub", ["inst"] = instrument });

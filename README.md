@@ -32,6 +32,10 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
+Feature preview: **beta.12 manual exit coverage correction** on `codex/manual-exit-coverage`.
+Stop-first and TP-first manual exits no longer block each other's position-sized coverage.
+**Requires updated app AND DOM bridge (order capability3).** [Proof, upgrade and OCO limitations](docs/MANUAL-EXIT-COVERAGE.md).
+
 Feature preview: **beta.11 readable trade markers** on `codex/readable-trade-markers`:
 larger high-contrast circles and exact quantity badges, with unchanged thresholds/colors.
 [Preview, settings migration and test evidence](docs/READABLE-TRADE-MARKERS.md).

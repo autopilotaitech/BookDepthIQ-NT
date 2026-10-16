@@ -324,7 +324,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var signature = json.Serialize(accts);
                 if (!force && signature == accountSignature) return;
                 accountSignature = signature;
-                Send(new Dictionary<string, object> { { "t", hello ? "hello" : "accounts" }, { "v", 2 }, { "orderVersion", 2 }, { "accounts", accts } });
+                Send(new Dictionary<string, object> { { "t", hello ? "hello" : "accounts" }, { "v", 2 }, { "orderVersion", 3 }, { "accounts", accts } });
                 if(!hello && account!=null) { SendAccount(); SendPositions(); SendOrders(); }
             }
 
@@ -426,7 +426,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 { Ack(cid,false,"reduction refused: the original position is flat or has changed direction"); return; }
                 if(reducing)
                 {
-                    var reserved=reductions.Where(r=>r.Value.Owner==a && r.Value.Instrument==inst && Active(r.Key)).Sum(r=>Math.Max(0,r.Key.Quantity-r.Key.Filled));
+                    var reserved=ReservedReductions(a,inst,ot==OrderType.StopMarket);
                     if(qty>Math.Abs(posQty)-reserved) { Ack(cid,false,"exit quantity exceeds the unreserved position — use REVERSE to change direction"); return; }
                 }
                 var action = buy ? (posQty < 0 ? OrderAction.BuyToCover : OrderAction.Buy) : (posQty > 0 ? OrderAction.Sell : OrderAction.SellShort);
@@ -516,7 +516,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var qty=Math.Min(Int(m,"qty"),pos.Quantity);
                 if(qty<=0) { Ack(cid,false,"quantity must be > 0"); return; }
                 if(qty==pos.Quantity) { a.Flatten(new[]{inst}); Ack(cid,true,"flatten sent"); return; }
-                var reserved=reductions.Where(r=>r.Value.Owner==a && r.Value.Instrument==inst && Active(r.Key)).Sum(r=>Math.Max(0,r.Key.Quantity-r.Key.Filled));
+                var reserved=ReservedReductions(a,inst,false);
                 if(qty>pos.Quantity-reserved) { Ack(cid,false,"exit quantity exceeds the unreserved position"); return; }
                 var isLong=pos.MarketPosition==MarketPosition.Long;
                 var o=a.CreateOrder(inst,isLong?OrderAction.Sell:OrderAction.BuyToCover,OrderType.Market,OrderEntry.Manual,TimeInForce.Day,qty,0,0,"","BDIQ close",Core.Globals.MaxDate,null);
@@ -664,6 +664,12 @@ namespace NinjaTrader.NinjaScript.AddOns
             { return o.Name!=null && (o.Name.StartsWith("BDIQ TP") || o.Name.StartsWith("BDIQ SL")); }
             private static bool Active(Order o)
             { return IsWorking(o) || (o.OrderState.ToString().StartsWith("Cancel") && o.OrderState.ToString()!="Cancelled"); }
+            private int ReservedReductions(Account a,Instrument inst,bool stops)
+            {
+                return reductions.Where(r=>r.Value.Owner==a && r.Value.Instrument==inst && Active(r.Key)
+                    && (r.Key.OrderType==OrderType.StopMarket || r.Key.OrderType==OrderType.StopLimit)==stops)
+                    .Sum(r=>Math.Max(0,r.Key.Quantity-r.Key.Filled));
+            }
 
             /// <summary>Only shrink/cancel owned protection to match ACTUAL remaining exposure.
             /// Never attach a new bracket to a reduction or modify unrelated native orders.</summary>
@@ -681,13 +687,16 @@ namespace NinjaTrader.NinjaScript.AddOns
                         var remaining=pos==null ? 0 : pos.Quantity;
                         var isLong=pos!=null && pos.MarketPosition==MarketPosition.Long;
                         var cancel=new List<Order>(); var change=new List<Order>();
-                        var reductionCapacity=remaining;
+                        // A protective stop and a profit-taking exit cover the SAME exposure.
+                        // Bound each family independently; neither consumes the other's coverage.
+                        var reductionCapacity=remaining;var stopCapacity=remaining;
                         foreach(var pending in instrumentGroup.Where(o=>reductions.ContainsKey(o) && Active(o)))
                         {
                             Reduction r;
                             if(!reductions.TryGetValue(pending,out r)) continue;
-                            var keep=r.Long!=isLong ? 0 : Math.Min(reductionCapacity,Math.Max(0,pending.Quantity-pending.Filled));
-                            reductionCapacity-=keep;
+                            var stop=pending.OrderType==OrderType.StopMarket || pending.OrderType==OrderType.StopLimit;
+                            var keep=r.Long!=isLong ? 0 : Math.Min(stop?stopCapacity:reductionCapacity,Math.Max(0,pending.Quantity-pending.Filled));
+                            if(stop) stopCapacity-=keep;else reductionCapacity-=keep;
                             if(keep==0) {cancel.Add(pending); continue;}
                             var wanted=pending.Filled+keep;
                             if(wanted!=pending.Quantity && !changingQuantity.ContainsKey(pending))
