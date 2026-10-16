@@ -32,6 +32,10 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
+Feature preview: **beta.13 explicit ladder order columns** on `codex/explicit-order-columns`.
+Only BUY/SELL submit new ladder orders; subtle cyan/orange tints identify them. Hover descriptions
+can be switched off in **Ticket → ENTRY → COLUMN HELP**. [Behavior and proof](docs/EXPLICIT-ORDER-COLUMNS.md).
+
 Feature preview: **beta.12 manual exit coverage correction** on `codex/manual-exit-coverage`.
 Stop-first and TP-first manual exits no longer block each other's position-sized coverage.
 **Requires updated app AND DOM bridge (order capability3).** [Proof, upgrade and OCO limitations](docs/MANUAL-EXIT-COVERAGE.md).

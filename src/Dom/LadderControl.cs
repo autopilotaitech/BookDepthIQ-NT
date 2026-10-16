@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using BookDepthIQ.Core;
@@ -13,7 +14,7 @@ public sealed record LadderLine(long Ticks, string Label, Color Color, bool Dash
 /// <summary>
 /// The price ladder, drawn directly (no per-cell controls): HEAT · PULL/STACK | BUY | SOLD | BID |
 /// PRICE | ASK | BOUGHT | SELL | P&L | PROFILE | Δ, each switchable. Click the
-/// buy side (BUY, SOLD, BID) for a buy limit, the sell side (ASK, BOUGHT, SELL) for a sell limit,
+/// BUY for a buy limit, SELL for a sell limit. Other columns never submit new orders;
 /// shift-click for a stop. A double-click on a row that has orders adds another; right-click cancels them, drag
 /// moves them; drag a preview leg to
 /// set the stop or a target. Calm follow: the ladder re-centres only when price drifts a sixth of the
@@ -36,6 +37,7 @@ public sealed class LadderControl : Control
     private bool dragShift;
     private int? dragPreview; // -1 = SL, 0..2 = TP
     private long? dragTo;
+    private (bool Buy,long Row,bool Stop,Point Origin,Col Column)? pendingEntry;
     private (Col Col, double X, double W)[] cols = Array.Empty<(Col, double, double)>();
 
     public Func<IReadOnlyList<LadderLine>> Lines { get; set; } = () => Array.Empty<LadderLine>();
@@ -123,8 +125,10 @@ public sealed class LadderControl : Control
         var ind = cfg.IndicatorsFor(s.Instrument);
 
         ctx.FillRectangle(Pal.B(Pal.Panel), new Rect(0, 0, w, RowH));
+        foreach(var c in cols.Where(c=>c.Col is Col.Buy or Col.Sell))
+            ctx.FillRectangle(Pal.B(c.Col==Col.Buy?Pal.Bid:Pal.Ask,.055),new Rect(c.X,0,c.W,Bounds.Height));
         foreach (var (c, x, cw) in cols)
-            Text(ctx, c == Col.Heat ? $"HEAT {cfg.HeatMinutes}M ▾" : c == Col.Flow ? $"FLOW {cfg.FlowSeconds}s" : Heads[(int)c] + (c == Col.Price && g > 1 ? $" ×{g}" : ""), x, 0, cw, RowH, Pal.Muted, 9.5, TextAlignment.Center);
+            Text(ctx, c == Col.Heat ? $"HEAT {cfg.HeatMinutes}M ▾" : c == Col.Flow ? $"FLOW {cfg.FlowSeconds}s" : Heads[(int)c] + (c == Col.Price && g > 1 ? $" ×{g}" : ""), x, 0, cw, RowH, c==Col.Buy?Pal.Bid:c==Col.Sell?Pal.Ask:Pal.Muted, 9.5, TextAlignment.Center);
 
         var book = s.Book;
         var bids = LadderMath.Aggregate(book.Bids.Ticks, book.Bids.Sizes, g);
@@ -171,7 +175,7 @@ public sealed class LadderControl : Control
             if (InVa(t) && ColRect(Col.Price) is (double px0, double pw0))
                 ctx.FillRectangle(Pal.B(Pal.VaBand, 15 / 255.0), new Rect(px0, y, pw0, RowH));
             ctx.FillRectangle(Pal.B(Pal.RowLine), new Rect(0, y + RowH - 1, w, 1));
-            if (hoverRow == t && hoverCol is Col hc && hc is Col.Buy or Col.Sold or Col.Bid or Col.Ask or Col.Bought or Col.Sell && ColRect(hc) is (double hx, double hw))
+            if (hoverRow == t && hoverCol is Col hc && hc is Col.Buy or Col.Sell && ColRect(hc) is (double hx, double hw))
                 ctx.FillRectangle(Pal.B(Pal.Hover), new Rect(hx, y, hw, RowH - 1));
         }
 
@@ -475,11 +479,49 @@ public sealed class LadderControl : Control
     }
 
     protected override void OnPointerEntered(PointerEventArgs e) { pointerOver = true; base.OnPointerEntered(e); }
-    protected override void OnPointerExited(PointerEventArgs e) { pointerOver = false; hoverRow = null; InvalidateVisual(); base.OnPointerExited(e); }
+    protected override void OnPointerExited(PointerEventArgs e) { pointerOver = false; hoverRow = null; pendingEntry=null;ToolTip.SetTip(this,null); InvalidateVisual(); base.OnPointerExited(e); }
+
+    public void RefreshColumnHelp() {if(!cfg.ColumnHelp) {ToolTip.SetTip(this,null);ToolTip.SetIsOpen(this,false);}}
+    public ToggleButton CreateColumnHelpToggle(Action save)
+    {
+        var toggle=Flight.Pill("COLUMN HELP","Show short descriptions when hovering over ladder columns");
+        toggle.Name="ColumnHelp";toggle.IsChecked=cfg.ColumnHelp;
+        toggle.IsCheckedChanged+=(_,_)=> {cfg.ColumnHelp=toggle.IsChecked==true;RefreshColumnHelp();save();};
+        return toggle;
+    }
+    private void ColumnDescription(Col col)
+    {
+        if(!cfg.ColumnHelp) {RefreshColumnHelp();return;}
+        ToolTip.SetShowDelay(this,650);
+        ToolTip.SetTip(this,col switch {
+            Col.Buy=>"BUY · left-click for a buy limit; Shift-click for a buy stop. Drag existing orders to move; right-click to cancel.",
+            Col.Sell=>"SELL · left-click for a sell limit; Shift-click for a sell stop. Drag existing orders to move; right-click to cancel.",
+            Col.Sold=>"SOLD · executed volume at the bid (read-only).",
+            Col.Bought=>"BOUGHT · executed volume at the ask (read-only).",
+            Col.Bid=>"BID · resting buy liquidity (read-only; no new orders).",
+            Col.Ask=>"ASK · resting sell liquidity (read-only; no new orders).",
+            Col.Price=>"PRICE · wheel/drag to zoom; double-click to reset (no orders).",
+            Col.Heat=>"HEAT · historical resting liquidity (read-only). Click its header to change the time window.",
+            Col.Flow=>"FLOW · recent directional pulling/stacking (read-only).",
+            Col.Abs=>"ABS · absorption indication (read-only).",
+            Col.Pnl=>"P&L · estimated position profit/loss at each price (read-only).",
+            Col.Profile=>"PROFILE · traded volume by price in the visible ladder (read-only).",
+            _=>"DELTA · buy-side minus sell-side executed volume (read-only)."});
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        pendingEntry=null;dragOrder=null;dragGroup.Clear();dragPreview=null;dragTo=null;zoomDragY=null;resizeAt=null;
+        base.OnPointerCaptureLost(e);
+    }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         var p = e.GetPosition(this);
+        ColumnDescription(ColAt(p.X));
+        var buttons=e.GetCurrentPoint(this).Properties;
+        if(pendingEntry is {} pending && (buttons.IsMiddleButtonPressed||buttons.IsRightButtonPressed||Math.Abs(p.X-pending.Origin.X)>4||Math.Abs(p.Y-pending.Origin.Y)>4||ColAt(p.X)!=pending.Column||RowAt(p.Y)!=pending.Row))
+        {pendingEntry=null;e.Pointer.Capture(null);}
         if (resizeAt != null) { ResizeTo(p.X); return; }
         if (p.Y < RowH)
         {
@@ -507,8 +549,13 @@ public sealed class LadderControl : Control
     {
         Focus();
         var p = e.GetPosition(this);
+        DoLayout();pendingEntry=null;
+        var buttons=e.GetCurrentPoint(this).Properties;
+        if(buttons.PointerUpdateKind!=PointerUpdateKind.LeftButtonPressed&&buttons.PointerUpdateKind!=PointerUpdateKind.RightButtonPressed) return;
+        if(p.X<0||p.X>=Bounds.Width||p.Y<0||p.Y>=Bounds.Height) return;
         if (p.Y < RowH)
         {
+            if(!buttons.IsLeftButtonPressed) return;
             if (DividerAt(p.X) is int d)
             {
                 if (e.ClickCount >= 2)
@@ -537,6 +584,7 @@ public sealed class LadderControl : Control
         var col = ColAt(p.X);
         if (col == Col.Price)
         {
+            if(!buttons.IsLeftButtonPressed) return;
             if (e.ClickCount >= 2) { zoomDragY = null; ResetZoom(); return; }
             zoomDragY = p.Y;
             e.Pointer.Capture(this);
@@ -553,7 +601,11 @@ public sealed class LadderControl : Control
         if (here.Count > 0)
         {
             // Double-click a row that has orders: add another order there.
-            if (e.ClickCount >= 2) { PlaceRequested?.Invoke(here[0].IsBuy, row, shift); return; }
+            if (e.ClickCount >= 2)
+            {
+                if(col is Col.Buy or Col.Sell) {pendingEntry=(col==Col.Buy,row,shift,p,col);e.Pointer.Capture(this);}
+                return;
+            }
             // Otherwise pick the orders up: dragged to another row they move; released on their own
             // row nothing is sent, and the hint says how to add.
             dragOrder = here[0];
@@ -564,13 +616,21 @@ public sealed class LadderControl : Control
             return;
         }
         if (PreviewAt(row, col) is int k) { dragPreview = k; dragTo = row; e.Pointer.Capture(this); return; }
-        if (col is Col.Buy or Col.Sold or Col.Bid) PlaceRequested?.Invoke(true, row, shift);
-        else if (col is Col.Ask or Col.Bought or Col.Sell) PlaceRequested?.Invoke(false, row, shift);
+        if (col is Col.Buy or Col.Sell) {pendingEntry=(col==Col.Buy,row,shift,p,col);e.Pointer.Capture(this);}
         base.OnPointerPressed(e);
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        if(e.InitialPressMouseButton!=MouseButton.Left) return;
+        if(pendingEntry is {} pending)
+        {
+            pendingEntry=null;var p=e.GetPosition(this);
+            var send=p.X>=0&&p.X<Bounds.Width&&p.Y>=RowH&&p.Y<Bounds.Height&&ColAt(p.X)==pending.Column&&RowAt(p.Y)==pending.Row&&Math.Abs(p.X-pending.Origin.X)<=4&&Math.Abs(p.Y-pending.Origin.Y)<=4;
+            e.Pointer.Capture(null);
+            if(send) PlaceRequested?.Invoke(pending.Buy,pending.Row,pending.Stop);
+            e.Handled=true;return;
+        }
         if (resizeAt != null)
         {
             resizeAt = null;
@@ -610,6 +670,7 @@ public sealed class LadderControl : Control
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
+        pendingEntry=null;dragOrder=null;dragGroup.Clear();dragPreview=null;dragTo=null;e.Pointer.Capture(null);
         var p = e.GetPosition(this);
         var steps = Math.Sign(e.Delta.Y);
         if (steps == 0) return;
