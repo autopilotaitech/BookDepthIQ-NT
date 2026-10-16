@@ -32,10 +32,9 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-Feature-branch preview: **Tokyo / London / New York session zones** with editable hours,
-named time zones, colors and per-chart visibility. Initially OFF; no chart trading actions.
-See [test evidence and actual-control screenshot](docs/SESSION-ZONES-VERIFICATION.md).
-Native/provider acceptance remains pending; the published download below is unchanged.
+**Session-zone development build: 1.13.0-beta.8**, on `codex/chart-session-zones`.
+This feature is not yet merged into main or published as a GitHub release. The current
+published download below remains beta.7; it does not contain session zones.
 
 **Current beta prerelease: [1.13.0-beta.7](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.13.0-beta.7).**
 Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.7/BookDepthIQ-DOM-1.13.0-beta.7-win-x64.zip)
@@ -46,6 +45,26 @@ The beta2+ chart AddOn is unchanged. From beta1/1.12.x/new install, install both
 See [release/upgrade notes](docs/RELEASE-1.13.0-beta.7.md).
 Still beta: broader owner testing, native parity and latency checks remain pending.
 The previous [1.12.13 DOM-only release](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13) remains available.
+
+### Session-zone preview — 1.13.0-beta.8 feature branch
+
+![Actual candle-chart controls with synthetic Tokyo, London and New York session ranges](docs/images/session-zones-preview.png)
+
+*Synthetic chart-control fixture, not a live trading screenshot. The main DOM layout is unchanged.*
+
+- Optional Tokyo, London and New York high/low range boxes, initially **OFF**. Open the
+  chart's **… → settings → SESSION ZONES** to enable them globally and on either chart.
+- Independent session toggles, colors, editable start/end hours and named time zones;
+  adjustable shading, labels, completed-session history and high/low extensions.
+- Native 30-second source shared with PAX; exact integer-tick highs/lows, DST-aware windows,
+  and explicit PARTIAL/STALE coverage. Day charts omit intraday session zones.
+- Subtle fills behind candles; labels remain at their true price or are omitted when crowded.
+  Zoom/pan/recenter and order/current-price overlays remain available. No chart trading actions.
+- **385 automated tests pass** (351 core/DOM +34 bridge-source), including stale-history,
+  reload/disconnect guards, extension-only views and dense-label checks at three DPI scales.
+  Release/native compilation passes. Native/provider parity and extended soak testing remain pending.
+
+[Verification, benchmark and remaining limitations](docs/SESSION-ZONES-VERIFICATION.md).
 
 ### New in 1.13.0-beta.7 — trade bubbles, chart orders and navigation
 
