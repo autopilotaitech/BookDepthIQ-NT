@@ -9,7 +9,8 @@ Settings open in the existing chart settings dialog; the mockup's settings card 
 placed beneath the chart. No permanent legend or toolbar banner is required.
 
 This specification adds explicit data/coverage constraints that were not conveyed by the picture.
-It is pending owner review; product implementation has not started.
+Owner approved live-first scope and suggested optional history in settings. Product implementation
+has not started. Historical capture is planned as a separate opt-in enhancement, not silently enabled.
 
 ## First build scope
 
@@ -19,6 +20,9 @@ It is pending owner review; product implementation has not started.
   directional guess from candle color. Aggressor classification is not institutional identification.
 - Live collection while the feature is enabled on at least one visible chart. No startup historical
   backfill in this first build. Existing candle history must never be used to fabricate prints.
+  Future settings will offer historical backfill OFF by default, with bounded lookback and explicit
+  coverage status. Do not ship a nonfunctional toggle. Actual tick records are required; unknown or
+  tick-rule-inferred historical sides must not be presented as confirmed bid/ask classifications.
 - Retained prints can be projected onto either chart timeframe. Same source print is stored once;
   two charts do not double-count it. Switching timeframe preserves retained instrument data.
 - Working account orders remain existing TP/SL/entry lines. Resting market-depth orders, sweeps,
