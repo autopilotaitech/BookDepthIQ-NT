@@ -1,6 +1,7 @@
 # Large executed trades — beta7 test build
 
-Branch `codex/chart-large-trades`; approved live-first screenshot design. Not merged or published.
+Developed on `codex/chart-large-trades`; approved live-first screenshot design.
+Integrated into main and published as beta7 at the owner's request; native acceptance remains pending.
 
 ![Actual Avalonia controls with synthetic trade data](images/large-trades-preview.png)
 

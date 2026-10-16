@@ -1,15 +1,15 @@
 # Two-chart beta workspace
 
-Release: `1.13.0-beta.3`, integrated into main after owner testing/approval.
-Owner reports chart loading and compact layout working; broader testing continues. No automatic
-installation changes are performed by this release workflow. See [release notes](RELEASE-1.13.0-beta.3.md).
+Release: `1.13.0-beta.7`, integrated into main for the owner-requested prerelease.
+Owner reports original chart loading and compact layout working; broader testing continues. No automatic
+installation changes are performed. See [release notes](RELEASE-1.13.0-beta.7.md).
 
 Beta3 tightens the DOM telemetry to two compact rows: position/account, then market. Individual
 readouts wrap at narrower widths instead of moving entire titled groups onto tall separate rows.
 Fonts, values, tooltips and room bar remain unchanged. Chart and trading behavior are unchanged.
 Upgrade from beta2 is app-only; the beta2 chart bridge on36974 is unchanged.
 
-## Next build: beta4 chart orders (feature branch)
+## Included: beta4 chart orders
 
 `codex/chart-order-overlays` adds display-only working entry/TP/SL lines and position-average lines
 to both charts. Labels include remaining quantity and price. Equal-price/type/side orders share a
@@ -31,17 +31,17 @@ Isolated tests cover projection, account/contract isolation, stale/disconnected 
 quantity, moves/cancel/flat lifecycle, invalid prices, stop-limit dual levels, both-pane clearing,
 render/toggle behavior and an empty real Ticket command sink. Native execution was not exercised.
 
-## Next build: beta5 chart navigation (feature branch)
+## Included: beta5 chart navigation
 
 `codex/chart-navigation-polish` adds a tick-aligned live-price line/tag, crosshair price/time
 badges and OHLCV readout, optional linked crosshairs, and a CENTER action that preserves horizontal
 zoom. Settings can hide the last-price display or crosshair and disable candle-center snapping.
 Visual settings apply without reloading history; the menu has an explicit Reload history action.
 Dense views use pixel buckets that retain candle OHLCV and study extrema; native bars stay untouched.
-See [verification and limitations](CHART-NAVIGATION-VERIFICATION.md). This is not a published release.
+See [verification and limitations](CHART-NAVIGATION-VERIFICATION.md). Included in beta7.
 The subsequent beta6 test build fixes contract-switch manual scaling and right-edge zoom;
 see the [reliability audit and owner checklist](CHART-RELIABILITY-AUDIT.md).
-The beta7 test branch adds optional large executed-trade bubbles; see
+Beta7 adds optional large executed-trade bubbles; see
 [controls, preview, bridge upgrade and verification](LARGE-TRADES-VERIFICATION.md).
 
 ## Controls

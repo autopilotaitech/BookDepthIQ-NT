@@ -32,20 +32,35 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Current beta prerelease: [1.13.0-beta.3](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.13.0-beta.3).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.3/BookDepthIQ-DOM-1.13.0-beta.3-win-x64.zip)
-and [SHA256 checksum](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.3/SHA256SUMS.txt).
-**From beta2: app-only update; the chart bridge is unchanged.** From beta1 replace the app AND chart
-AddOn (the chart port changed). From 1.12.x install the new chart AddOn and compile with F5; older
-order bridges still require their existing upgrade. See [release/upgrade notes](docs/RELEASE-1.13.0-beta.3.md).
+**Current beta prerelease: [1.13.0-beta.7](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.13.0-beta.7).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.7/BookDepthIQ-DOM-1.13.0-beta.7-win-x64.zip)
+and [SHA256 checksum](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.7/SHA256SUMS.txt).
+**Update the app AND `BookDepthIQBridge.cs`, then recompile in NT for trade bubbles.** The new bridge
+adds exact-contract/chart-time metadata; old bridges deliberately omit bubbles rather than guess.
+The beta2+ chart AddOn is unchanged. From beta1/1.12.x/new install, install both packaged AddOns.
+See [release/upgrade notes](docs/RELEASE-1.13.0-beta.7.md).
 Still beta: broader owner testing, native parity and latency checks remain pending.
-Development branch `codex/chart-navigation-polish` adds clearer price/crosshair displays and
-recenter/scale controls; see [chart verification](docs/CHART-NAVIGATION-VERIFICATION.md).
-This does not change the published beta3 download above.
-Development branch `codex/chart-large-trades` adds optional live executed-trade bubbles with
-per-instrument colors/thresholds. It requires the updated DOM bridge for chart-aligned timestamps;
-see [actual preview, verification and limitations](docs/LARGE-TRADES-VERIFICATION.md).
 The previous [1.12.13 DOM-only release](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13) remains available.
+
+### New in 1.13.0-beta.7 — trade bubbles, chart orders and navigation
+
+![Actual candle-chart controls with synthetic large-trade bubbles](docs/images/large-trades-preview.png)
+
+- Optional live executed-trade bubbles, with per-instrument thresholds, buy/sell/unknown colors,
+  opacity, size and quantity labels. Settings → Chart settings → LARGE TRADES; OFF by default.
+- Individual reported prints only, not reconstructed parent orders or institutional identification.
+  Live capture is bounded; historical bubbles are not yet included. Daily/unproved session intervals
+  are omitted; dense views retain larger prints without merging quantities.
+- Display-only working entry/TP/SL and position-average lines on both charts, filtered by account
+  and contract. No chart interaction submits, modifies or cancels orders.
+- Tick-accurate live-price tags, crosshair price/time/OHLCV and optional linked cursors. CENTER/Space
+  recenters while preserving time zoom; improved manual scaling, panning and explicit history reload.
+- Fixes contract switches retaining unrelated manual price scales and right-edge zoom hiding candles.
+- **356 isolated tests pass** (322 core/DOM +34 bridge-source). Release/native compile checks and
+  synthetic desktop rendering pass. Native/provider acceptance and HFT latency are not certified.
+
+[Bubble controls, verification and limitations](docs/LARGE-TRADES-VERIFICATION.md) ·
+[Chart navigation evidence](docs/CHART-NAVIGATION-VERIFICATION.md).
 
 ### New in 1.13.0-beta.3 — two charts and compact DOM telemetry
 
