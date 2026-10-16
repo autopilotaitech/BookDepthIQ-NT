@@ -132,14 +132,15 @@ namespace NinjaTrader.Data
         public double GetOpen(int i)=>Rows[i].Open;public double GetHigh(int i)=>Rows[i].High;public double GetLow(int i)=>Rows[i].Low;public double GetClose(int i)=>Rows[i].Close;
         public double GetAsk(int i)=>0;public double GetBid(int i)=>0;public long GetVolume(int i)=>Rows[i].Volume;public DateTime GetTime(int i)=>Rows[i].Time;
     }
-    public class BarsUpdateEventArgs : EventArgs {public int MinIndex,MaxIndex;}
+    public class BarsSeries : Bars {}
+    public class BarsUpdateEventArgs : EventArgs {public int MinIndex,MaxIndex;public BarsSeries BarsSeries;}
     public class BarsRequest
     {
         [ThreadStatic] public static Bars NextBars;
         [ThreadStatic] public static BarsRequest LastCreated;
-        public BarsRequest(Instrument i,DateTime from,DateTime to) {} public BarsRequest(Instrument i,int count) {Bars=NextBars??new Bars();NextBars=null;LastCreated=this;} public BarsPeriod BarsPeriod; public object TradingHours; public Bars Bars;
+        public BarsRequest(Instrument i,DateTime from,DateTime to):this(i,250) {} public BarsRequest(Instrument i,int count) {Bars=NextBars??new Bars();NextBars=null;LastCreated=this;} public BarsPeriod BarsPeriod; public object TradingHours; public Bars Bars;
         public event EventHandler<BarsUpdateEventArgs> Update;
-        public void Raise(int min,int max)=>Update?.Invoke(this,new BarsUpdateEventArgs {MinIndex=min,MaxIndex=max});
+        public void Raise(int min,int max,BarsSeries series=null)=>Update?.Invoke(this,new BarsUpdateEventArgs {MinIndex=min,MaxIndex=max,BarsSeries=series??new BarsSeries {Rows=Bars.Rows}});
         public void Dispose() {}
         public void Request(Action<BarsRequest,ErrorCode,string> callback) { callback(this,ErrorCode.NoError,""); }
     }

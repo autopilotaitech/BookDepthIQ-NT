@@ -13,6 +13,7 @@ public sealed class ChartCoordinator
         public long Generation,Version,Sequence,ReceivedAtMs;
         public ChartStore Store=new(2000);
         public double TickSize=.25;
+        public int Frame=3;
         public string Status="OFFLINE";
         public long? Last;
         public bool Dirty=true;
@@ -27,7 +28,7 @@ public sealed class ChartCoordinator
     {
         lock(gate)
         {
-            var s=slots[slot];s.Generation++;s.Store=new ChartStore(count,slot==2?75000:10000);s.Store.Reset(s.Generation);
+            var s=slots[slot];s.Frame=frame;s.Generation++;s.Store=new ChartStore(count,slot==2?75000:10000);s.Store.Reset(s.Generation);
             s.Cached=Array.Empty<ChartBar>();s.Last=null;s.Sequence=0;s.ReceivedAtMs=0;s.Dirty=true;s.Version++;s.Status="LOADING";return s.Generation;
         }
     }
@@ -63,9 +64,23 @@ public sealed class ChartCoordinator
             s.ReceivedAtMs=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         }
     }
-    public ChartSnapshot Snapshot(int slot)
+    public ChartSnapshot Snapshot(int slot,DateTimeOffset? now=null)
     {
-        lock(gate) {var s=slots[shared.TryGetValue(slot,out var source)?source:slot];if(s.Dirty) {s.Cached=s.Store.Snapshot();s.Dirty=false;}return new(s.Cached,s.TickSize,s.Status,s.Last,s.Version,s.ReceivedAtMs,s.Generation);}
+        lock(gate)
+        {
+            var s=slots[shared.TryGetValue(slot,out var source)?source:slot];
+            if(s.Dirty) {s.Cached=s.Store.Snapshot();s.Dirty=false;}
+            var status=s.Status;
+            if(status=="LIVE"&&s.Cached.Count>0&&s.Frame<1440)
+            {
+                var clock=now??DateTimeOffset.UtcNow;
+                var endpoint=s.Cached[s.Cached.Count-1].Time;
+                var interval=s.Frame==-30?TimeSpan.FromSeconds(30):TimeSpan.FromMinutes(s.Frame);
+                if(endpoint>clock+interval+TimeSpan.FromSeconds(90)) status="TIME MISMATCH · future candles";
+                else if(endpoint<clock-TimeSpan.FromSeconds(90)) status="STALE · candle updates missing";
+            }
+            return new(s.Cached,s.TickSize,status,s.Last,s.Version,s.ReceivedAtMs,s.Generation);
+        }
     }
     public long Version(int slot) {lock(gate) return slots[slot].Version;}
 }

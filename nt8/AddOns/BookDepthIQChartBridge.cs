@@ -131,20 +131,21 @@ namespace NinjaTrader.NinjaScript.AddOns
                     });
                     if(slot!=2) instrument.Dispatcher.InvokeAsync(()=> {if(stopped) return;market=new MarketData(instrument);market.Update+=Last;});
                 }
-                void Update(object sender,BarsUpdateEventArgs e) {if(!stopped) Send(e.MinIndex,e.MaxIndex,false);}
+                void Update(object sender,BarsUpdateEventArgs e) {if(!stopped && e.BarsSeries!=null) Send(e.MinIndex,e.MaxIndex,false,e.BarsSeries);}
                 long Ticks(double price) {return (long)Math.Round(price/instrument.MasterInstrument.TickSize);}
-                void Send(int min,int max,bool complete)
+                void Send(int min,int max,bool complete,BarsSeries live=null)
                 {
-                    var bars=request.Bars; if(stopped || bars==null) return;
+                    var bars=request.Bars; if(stopped || (live==null && bars==null)) return;
+                    var total=live!=null?live.Count:bars.Count;
                     var version=Interlocked.Increment(ref revision);
-                    for(var first=Math.Max(Math.Max(0,min),bars.Count-count);first<=Math.Min(max,bars.Count-1);first+=256)
+                    for(var first=Math.Max(Math.Max(0,min),total-count);first<=Math.Min(max,total-1);first+=256)
                     {
                         var items=new List<object>();
-                        for(var i=first;i<=Math.Min(Math.Min(max,bars.Count-1),first+255);i++)
+                        for(var i=first;i<=Math.Min(Math.Min(max,total-1),first+255);i++)
                         {
-                            var time=DateTime.SpecifyKind(bars.GetTime(i),DateTimeKind.Unspecified);
+                            var time=DateTime.SpecifyKind(live!=null?live.GetTime(i):bars.GetTime(i),DateTimeKind.Unspecified);
                             var utc=TimeZoneInfo.ConvertTimeToUtc(time,Core.Globals.GeneralOptions.TimeZoneInfo);
-                            items.Add(new {index=i,ms=new DateTimeOffset(utc).ToUnixTimeMilliseconds(),date=time.ToString("yyyy-MM-dd"),open=Ticks(bars.GetOpen(i)),high=Ticks(bars.GetHigh(i)),low=Ticks(bars.GetLow(i)),close=Ticks(bars.GetClose(i)),volume=bars.GetVolume(i),revision=version,forming=i==bars.Count-1});
+                            items.Add(new {index=i,ms=new DateTimeOffset(utc).ToUnixTimeMilliseconds(),date=time.ToString("yyyy-MM-dd"),open=Ticks(live!=null?live.GetOpen(i):bars.GetOpen(i)),high=Ticks(live!=null?live.GetHigh(i):bars.GetHigh(i)),low=Ticks(live!=null?live.GetLow(i):bars.GetLow(i)),close=Ticks(live!=null?live.GetClose(i):bars.GetClose(i)),volume=live!=null?live.GetVolume(i):bars.GetVolume(i),revision=version,forming=i==total-1});
                         }
                         if(stopped) return;
                         session.Emit(new {t="bars",slot=slot,generation=generation,instrument=instrument.FullName,frame=frame,tickSize=instrument.MasterInstrument.TickSize,bars=items});

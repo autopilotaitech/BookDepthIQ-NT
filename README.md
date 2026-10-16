@@ -32,7 +32,7 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-**Session-zone development build: 1.13.0-beta.8**, on `codex/chart-session-zones`.
+**Session-zone development build: 1.13.0-beta.9**, on `codex/chart-session-zones`.
 This feature is not yet merged into main or published as a GitHub release. The current
 published download below remains beta.7; it does not contain session zones.
 
@@ -46,7 +46,13 @@ See [release/upgrade notes](docs/RELEASE-1.13.0-beta.7.md).
 Still beta: broader owner testing, native parity and latency checks remain pending.
 The previous [1.12.13 DOM-only release](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13) remains available.
 
-### Session-zone preview — 1.13.0-beta.8 feature branch
+### Session-zone preview — 1.13.0-beta.9 feature branch
+
+**Beta.9 correction: replace `BookDepthIQChartBridge.cs` and recompile in NinjaTrader as well
+as updating the app.** Live bar callbacks now read the event's bar series rather than the history
+snapshot, fixing dropped updates on the candle and shared session source. The app flags old or
+implausibly future candle timestamps instead of treating history completion as proof of LIVE data.
+See [fix evidence and upgrade steps](docs/CHART-LIVE-UPDATE-FIX.md).
 
 ![Actual candle-chart controls with synthetic Tokyo, London and New York session ranges](docs/images/session-zones-preview.png)
 

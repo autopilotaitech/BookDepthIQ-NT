@@ -5,6 +5,24 @@ using NinjaTrader.Data;
 
 public class ChartBridgeTests
 {
+    [Theory] [InlineData(0,3)] [InlineData(1,15)] [InlineData(2,-30)]
+    public void Live_update_reads_event_series_not_frozen_history(int slot,int frame)
+    {
+        var old=new Bars();old.Rows.Add(new Bars.Row {Time=new DateTime(2026,10,15,18,0,0),Open=30200,High=30201,Low=30199,Close=30200,Volume=10});
+        BarsRequest.NextBars=old;var output=new List<object>();
+        using(var session=new BookDepthIQChartBridge.ChartSession(output.Add))
+        {
+            session.Handle("{\"t\":\"subscribe\",\"slot\":"+slot+",\"generation\":1,\"instrument\":\"NQ 12-26\",\"frame\":"+frame+",\"count\":1000}");
+            var live=new BarsSeries();live.Rows.Add(old.Rows[0]);
+            live.Rows.Add(new Bars.Row {Time=new DateTime(2026,10,16,7,9,0),Open=30110,High=30112,Low=30109,Close=30111,Volume=99});
+            output.Clear();BarsRequest.LastCreated.Raise(1,1,live);
+            var json=new JavaScriptSerializer();var packet=json.Deserialize<Dictionary<string,object>>(json.Serialize(Assert.Single(output)));
+            var row=(Dictionary<string,object>)((System.Collections.ArrayList)packet["bars"])[0];
+            Assert.Equal(120444,Convert.ToInt64(row["close"]));Assert.Equal(99,Convert.ToInt64(row["volume"]));
+            var utc=TimeZoneInfo.ConvertTimeToUtc(new DateTime(2026,10,16,7,9,0),NinjaTrader.Core.Globals.GeneralOptions.TimeZoneInfo);
+            Assert.Equal(new DateTimeOffset(utc).ToUnixTimeMilliseconds(),Convert.ToInt64(row["ms"]));Assert.True(Convert.ToBoolean(row["forming"]));
+        }
+    }
     [Fact] public void Native_history_is_chunked_and_late_updates_after_unsubscribe_are_ignored()
     {
         var bars=new Bars();for(int i=0;i<600;i++) bars.Rows.Add(new Bars.Row {Time=new DateTime(2026,10,15,13,30,0).AddMinutes(i),Open=100,High=101,Low=99,Close=100.5,Volume=17});
