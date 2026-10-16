@@ -27,7 +27,7 @@ public sealed class DomState
     public bool Connected
     {
         get=>connected;
-        set { var lost=connected && !value; connected=value; if(lost) ResetTradingSession(); }
+        set { var lost=connected && !value; connected=value; if(lost) {ChartTrades.Disconnect(NowMs());ResetTradingSession();} }
     }
     public int BridgeOrderVersion { get; private set; }
     public List<AccountInfo> Accounts { get; } = new();
@@ -64,7 +64,9 @@ public sealed class DomState
     public long LastFeedMs { get; set; }
 
     // ── instrument / market ──
-    public string Instrument { get; set; } = "";
+    private string instrumentName="";
+    public string Instrument {get=>instrumentName;set {if(instrumentName==value) return;instrumentName=value;ChartTrades.Reset(value);}}
+    public BookDepthIQ.Core.Charts.ChartTradeStore ChartTrades {get;}=new();
     public double TickSize { get; set; } = 0.25;
     public double PointValue { get; set; } = 20;
     public double TickValue => TickSize * PointValue;
@@ -362,6 +364,7 @@ public sealed class DomState
         LastTick = t;
         if (live)
         {
+            if(Connected) ChartTrades.Add(Instrument,t,size,side,ms,NowMs());
             if (FeedAgeMs > 2000) Outlook.Reset();
             if (Outlook.OnTrade(t, ms) is { } outcome)
             {

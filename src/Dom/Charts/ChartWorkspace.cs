@@ -25,6 +25,7 @@ public sealed class ChartWorkspace : Grid,IDisposable
     public double MinimumDomWidth {get;set;}=1060;
     public PaxOrCfg OpeningRangeConfig {get;set;}=new();
     public Func<IReadOnlyList<ChartTradeLine>>? TradingLinesProvider {get;set;}
+    public Func<ChartTradeSnapshot>? TradePrintsProvider {get;set;}
     public void RefreshTradingLines()
     {
         var lines=TradingLinesProvider?.Invoke()??Array.Empty<ChartTradeLine>();
@@ -62,9 +63,11 @@ public sealed class ChartWorkspace : Grid,IDisposable
         if(!ChartsVisible||timer!=null) return;
         timer=DispatcherTimer.Run(()=> {
             RefreshTradingLines();
+            var prints=TradePrintsProvider?.Invoke()??ChartTradeSnapshot.Empty;
             for(int i=0;i<2;i++) if(panes[i].IsVisible)
             {
                 var pref=i==0?settings.Top:settings.Bottom;
+                panes[i].Chart.CapturedTrades=prints;panes[i].Chart.TradeProfile=settings.TradeProfile(Instrument) with{};
                 if(!settings.LinkCrosshair) panes[i].Chart.SetLinkedCursor(null);
                 if(!pref.PaxActive) panes[i].Chart.OpeningRanges=Array.Empty<ChartOrLine>();
                 panes[i].Update(Instrument,model.Snapshot(i));
