@@ -61,12 +61,30 @@ public sealed partial class CandleChartControl
             DrawStudy(context,sma,Pal.Accent,start,end,plot);DrawStudy(context,ema,Pal.Warn,start,end,plot);
             if(settings.PaxActive && end>start)
             {
+                var labelBounds=new List<Rect>();
                 foreach(var level in OpeningRanges)
                 {
                     if(level.End<bars[start].Time || level.Start>bars[end-1].Time) continue;
                     int a=LowerBound(bars,level.Start),b=LowerBound(bars,level.End);var y=plot.Y(level.Ticks);
                     if(y<0||y>h) continue;
-                    context.DrawLine(new Pen(Pal.B(level.Upper?Pal.Bid:Pal.Ask),1,level.Label.StartsWith("OR EXT",StringComparison.Ordinal)?DashStyle.Dash:null),new Point(Math.Max(0,plot.X(a)),y),new Point(Math.Min(w,plot.X(b)),y));
+                    var color=level.Label=="OR MID"?Pal.Warn:level.Upper?Pal.Bid:Pal.Ask;
+                    var brush=new SolidColorBrush(color,level.IsCurrent?1:.3);
+                    var right=Math.Min(w,plot.X(Math.Min(b,bars.Count-1)));
+                    context.DrawLine(new Pen(brush,level.IsCurrent?1.2:.7,level.Label.StartsWith("OR EXT",StringComparison.Ordinal)?DashStyle.Dash:null),new Point(Math.Max(0,plot.X(a)),y),new Point(right,y));
+                    if(level.Label is "OR H" or "OR L")
+                    {
+                        var label=$"{level.SessionDate:MM-dd} {level.Label}"+(level.IsCurrent?" · TODAY":"");
+                        var ft=Formatted(label,color,10);var x=Math.Max(2,plot.X(a)+3);
+                        var top=level.Upper?y-ft.Height-3:y+3;
+                        var labelBox=new Rect(x-2,top-1,ft.Width+4,ft.Height+2);
+                        if(labelBox.Right>w||labelBox.Top<0||labelBox.Bottom>h||labelBounds.Any(r=>r.Intersects(labelBox))) continue;
+                        labelBounds.Add(labelBox);
+                        using(context.PushOpacity(level.IsCurrent?1:.55))
+                        {
+                            context.FillRectangle(Pal.B(Pal.Card),labelBox);
+                            context.DrawText(ft,new Point(x,top));
+                        }
+                    }
                 }
             }
             DrawSessions(context,plot,true);

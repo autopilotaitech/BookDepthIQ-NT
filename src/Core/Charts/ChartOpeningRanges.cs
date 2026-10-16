@@ -1,35 +1,45 @@
 namespace BookDepthIQ.Core.Charts;
 
-public sealed record ChartOrLine(DateTimeOffset Start,DateTimeOffset End,long Ticks,string Label,bool Upper);
+public sealed record ChartOrLine(DateTimeOffset Start,DateTimeOffset End,long Ticks,string Label,bool Upper,DateOnly SessionDate=default,bool IsCurrent=false);
 
 /// <summary>Independent chart adapter. NT thirty-second bars are end-stamped; incomplete ORs are omitted.</summary>
 public static class ChartOpeningRanges
 {
-    public static IReadOnlyList<ChartOrLine> Build(IReadOnlyList<ChartBar> bars,PaxOrCfg cfg,string instrument,double tickSize,int frame,int days)
+    public static IReadOnlyList<ChartOrLine> Build(IReadOnlyList<ChartBar> bars,PaxOrCfg cfg,string instrument,double tickSize,int frame,int days,DateTimeOffset? now=null)
     {
         if(!ChartFrame.SupportsPax(frame)||tickSize<=0||cfg.DurationSec!=30) return Array.Empty<ChartOrLine>();
-        var root=PaxOr.OrRoot(instrument);var step=PaxOr.LevelFactorTicks(root,cfg,tickSize);if(step<=0) return Array.Empty<ChartOrLine>();
+        var root=PaxOr.OrRoot(instrument);var step=PaxOr.LevelFactorTicks(root,cfg,tickSize);
         var sessions=new SortedDictionary<long,List<ChartBar>>();
+        var zone=BookDepthIQ.Core.Session.Zone(cfg.Timezone);
+        var today=DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now??DateTimeOffset.UtcNow,zone).DateTime);
+        if(!TimeSpan.TryParse(cfg.EndTime,out var plotEnd)) return Array.Empty<ChartOrLine>();
         foreach(var bar in bars)
         {
             var session=SessionFor(bar.Time.AddTicks(-1),cfg);
             if(!sessions.TryGetValue(session.Start,out var list)) sessions[session.Start]=list=new();list.Add(bar);
         }
         var result=new List<ChartOrLine>();
-        foreach(var pair in sessions.TakeLast(Math.Clamp(days,1,8)+1))
+        var previous=sessions.Where(p=>DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(p.Key),zone).DateTime)<today).TakeLast(Math.Clamp(days,0,8));
+        var current=sessions.Where(p=>DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(p.Key),zone).DateTime)==today);
+        foreach(var pair in previous.Concat(current))
         {
             var list=pair.Value.OrderBy(b=>b.Time).ToArray();var opening=list.FirstOrDefault(b=>!b.Forming&&b.Time.ToUnixTimeMilliseconds()==pair.Key+30000);
             if(opening==null) continue;
-            var end=DateTimeOffset.FromUnixTimeMilliseconds(SessionFor(opening.Time,cfg).End);
+            var local=TimeZoneInfo.ConvertTime(opening.Time,zone).Date;
+            var end=new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local+plotEnd,DateTimeKind.Unspecified),zone));
             var start=opening.Time;long high=opening.High,low=opening.Low;
-            result.Add(new(start,end,high,"OR H",true));result.Add(new(start,end,low,"OR L",false));
-            if(cfg.ShowMid) result.Add(new(start,end,(long)Math.Round((high+low)/2.0),"OR MID",true));
+            if(end<=start) continue;
+            var date=DateOnly.FromDateTime(local);bool isCurrent=date==today;
+            void Add(DateTimeOffset from,long ticks,string label,bool upper)=>result.Add(new(from,end,ticks,label,upper,date,isCurrent));
+            Add(start,high,"OR H",true);Add(start,low,"OR L",false);
+            if(cfg.ShowMid) Add(start,(long)Math.Round((high+low)/2.0),"OR MID",true);
+            if(step<=0) continue;
             int up=1,down=1;
-            result.Add(new(start,end,high+step,"OR EXT1",true));result.Add(new(start,end,low-step,"OR EXT1",false));
-            foreach(var bar in list.Where(b=>b.Time>opening.Time))
+            Add(start,high+step,"OR EXT1",true);Add(start,low-step,"OR EXT1",false);
+            foreach(var bar in list.Where(b=>!b.Forming&&b.Time>opening.Time&&b.Time<=end))
             {
-                while(bar.High>high+step*up && up<200) {up++;result.Add(new(bar.Time,end,high+step*up,"OR EXT"+up,true));}
-                while(bar.Low<low-step*down && down<200) {down++;result.Add(new(bar.Time,end,low-step*down,"OR EXT"+down,false));}
+                if(bar.High>high+step*up && up<200) {up++;Add(bar.Time,high+step*up,"OR EXT"+up,true);}
+                if(bar.Low<low-step*down && down<200) {down++;Add(bar.Time,low-step*down,"OR EXT"+down,false);}
             }
         }
         return result;

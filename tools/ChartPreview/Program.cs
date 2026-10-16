@@ -86,6 +86,11 @@ public sealed class PreviewWindow : Window
                 panes[i].Chart.SessionZones=ChartSessionZones.Build(sessionSource,preferences.Sessions.Definitions,1,new(2026,10,15,20,0,0,TimeSpan.Zero),true);
             }
             var last=bars[^1].Close;
+            if(Program.Options.Contains("--pax"))
+            {
+                settings.Pax=true;
+                panes[i].Chart.OpeningRanges=ChartOpeningRanges.Build(sessionSource,new BookDepthIQ.Core.PaxOrCfg {Timezone="UTC",StartTime="08:30:00",NqLevelPoints=20},"NQ",.25,settings.Frame,1,new(2026,10,15,20,0,0,TimeSpan.Zero));
+            }
             if(Program.Options.Contains("--bubbles"))
             {
                 settings.ShowLargeTrades=true;

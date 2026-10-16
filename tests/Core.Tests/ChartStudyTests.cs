@@ -4,13 +4,13 @@ using Xunit;
 
 public class ChartStudyTests
 {
-    [Theory] [InlineData(2026,3,6,2026,3,9,13)] [InlineData(2026,10,30,2026,11,2,14)]
-    public void Historical_endpoints_stay_at_local_open_across_dst(int year,int month,int day,int ey,int em,int ed,int utcHour)
+    [Theory] [InlineData(2026,3,6,23)] [InlineData(2026,10,30,22)]
+    public void Historical_endpoints_stop_at_configured_same_day_plot_end(int year,int month,int day,int utcHour)
     {
         var time=new DateTimeOffset(year,month,day,month==3?14:13,30,30,TimeSpan.Zero);
         var bar=new ChartBar(0,time,new(year,month,day),400,408,396,404,25,1,false);
-        var lines=ChartOpeningRanges.Build(new[]{bar},new PaxOrCfg(),"NQ",.25,3,8);
-        Assert.Equal(new DateTimeOffset(ey,em,ed,utcHour,30,0,TimeSpan.Zero),lines[0].End);
+        var lines=ChartOpeningRanges.Build(new[]{bar},new PaxOrCfg(),"NQ",.25,3,8,time.AddHours(1));
+        Assert.Equal(new DateTimeOffset(year,month,day,utcHour,0,0,TimeSpan.Zero),lines[0].End);
     }
     [Fact] public void Studies_warm_up_and_use_corrected_selected_frame_closes()
     {

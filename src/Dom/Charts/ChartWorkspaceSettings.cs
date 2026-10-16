@@ -23,7 +23,7 @@ public sealed class ChartPaneSettings
     [JsonIgnore] public bool PaxActive=>Pax && ChartFrame.SupportsPax(Frame);
     public int Lookback(int frame)=>History.TryGetValue(frame,out var count)?Math.Clamp(count,250,10000):ChartFrame.DefaultBars(frame);
     public void SetLookback(int frame,int count)=>History[frame]=Math.Clamp(count,250,10000);
-    public void Normalize() {if(!ChartFrame.Choices.Contains(Frame)) Frame=3;History??=new();Period=Math.Clamp(Period,1,500);PaxDays=Math.Clamp(PaxDays,1,8);}
+    public void Normalize() {if(!ChartFrame.Choices.Contains(Frame)) Frame=3;History??=new();Period=Math.Clamp(Period,1,500);PaxDays=Math.Clamp(PaxDays,0,8);}
 }
 public sealed class ChartWorkspaceSettings
 {

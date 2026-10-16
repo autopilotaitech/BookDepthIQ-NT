@@ -26,8 +26,8 @@ public sealed class ChartSettingsWindow : Window
         var period=new NumericUpDown {Minimum=1,Maximum=500,Value=settings.Period,FormatString="0"};panel.Children.Add(period);
         var pax=new CheckBox {Content="PAX-style opening range",IsChecked=settings.Pax,IsEnabled=BookDepthIQ.Core.Charts.ChartFrame.SupportsPax(settings.Frame)};
         ToolTip.SetTip(pax,"Intraday only (1–30m). Uses shared DOM opening-range settings; disabled on 1h, 4h and Day.");panel.Children.Add(pax);
-        panel.Children.Add(new TextBlock {Text="PAX historical sessions",FontSize=11,Foreground=Pal.B(Pal.Muted)});
-        var days=new NumericUpDown {Minimum=1,Maximum=8,Value=settings.PaxDays,FormatString="0"};panel.Children.Add(days);
+        panel.Children.Add(new TextBlock {Text="PAX previous sessions · 0 = today only",FontSize=11,Foreground=Pal.B(Pal.Muted)});
+        var days=new NumericUpDown {Minimum=0,Maximum=8,Value=settings.PaxDays,FormatString="0"};panel.Children.Add(days);
         var trades=workspaceSettings!=null?new LargeTradeSettingsPanel(workspaceSettings,settings,instrument,tradeCoverage):null;
         if(trades!=null) panel.Children.Add(trades);
         var sessions=workspaceSettings!=null?new SessionZoneSettingsPanel(workspaceSettings,settings,sessionCoverage):null;
