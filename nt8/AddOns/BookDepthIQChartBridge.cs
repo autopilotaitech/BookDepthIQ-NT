@@ -114,6 +114,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                 readonly Instrument instrument; readonly BarsRequest request;
                 MarketData market;
                 volatile bool stopped; long revision,sequence;
+                readonly object barSendGate=new object();
+                int lastSentIndex=-1;
                 public Subscription(ChartSession session,int slot,long generation,int frame,int count,Instrument inst)
                 {
                     this.session=session;this.slot=slot;this.generation=generation;this.frame=frame;this.count=count;instrument=inst;
@@ -135,8 +137,16 @@ namespace NinjaTrader.NinjaScript.AddOns
                 long Ticks(double price) {return (long)Math.Round(price/instrument.MasterInstrument.TickSize);}
                 void Send(int min,int max,bool complete,BarsSeries live=null)
                 {
+                    lock(barSendGate) SendBars(min,max,complete,live);
+                }
+                void SendBars(int min,int max,bool complete,BarsSeries live)
+                {
                     var bars=request.Bars; if(stopped || (live==null && bars==null)) return;
                     var total=live!=null?live.Count:bars.Count;
+                    // A new-bar callback need not include the previous bar in MinIndex.
+                    // Republish that previous endpoint from the authoritative live series so
+                    // downstream consumers do not retain its old forming=true forever.
+                    if(live!=null && lastSentIndex>=0 && total-1>lastSentIndex) min=Math.Min(min,lastSentIndex);
                     var version=Interlocked.Increment(ref revision);
                     for(var first=Math.Max(Math.Max(0,min),total-count);first<=Math.Min(max,total-1);first+=256)
                     {
@@ -145,11 +155,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                         {
                             var time=DateTime.SpecifyKind(live!=null?live.GetTime(i):bars.GetTime(i),DateTimeKind.Unspecified);
                             var utc=TimeZoneInfo.ConvertTimeToUtc(time,Core.Globals.GeneralOptions.TimeZoneInfo);
-                            items.Add(new {index=i,ms=new DateTimeOffset(utc).ToUnixTimeMilliseconds(),date=time.ToString("yyyy-MM-dd"),open=Ticks(live!=null?live.GetOpen(i):bars.GetOpen(i)),high=Ticks(live!=null?live.GetHigh(i):bars.GetHigh(i)),low=Ticks(live!=null?live.GetLow(i):bars.GetLow(i)),close=Ticks(live!=null?live.GetClose(i):bars.GetClose(i)),volume=live!=null?live.GetVolume(i):bars.GetVolume(i),revision=version,forming=i==total-1});
+                            items.Add(new {index=i,ms=new DateTimeOffset(utc).ToUnixTimeMilliseconds(),date=time.ToString("yyyy-MM-dd"),open=Ticks(live!=null?live.GetOpen(i):bars.GetOpen(i)),high=Ticks(live!=null?live.GetHigh(i):bars.GetHigh(i)),low=Ticks(live!=null?live.GetLow(i):bars.GetLow(i)),close=Ticks(live!=null?live.GetClose(i):bars.GetClose(i)),volume=live!=null?live.GetVolume(i):bars.GetVolume(i),revision=version,forming=i==total-1 && i>=lastSentIndex});
                         }
                         if(stopped) return;
                         session.Emit(new {t="bars",slot=slot,generation=generation,instrument=instrument.FullName,frame=frame,tickSize=instrument.MasterInstrument.TickSize,bars=items});
                     }
+                    lastSentIndex=Math.Max(lastSentIndex,Math.Min(max,total-1));
                     if(complete && !stopped) session.Emit(new {t="complete",slot=slot,generation=generation});
                 }
                 void Last(object sender,MarketDataEventArgs e)

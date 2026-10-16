@@ -32,6 +32,10 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
+Feature preview: **beta.14 PAX live-bar rollover correction** on `codex/pax-live-rollover`.
+Completed bars now leave their forming state so PAX can continue adding extensions during live
+moves. **Replace/recompile `BookDepthIQChartBridge.cs`.** [Regression evidence and upgrade](docs/PAX-LIVE-ROLLOVER.md).
+
 Feature preview: **beta.13 explicit ladder order columns** on `codex/explicit-order-columns`.
 Only BUY/SELL submit new ladder orders; subtle cyan/orange tints identify them. Hover descriptions
 can be switched off in **Ticket → ENTRY → COLUMN HELP**. [Behavior and proof](docs/EXPLICIT-ORDER-COLUMNS.md).
