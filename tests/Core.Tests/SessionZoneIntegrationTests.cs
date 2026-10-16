@@ -1,8 +1,27 @@
 using BookDepthIQ.Core.Charts;
 using BookDepthIQ.Dom.Charts;
 using Xunit;
+using Avalonia.Headless.XUnit;
+using Avalonia.Controls;
+using System.Reflection;
 public class SessionZoneIntegrationTests
 {
+    [AvaloniaFact] public void Workspace_publication_rejects_a_pre_reload_subscription()
+    {
+        var model=new ChartCoordinator();model.Reset(2,-30,75000);
+        using var workspace=new ChartWorkspace(new Border(),new(),model,()=>{});workspace.Instrument="NQ TEST";
+        var worker=(SessionZoneWorker)typeof(ChartWorkspace).GetField("sessionWorker",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(workspace)!;
+        var publish=(Action<SessionZoneJob,SessionZoneSnapshot>)typeof(SessionZoneWorker).GetField("publish",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(worker)!;
+        var panes=(ChartPane[])typeof(ChartWorkspace).GetField("panes",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(workspace)!;
+        var result=new SessionZoneSnapshot(Array.Empty<SessionZone>(),new[]{"old subscription"});
+        var job=Job("before reload") with {Source=model.Snapshot(2)};
+        publish(job,result);Assert.Same(result,panes[0].Chart.SessionZones);
+        workspace.Instrument="ES TEST";workspace.Instrument="NQ TEST";
+        model.Reset(2,-30,75000);publish(job,result);
+        Assert.Empty(panes[0].Chart.SessionZones.Notes);Assert.Empty(panes[1].Chart.SessionZones.Notes);
+        job=job with {Source=model.Snapshot(2)};
+        model.Disconnected();publish(job,result);Assert.Empty(panes[0].Chart.SessionZones.Notes);
+    }
     [Fact] public void Session_and_pax_consumers_share_one_source_and_do_not_unsubscribe_each_other()
     {
         var cfg=new ChartWorkspaceSettings();cfg.Sessions.Enabled=true;cfg.Top.ShowSessionZones=true;

@@ -32,6 +32,11 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
+Feature-branch preview: **Tokyo / London / New York session zones** with editable hours,
+named time zones, colors and per-chart visibility. Initially OFF; no chart trading actions.
+See [test evidence and actual-control screenshot](docs/SESSION-ZONES-VERIFICATION.md).
+Native/provider acceptance remains pending; the published download below is unchanged.
+
 **Current beta prerelease: [1.13.0-beta.7](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.13.0-beta.7).**
 Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.7/BookDepthIQ-DOM-1.13.0-beta.7-win-x64.zip)
 and [SHA256 checksum](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.7/SHA256SUMS.txt).

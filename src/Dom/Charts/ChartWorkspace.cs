@@ -41,7 +41,11 @@ public sealed class ChartWorkspace : Grid,IDisposable
         Dom=dom;this.settings=settings;this.model=model;this.save=save;settings.Normalize();
         ColumnDefinitions=new("0,0,*");charts.RowDefinitions=new("*,5,*");
         panes=new[]{new ChartPane(settings.Top,Changed,()=>Hide(0),()=>Maximize(0),settings,()=>ReloadRequested?.Invoke()),new ChartPane(settings.Bottom,Changed,()=>Hide(1),()=>Maximize(1),settings,()=>ReloadRequested?.Invoke())};
-        sessionWorker=new(null,(_,result)=> {foreach(var pane in panes) {pane.Chart.SessionZones=result;pane.Chart.InvalidateVisual();}});
+        sessionWorker=new(null,(job,result)=> {
+            var current=model.Snapshot(2);
+            if(job.Instrument!=Instrument||job.Source.Generation!=current.Generation||job.Source.Status!=current.Status) return;
+            foreach(var pane in panes) {pane.Chart.SessionZones=result;pane.Chart.InvalidateVisual();}
+        });
         panes[0].Chart.CursorChanged+=value=> {if(settings.LinkCrosshair) panes[1].Chart.SetLinkedCursor(value);};
         panes[1].Chart.CursorChanged+=value=> {if(settings.LinkCrosshair) panes[0].Chart.SetLinkedCursor(value);};
         charts.Children.Add(panes[0]);Grid.SetRow(panes[1],2);charts.Children.Add(panes[1]);

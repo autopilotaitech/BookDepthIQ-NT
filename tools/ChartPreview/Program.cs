@@ -38,6 +38,7 @@ public sealed class PreviewWindow : Window
 {
     readonly ChartWorkspaceSettings preferences=new() {Enabled=true,LinkCrosshair=true};
     readonly ChartPane[] panes;
+    readonly ChartBar[] sessionSource=SessionFixture();
     public PreviewWindow()
     {
         Title="BookDepthIQ chart preview — SYNTHETIC DATA, NO TRADING";
@@ -45,6 +46,15 @@ public sealed class PreviewWindow : Window
         Height=int.TryParse(Program.Option("--height"),out var height)?Math.Clamp(height,300,1800):1000;
         Background=Pal.B(Pal.Bg);FontFamily=Flight.Sans;
         preferences.Top.Volume=true;preferences.Top.Sma=true;preferences.Bottom.Ema=true;
+        if(Program.Options.Contains("--sessions"))
+        {
+            preferences.Top.Frame=15;preferences.Bottom.Frame=30;preferences.Top.ShowSessionZones=preferences.Bottom.ShowSessionZones=true;
+            preferences.Sessions.Enabled=!Program.Options.Contains("--sessions-off");preferences.Sessions.Previous=1;
+            preferences.Sessions.Definitions=new[]{
+                new SessionDefinition("tokyo","TOKYO",true,"#9A85EF","00:00","06:00","UTC"),
+                new SessionDefinition("london","LONDON",true,"#00BBD6","08:00","14:00","UTC"),
+                new SessionDefinition("ny","NEW YORK",true,"#579AFF","14:00","21:00","UTC")};
+        }
         panes=new[]{new ChartPane(preferences.Top,Refresh,()=>{},()=>{},preferences,Refresh),new ChartPane(preferences.Bottom,Refresh,()=>{},()=>{},preferences,Refresh)};
         panes[0].Chart.CursorChanged+=cursor=> {if(preferences.LinkCrosshair) panes[1].Chart.SetLinkedCursor(cursor);};
         panes[1].Chart.CursorChanged+=cursor=> {if(preferences.LinkCrosshair) panes[0].Chart.SetLinkedCursor(cursor);};
@@ -68,8 +78,13 @@ public sealed class PreviewWindow : Window
         {
             var settings=i==0?preferences.Top:preferences.Bottom;
             var requested=int.TryParse(Program.Option("--bars"),out var count)?Math.Clamp(count,250,10000):240;
-            var bars=Fixture(settings.Frame,requested);
+            var bars=Program.Options.Contains("--sessions")?Aggregate(sessionSource,settings.Frame).TakeLast(requested).ToArray():Fixture(settings.Frame,requested);
             panes[i].Update("NQ · PREVIEW",new(bars,.25,"LIVE",bars[^1].Close+3,1));
+            if(Program.Options.Contains("--sessions"))
+            {
+                panes[i].Chart.SessionStyle=preferences.Sessions.Copy();
+                panes[i].Chart.SessionZones=ChartSessionZones.Build(sessionSource,preferences.Sessions.Definitions,1,new(2026,10,15,20,0,0,TimeSpan.Zero),true);
+            }
             var last=bars[^1].Close;
             if(Program.Options.Contains("--bubbles"))
             {
@@ -103,6 +118,19 @@ public sealed class PreviewWindow : Window
         }
         return result.ToArray();
     }
+    static ChartBar[] SessionFixture()
+    {
+        var result=new List<ChartBar>();var end=new DateTimeOffset(2026,10,15,20,0,0,TimeSpan.Zero);long previous=120500;
+        var count=Program.Options.Contains("--all")?75000:8641;
+        for(int i=0;i<count;i++)
+        {
+            var time=end.AddSeconds((i-count+1)*30);var close=120500+(long)(Math.Sin(i/220d)*140+Math.Sin(i/61d)*65);
+            result.Add(new(i,time,DateOnly.FromDateTime(time.UtcDateTime),previous,Math.Max(previous,close)+4,Math.Min(previous,close)-4,close,30+i%40,1,i==count-1));previous=close;
+        }
+        return result.ToArray();
+    }
+    static ChartBar[] Aggregate(ChartBar[] source,int minutes)=>source.GroupBy(b=>(b.Time.ToUnixTimeMilliseconds()+minutes*60000L-1)/(minutes*60000L))
+        .Select((group,i)=>new ChartBar(i,DateTimeOffset.FromUnixTimeMilliseconds(group.Key*minutes*60000L),group.Last().TradingDate,group.First().Open,group.Max(b=>b.High),group.Min(b=>b.Low),group.Last().Close,group.Sum(b=>b.Volume),1,group.Last().Forming)).ToArray();
     void Capture(string output)
     {
         if(Program.Options.Contains("--cursor")) panes[0].Chart.SetCursor(new Point(panes[0].Chart.Geometry.PlotWidth*.65,panes[0].Chart.Geometry.PlotHeight*.42));

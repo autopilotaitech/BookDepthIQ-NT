@@ -57,7 +57,7 @@ public static class ChartSessionZones
                     }
                     else if(bar.Time>upper) continue;
                     if(last!=null&&from>last.Value) gap=true;
-                    high=Math.Max(high,bar.High);low=Math.Min(low,bar.Low);first??=from;last=bar.Forming?now:bar.Time;
+                    high=Math.Max(high,bar.High);low=Math.Min(low,bar.Low);first??=from;last=bar.Forming&&now<bar.Time?now:bar.Time;
                 }
                 if(first==null||last==null) continue;
                 bool partial=gap||first>start||(!developing&&last<end);

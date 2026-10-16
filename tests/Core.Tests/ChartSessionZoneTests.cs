@@ -16,6 +16,11 @@ public class ChartSessionZoneTests
         var result=ChartSessionZones.Build(new[]{Bar(30),Bar(120)},new[]{Def(end:"08:02")},3,Start.AddMinutes(3),true);
         Assert.Equal("PARTIAL",Assert.Single(result.Zones).State);
     }
+    [Fact] public void Old_forming_history_does_not_advance_coverage_to_wall_clock()
+    {
+        var zone=Assert.Single(ChartSessionZones.Build(new[]{Bar(30,forming:true)},new[]{Def(end:"16:00")},3,Start.AddHours(2),true).Zones);
+        Assert.Contains("STALE",zone.State);Assert.Equal(Start.AddSeconds(30),zone.Progress);
+    }
     [Fact] public void Truncated_stale_forming_empty_and_invalid_inputs_are_not_certified_complete()
     {
         Assert.Empty(ChartSessionZones.Build(Array.Empty<ChartBar>(),new[]{Def()},3,Start,true).Zones);

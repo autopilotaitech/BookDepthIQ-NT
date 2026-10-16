@@ -25,22 +25,27 @@ public sealed partial class CandleChartControl
         rect=default;if(!SessionX(zone.Start,plot,out var left)||!SessionX(zone.Progress,plot,out var right)||right<=left) return false;
         var top=plot.Y(zone.High);var bottom=plot.Y(zone.Low);rect=new(left,Math.Min(top,bottom),right-left,Math.Max(1,Math.Abs(bottom-top)));return true;
     }
+    bool SessionExtension(SessionZone zone,ChartGeometry plot,out double start,out double end)
+    {
+        start=end=0;
+        return SessionStyle.ExtendLevels&&zone.Progress>=zone.End&&SessionX(zone.End,plot,out start)&&SessionX(zone.ExtendUntil,plot,out end)&&end>start;
+    }
     void DrawSessions(DrawingContext context,ChartGeometry plot,bool labels)
     {
         if(!SessionsShown) return;var occupied=new List<Rect>();
         foreach(var zone in SessionZones.Zones.Take(27).Reverse())
         {
-            if(!SessionRect(zone,plot,out var rect)||rect.Right<0||rect.X>plot.PlotWidth) continue;
             var color=Color.TryParse(zone.Color,out var parsed)?parsed:Pal.Muted;var pen=new Pen(Pal.B(color),.9);
+            if(!labels&&SessionExtension(zone,plot,out var extensionStart,out var extensionEnd))
+            {
+                var dashed=new Pen(new SolidColorBrush(color,.55),.8,DashStyle.Dash);
+                context.DrawLine(dashed,new Point(extensionStart,plot.Y(zone.High)),new Point(extensionEnd,plot.Y(zone.High)));
+                context.DrawLine(dashed,new Point(extensionStart,plot.Y(zone.Low)),new Point(extensionEnd,plot.Y(zone.Low)));
+            }
+            if(!SessionRect(zone,plot,out var rect)||rect.Right<0||rect.X>plot.PlotWidth) continue;
             if(!labels)
             {
                 context.DrawRectangle(new SolidColorBrush(color,SessionStyle.Opacity),pen,rect);
-                if(SessionStyle.ExtendLevels&&zone.Progress>=zone.End&&SessionX(zone.ExtendUntil,plot,out var end)&&end>rect.Right)
-                {
-                    var dashed=new Pen(new SolidColorBrush(color,.55),.8,DashStyle.Dash);
-                    context.DrawLine(dashed,new Point(rect.Right,plot.Y(zone.High)),new Point(end,plot.Y(zone.High)));
-                    context.DrawLine(dashed,new Point(rect.Right,plot.Y(zone.Low)),new Point(end,plot.Y(zone.Low)));
-                }
                 continue;
             }
             if(!SessionStyle.ShowLabels) continue;
@@ -64,9 +69,8 @@ public sealed partial class CandleChartControl
         text="";if(!SessionsShown||pointer is not {} point) return false;var plot=Geometry;
         foreach(var zone in SessionZones.Zones.Reverse())
         {
-            if(!SessionRect(zone,plot,out var rect)) continue;
-            bool inBox=rect.Contains(point);
-            bool onExtension=SessionStyle.ExtendLevels&&zone.Progress>=zone.End&&SessionX(zone.ExtendUntil,plot,out var end)&&point.X>=rect.Right&&point.X<=end&&
+            bool inBox=SessionRect(zone,plot,out var rect)&&rect.Contains(point);
+            bool onExtension=SessionExtension(zone,plot,out var start,out var end)&&point.X>=start&&point.X<=end&&
                 (Math.Abs(point.Y-plot.Y(zone.High))<=4||Math.Abs(point.Y-plot.Y(zone.Low))<=4);
             if(!inBox&&!onExtension) continue;
             text=$"{zone.Name} · {zone.State}\nH {Price(zone.High)} · L {Price(zone.Low)}\nUTC {zone.Start:yyyy-MM-dd HH:mm} → {zone.End:yyyy-MM-dd HH:mm}";return true;

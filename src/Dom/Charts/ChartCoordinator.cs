@@ -3,7 +3,7 @@ using BookDepthIQ.Core.Charts;
 
 namespace BookDepthIQ.Dom.Charts;
 
-public sealed record ChartSnapshot(IReadOnlyList<ChartBar> Bars,double TickSize,string Status,long? LastPrice,long Version,long ReceivedAtMs=0);
+public sealed record ChartSnapshot(IReadOnlyList<ChartBar> Bars,double TickSize,string Status,long? LastPrice,long Version,long ReceivedAtMs=0,long Generation=0);
 
 /// <summary>Chart worker state only. No account, order, DOM state or UI-thread dependency.</summary>
 public sealed class ChartCoordinator
@@ -65,7 +65,7 @@ public sealed class ChartCoordinator
     }
     public ChartSnapshot Snapshot(int slot)
     {
-        lock(gate) {var s=slots[shared.TryGetValue(slot,out var source)?source:slot];if(s.Dirty) {s.Cached=s.Store.Snapshot();s.Dirty=false;}return new(s.Cached,s.TickSize,s.Status,s.Last,s.Version,s.ReceivedAtMs);}
+        lock(gate) {var s=slots[shared.TryGetValue(slot,out var source)?source:slot];if(s.Dirty) {s.Cached=s.Store.Snapshot();s.Dirty=false;}return new(s.Cached,s.TickSize,s.Status,s.Last,s.Version,s.ReceivedAtMs,s.Generation);}
     }
     public long Version(int slot) {lock(gate) return slots[slot].Version;}
 }
