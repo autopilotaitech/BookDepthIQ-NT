@@ -32,35 +32,31 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
-Feature preview: **beta.14 PAX live-bar rollover correction** on `codex/pax-live-rollover`.
-Completed bars now leave their forming state so PAX can continue adding extensions during live
-moves. **Replace/recompile `BookDepthIQChartBridge.cs`.** [Regression evidence and upgrade](docs/PAX-LIVE-ROLLOVER.md).
+**Current beta prerelease: [1.13.0-beta.14](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.13.0-beta.14).**
+Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.14/BookDepthIQ-DOM-1.13.0-beta.14-win-x64.zip)
+and [SHA256 checksum](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.14/SHA256SUMS.txt).
+**Update the app AND BOTH packaged AddOns, then recompile NinjaTrader (F5).**
+The DOM bridge requires order capability3; the chart bridge fixes live bar completion/PAX rollover.
+Reload chart history after activating the updated AddOns. Do not replace/restart while managing an open position.
+See [release/upgrade notes](https://github.com/autopilotaitech/BookDepthIQ-NT/blob/v1.13.0-beta.14/docs/RELEASE-1.13.0-beta.14.md).
 
-Feature preview: **beta.13 explicit ladder order columns** on `codex/explicit-order-columns`.
-Only BUY/SELL submit new ladder orders; subtle cyan/orange tints identify them. Hover descriptions
-can be switched off in **Ticket → ENTRY → COLUMN HELP**. [Behavior and proof](docs/EXPLICIT-ORDER-COLUMNS.md).
-
-Feature preview: **beta.12 manual exit coverage correction** on `codex/manual-exit-coverage`.
-Stop-first and TP-first manual exits no longer block each other's position-sized coverage.
-**Requires updated app AND DOM bridge (order capability3).** [Proof, upgrade and OCO limitations](docs/MANUAL-EXIT-COVERAGE.md).
-
-Feature preview: **beta.11 readable trade markers** on `codex/readable-trade-markers`:
-larger high-contrast circles and exact quantity badges, with unchanged thresholds/colors.
-[Preview, settings migration and test evidence](docs/READABLE-TRADE-MARKERS.md).
-
-**Main branch: 1.13.0-beta.10 source**, including session zones, live candle updates and PAX corrections.
-Merged after the owner's testing approval on October 16, 2026. The current published download
-below remains beta.7; it does not contain these newer corrections or session zones.
-
-**Current beta prerelease: [1.13.0-beta.7](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.13.0-beta.7).**
-Download the [Windows x64 ZIP](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.7/BookDepthIQ-DOM-1.13.0-beta.7-win-x64.zip)
-and [SHA256 checksum](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/download/v1.13.0-beta.7/SHA256SUMS.txt).
-**Update the app AND `BookDepthIQBridge.cs`, then recompile in NT for trade bubbles.** The new bridge
-adds exact-contract/chart-time metadata; old bridges deliberately omit bubbles rather than guess.
-The beta2+ chart AddOn is unchanged. From beta1/1.12.x/new install, install both packaged AddOns.
-See [release/upgrade notes](docs/RELEASE-1.13.0-beta.7.md).
+Release source is tagged `v1.13.0-beta.14` from `codex/pax-live-rollover`. Main application source
+remains the previously merged beta.10; the README download links refer to the newer tagged build.
 Still beta: broader owner testing, native parity and latency checks remain pending.
 The previous [1.12.13 DOM-only release](https://github.com/autopilotaitech/BookDepthIQ-NT/releases/tag/v1.12.13) remains available.
+
+### New in beta.14 — cumulative beta.8–14 updates
+
+- Tokyo/London/New York session zones with custom hours, named time zones, colors and per-chart visibility.
+- More readable large-trade circles and exact quantity badges, preserving thresholds and custom colors.
+- Manual stop-first/TP-first exit coverage correction; separately clicked exits are bridge-managed,
+  **not broker-native OCO**. See [execution limitations](https://github.com/autopilotaitech/BookDepthIQ-NT/blob/v1.13.0-beta.14/docs/MANUAL-EXIT-COVERAGE.md).
+- Only tinted BUY/SELL ladder columns submit new orders. Scroll/drag cancels pending entry;
+  existing order management remains. Optional help: Ticket → ENTRY → COLUMN HELP.
+- Corrected PAX extension activation, same-day plot end, zero prior-day history and current/prior-day styling.
+- Live chart event-series and rollover fixes prevent completed bars remaining marked forming and freezing PAX growth.
+- **416 isolated tests pass** (370 Core/DOM +46 Bridge); Release/native builds clean. No native orders
+  sent during agent verification; provider execution, atomic cancellation and HFT latency are not certified.
 
 ### Main branch updates — 1.13.0-beta.10
 
