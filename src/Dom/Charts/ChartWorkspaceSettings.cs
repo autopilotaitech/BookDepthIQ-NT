@@ -11,6 +11,7 @@ public sealed class ChartPaneSettings
     public bool Volume {get;set;}
     public bool ShowOrders {get;set;}=true;
     public bool ShowLargeTrades {get;set;}
+    public bool ShowSessionZones {get;set;}
     public bool ShowLastPrice {get;set;}=true;
     public bool ShowCrosshair {get;set;}=true;
     public bool SnapCrosshair {get;set;}=true;
@@ -30,6 +31,7 @@ public sealed class ChartWorkspaceSettings
     public double WidthRatio {get;set;}=.32;
     public double HeightRatio {get;set;}=.5;
     public bool LinkCrosshair {get;set;}
+    public SessionZoneSettings Sessions {get;set;}=new();
     public Dictionary<string,LargeTradeProfile> TradeProfiles {get;set;}=new();
     public static string TradeProfileKey(string instrument)
     {
@@ -49,6 +51,7 @@ public sealed class ChartWorkspaceSettings
         WidthRatio=double.IsFinite(WidthRatio)?Math.Clamp(WidthRatio,.1,.8):.32;
         HeightRatio=double.IsFinite(HeightRatio)?Math.Clamp(HeightRatio,.2,.8):.5;
         Top??=new();Bottom??=new() {Frame=15};Top.Normalize();Bottom.Normalize();
+        Sessions??=new();Sessions.Normalize();
         TradeProfiles??=new();foreach(var key in TradeProfiles.Keys.ToArray()) {TradeProfiles[key]??=new();TradeProfiles[key].Normalize();}
     }
 }
