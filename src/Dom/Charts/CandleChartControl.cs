@@ -74,10 +74,10 @@ public sealed partial class CandleChartControl : Control
     public void SetLinkedCursor(ChartCursorLink? value) {linkedCursor=value;InvalidateVisual();}
     void PublishCursor()
     {
+        RefreshTradeTooltip();
         var hit=CursorReadout;
         var value=pointer!=null&&hit!=null?new ChartCursorLink(hit.Time,hit.PriceTicks,hit.Bar.TradingDate):null;
         if(value==publishedCursor) return;publishedCursor=value;CursorChanged?.Invoke(value);
-        ToolTip.SetTip(this,hit==null?null:$"{hit.Time.ToLocalTime():yyyy-MM-dd HH:mm} · O {Price(hit.Bar.Open)} H {Price(hit.Bar.High)} L {Price(hit.Bar.Low)} C {Price(hit.Bar.Close)} · Volume {hit.Bar.Volume:N0}");
     }
     public void Update(ChartSnapshot value)
     {

@@ -68,6 +68,7 @@ public sealed partial class CandleChartControl
                     context.DrawLine(new Pen(Pal.B(level.Upper?Pal.Bid:Pal.Ask),1,level.Label.StartsWith("OR EXT",StringComparison.Ordinal)?DashStyle.Dash:null),new Point(Math.Max(0,plot.X(a)),y),new Point(Math.Min(w,plot.X(b)),y));
                 }
             }
+            DrawBubbles(context,plot);
             if(settings.ShowLastPrice && DisplayPriceTicks is {} price)
             {
                 var color=PriceColor();var y=plot.Y(price);

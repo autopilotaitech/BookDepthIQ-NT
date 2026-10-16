@@ -7,7 +7,7 @@ public readonly record struct ChartGeometry(double Width,double Height,double St
     public const double TimeAxisHeight=28;
     public double PlotWidth=>Math.Max(1,Width-AxisWidth);
     public double PlotHeight=>Math.Max(1,Height-TimeAxisHeight);
-    public double X(int index)=>(index-Start+.5)/Math.Max(1,Count)*PlotWidth;
+    public double X(double index)=>(index-Start+.5)/Math.Max(1,Count)*PlotWidth;
     public double Y(double ticks)=>PlotHeight-(ticks-Low)/Math.Max(1e-8,High-Low)*PlotHeight;
     public long TicksAt(double y)=>(long)Math.Round(High-Math.Clamp(y/PlotHeight,0,1)*(High-Low));
     public int BarAt(double x,int total)
