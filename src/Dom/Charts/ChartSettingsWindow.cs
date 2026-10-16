@@ -6,7 +6,7 @@ namespace BookDepthIQ.Dom.Charts;
 
 public sealed class ChartSettingsWindow : Window
 {
-    public ChartSettingsWindow(ChartPaneSettings settings,Action changed,ChartSnapshot? snapshot=null,ChartWorkspaceSettings? workspaceSettings=null)
+    public ChartSettingsWindow(ChartPaneSettings settings,Action changed,ChartSnapshot? snapshot=null,ChartWorkspaceSettings? workspaceSettings=null,string instrument="",string tradeCoverage="Capture begins when enabled on a visible chart.")
     {
         Title="Chart settings";Width=390;Height=590;CanResize=false;Background=Pal.B(Pal.Bg);FontFamily=Flight.Sans;Foreground=Pal.B(Pal.Text);
         var panel=new StackPanel {Margin=new Thickness(18),Spacing=10};
@@ -28,8 +28,11 @@ public sealed class ChartSettingsWindow : Window
         ToolTip.SetTip(pax,"Intraday only (1–30m). Uses shared DOM opening-range settings; disabled on 1h, 4h and Day.");panel.Children.Add(pax);
         panel.Children.Add(new TextBlock {Text="PAX historical sessions",FontSize=11,Foreground=Pal.B(Pal.Muted)});
         var days=new NumericUpDown {Minimum=1,Maximum=8,Value=settings.PaxDays,FormatString="0"};panel.Children.Add(days);
+        var trades=workspaceSettings!=null?new LargeTradeSettingsPanel(workspaceSettings,settings,instrument,tradeCoverage):null;
+        if(trades!=null) panel.Children.Add(trades);
         var actions=new StackPanel {Orientation=Orientation.Horizontal,Spacing=8};
         actions.Children.Add(Flight.HeadBtn("APPLY",()=> {
+            if(trades!=null&&!trades.TryApply()) return;
             settings.SetLookback(settings.Frame,(int)(bars.Value??250));settings.Volume=volume.IsChecked==true;settings.ShowOrders=orders.IsChecked==true;
             settings.ShowLastPrice=lastPrice.IsChecked==true;settings.ShowCrosshair=crosshair.IsChecked==true;settings.SnapCrosshair=snap.IsChecked==true;
             if(workspaceSettings!=null) workspaceSettings.LinkCrosshair=link.IsChecked==true;

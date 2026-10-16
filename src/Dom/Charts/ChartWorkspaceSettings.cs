@@ -10,6 +10,7 @@ public sealed class ChartPaneSettings
     public bool Pax {get;set;}
     public bool Volume {get;set;}
     public bool ShowOrders {get;set;}=true;
+    public bool ShowLargeTrades {get;set;}
     public bool ShowLastPrice {get;set;}=true;
     public bool ShowCrosshair {get;set;}=true;
     public bool SnapCrosshair {get;set;}=true;
@@ -29,6 +30,18 @@ public sealed class ChartWorkspaceSettings
     public double WidthRatio {get;set;}=.32;
     public double HeightRatio {get;set;}=.5;
     public bool LinkCrosshair {get;set;}
+    public Dictionary<string,LargeTradeProfile> TradeProfiles {get;set;}=new();
+    public static string TradeProfileKey(string instrument)
+    {
+        var value=instrument.Trim().ToUpperInvariant();var root=BookDepthIQ.Core.CmeSpecs.RootOf(value);
+        return BookDepthIQ.Core.CmeSpecs.All.Any(s=>s.Root==root)?root:value;
+    }
+    public LargeTradeProfile TradeProfile(string instrument)
+    {
+        var key=TradeProfileKey(instrument);
+        if(!TradeProfiles.TryGetValue(key,out var profile)||profile==null) TradeProfiles[key]=profile=new();
+        return profile;
+    }
     public ChartPaneSettings Top {get;set;}=new();
     public ChartPaneSettings Bottom {get;set;}=new() {Frame=15};
     public void Normalize()
@@ -36,5 +49,6 @@ public sealed class ChartWorkspaceSettings
         WidthRatio=double.IsFinite(WidthRatio)?Math.Clamp(WidthRatio,.1,.8):.32;
         HeightRatio=double.IsFinite(HeightRatio)?Math.Clamp(HeightRatio,.2,.8):.5;
         Top??=new();Bottom??=new() {Frame=15};Top.Normalize();Bottom.Normalize();
+        TradeProfiles??=new();foreach(var key in TradeProfiles.Keys.ToArray()) {TradeProfiles[key]??=new();TradeProfiles[key].Normalize();}
     }
 }
