@@ -49,7 +49,7 @@ public sealed class LargeTradeSettingsPanel : StackPanel
         {error.Text="Use #RRGGBB colors, for example #00C8F4.";return false;}
         if(minimum.Value==null||opacity.Value==null||minSize.Value==null||maxSize.Value==null||maxSize.Value<minSize.Value)
         {error.Text="Enter all numbers; maximum diameter must be ≥ minimum.";return false;}
-        var profile=new LargeTradeProfile {MinContracts=(long)minimum.Value,BuyColor=buy.Text!,SellColor=sell.Text!,UnknownColor=unknown.Text!,Opacity=(double)opacity.Value/100,MinDiameter=(double)minSize.Value,MaxDiameter=(double)maxSize.Value,Labels=(TradeQuantityLabels)labels.SelectedIndex};profile.Normalize();
+        var profile=new LargeTradeProfile {ReadabilityVersion=1,MinContracts=(long)minimum.Value,BuyColor=buy.Text!,SellColor=sell.Text!,UnknownColor=unknown.Text!,Opacity=(double)opacity.Value/100,MinDiameter=(double)minSize.Value,MaxDiameter=(double)maxSize.Value,Labels=(TradeQuantityLabels)labels.SelectedIndex};profile.Normalize();
         workspace.TradeProfiles[ChartWorkspaceSettings.TradeProfileKey(instrument)]=profile;
         pane.ShowLargeTrades=enabled.IsChecked==true;
         if(applyTo.SelectedIndex==1) workspace.Top.ShowLargeTrades=workspace.Bottom.ShowLargeTrades=pane.ShowLargeTrades;

@@ -32,6 +32,10 @@ bridge is a thin AddOn: it streams data and executes what the DOM sends. It neve
 
 ## Install
 
+Feature preview: **beta.11 readable trade markers** on `codex/readable-trade-markers`:
+larger high-contrast circles and exact quantity badges, with unchanged thresholds/colors.
+[Preview, settings migration and test evidence](docs/READABLE-TRADE-MARKERS.md).
+
 **Main branch: 1.13.0-beta.10 source**, including session zones, live candle updates and PAX corrections.
 Merged after the owner's testing approval on October 16, 2026. The current published download
 below remains beta.7; it does not contain these newer corrections or session zones.
