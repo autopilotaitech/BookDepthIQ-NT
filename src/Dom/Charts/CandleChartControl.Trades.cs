@@ -63,6 +63,7 @@ public sealed partial class CandleChartControl
                 ToolTip.SetTip(this,$"{print.Quantity:N0} contracts · {side} executed print\n{Price(print.Tick)} · {DateTimeOffset.FromUnixTimeMilliseconds(print.TimeMs).ToLocalTime():yyyy-MM-dd HH:mm:ss.fff}\n{hits.Length} overlapping marker(s)\n{TradeCoverageSummary}");return;
             }
         }
+        if(TrySessionTooltip(out var sessionTip)) {ToolTip.SetTip(this,sessionTip);return;}
         var hit=CursorReadout;
         ToolTip.SetTip(this,hit==null?null:$"{hit.Time.ToLocalTime():yyyy-MM-dd HH:mm} · O {Price(hit.Bar.Open)} H {Price(hit.Bar.High)} L {Price(hit.Bar.Low)} C {Price(hit.Bar.Close)} · Volume {hit.Bar.Volume:N0}");
     }

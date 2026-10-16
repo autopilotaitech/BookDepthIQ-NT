@@ -17,7 +17,7 @@ public sealed class ChartPane : DockPanel
         var frames=new ComboBox {ItemsSource=ChartFrame.Choices.Select(ChartFrame.Label).ToArray(),SelectedIndex=Array.IndexOf(ChartFrame.Choices,settings.Frame),Width=60,Height=28,MinHeight=28,FontFamily=Flight.Sans,FontSize=11};
         frames.SelectionChanged+=(_,_)=> {if(frames.SelectedIndex<0) return;settings.Frame=ChartFrame.Choices[frames.SelectedIndex];Chart.Clear();changed();};
         var menu=new ContextMenu();
-        var options=new MenuItem {Header="Chart settings"};options.Click+=(_,_)=> {if(TopLevel.GetTopLevel(this) is Window owner) new ChartSettingsWindow(settings,changed,lastSnapshot,workspaceSettings,symbol.Text??"",Chart.TradeCoverageSummary).ShowDialog(owner);};
+        var options=new MenuItem {Header="Chart settings"};options.Click+=(_,_)=> {if(TopLevel.GetTopLevel(this) is Window owner) new ChartSettingsWindow(settings,changed,lastSnapshot,workspaceSettings,symbol.Text??"",Chart.TradeCoverageSummary,Chart.SessionCoverageSummary).ShowDialog(owner);};
         var reset=new MenuItem {Header="Reset view"};reset.Click+=(_,_)=>Chart.ResetView();
         var reloadItem=new MenuItem {Header="Reload history"};reloadItem.Click+=(_,_)=> (reload??changed)();
         var max=new MenuItem {Header="Maximize / restore"};max.Click+=(_,_)=>maximize();

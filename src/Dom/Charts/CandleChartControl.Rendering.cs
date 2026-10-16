@@ -42,6 +42,7 @@ public sealed partial class CandleChartControl
         DrawAxisTags(context,plot);
         using(context.PushClip(new Rect(0,0,w,h)))
         {
+            DrawSessions(context,plot,false);
             var key=(start,end,Viewport.Count,w);
             if(!ReferenceEquals(bucketSource,bars)||bucketKey!=key) {renderBuckets=ChartRenderBuckets.Build(bars,start,end,Viewport.Count,w);bucketSource=bars;bucketKey=key;}
             var bidPen=new Pen(Pal.B(Pal.Bid),1);var askPen=new Pen(Pal.B(Pal.Ask),1);
@@ -68,6 +69,7 @@ public sealed partial class CandleChartControl
                     context.DrawLine(new Pen(Pal.B(level.Upper?Pal.Bid:Pal.Ask),1,level.Label.StartsWith("OR EXT",StringComparison.Ordinal)?DashStyle.Dash:null),new Point(Math.Max(0,plot.X(a)),y),new Point(Math.Min(w,plot.X(b)),y));
                 }
             }
+            DrawSessions(context,plot,true);
             DrawBubbles(context,plot);
             if(settings.ShowLastPrice && DisplayPriceTicks is {} price)
             {
