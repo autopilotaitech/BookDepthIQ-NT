@@ -9,6 +9,12 @@ using Avalonia.Interactivity;
 
 public class PaxChartParityTests
 {
+    [Fact] public void Sustained_selloff_continues_beyond_extension_six()
+    {
+        var bars=new[]{Bar(0,30)}.Concat(Enumerable.Range(1,20).Select(i=>Bar(i,30+i*30,408,396-i*9))).ToArray();
+        var lines=ChartOpeningRanges.Build(bars,Config,"NQ",.25,3,0,Bell.AddMinutes(20));
+        Assert.Contains(lines,l=>l.Label=="OR EXT7"&&!l.Upper);Assert.Contains(lines,l=>l.Label=="OR EXT21"&&!l.Upper);
+    }
     [AvaloniaFact] public void Settings_applies_zero_previous_sessions_and_json_keeps_it()
     {
         var pane=new ChartPaneSettings {PaxDays=2};int changes=0;

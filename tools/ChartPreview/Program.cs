@@ -94,9 +94,9 @@ public sealed class PreviewWindow : Window
             if(Program.Options.Contains("--bubbles"))
             {
                 settings.ShowLargeTrades=true;
-                panes[i].Chart.TradeProfile=new() {MinDiameter=32,MaxDiameter=54,Labels=TradeQuantityLabels.All};
+                panes[i].Chart.TradeProfile=new();
                 var indexes=new[]{bars.Length-100,bars.Length-80,bars.Length-58,bars.Length-35,bars.Length-14};
-                var quantities=new long[]{85,120,65,210,95};
+                var quantities=new long[]{50,120,65,210,95};
                 var prints=indexes.Select((index,j)=>new ChartPrint(j+1,"NQ · PREVIEW",bars[index].Close,quantities[j],j is 1 or 4?'s':'b',bars[index].Time.AddMinutes(-settings.Frame*.5).ToUnixTimeMilliseconds())).ToArray();
                 panes[i].Chart.CapturedTrades=new(prints,new[]{new ChartTradeCoverage(bars[indexes[0]].Time.ToUnixTimeMilliseconds(),null)},0,1);
             }

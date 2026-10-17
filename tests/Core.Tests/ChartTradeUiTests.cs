@@ -8,6 +8,29 @@ using BookDepthIQ.Dom.Charts;
 using Xunit;
 public class ChartTradeUiTests
 {
+    [AvaloniaTheory] [InlineData(1)] [InlineData(1.5)] [InlineData(2)]
+    public void Threshold_print_has_visible_quantity_without_requiring_a_large_marker(double scale)
+    {
+        var chart=Fixture(new() {ShowLargeTrades=true});chart.TradeProfile=new();
+        chart.CapturedTrades=new(new[]{new ChartPrint(1,"NQ TEST",100,50,'s',90000)},Array.Empty<ChartTradeCoverage>(),0,1);
+        var labeled=Render(chart,scale);chart.TradeProfile.Labels=TradeQuantityLabels.Off;
+        Assert.False(labeled.SequenceEqual(Render(chart,scale)));
+    }
+    [Fact] public void Legacy_default_style_upgrades_without_changing_threshold_colors_or_custom_preferences()
+    {
+        var old=new LargeTradeProfile {MinContracts=50,MinDiameter=12,MaxDiameter=42,Opacity=.2,Labels=TradeQuantityLabels.Large,SellColor="#AA7733"};old.Normalize();
+        Assert.Equal(TradeQuantityLabels.All,old.Labels);Assert.True(old.MinDiameter>=24);Assert.Equal(50,old.MinContracts);Assert.Equal("#AA7733",old.SellColor);
+        var custom=new LargeTradeProfile {MinDiameter=18,MaxDiameter=55,Opacity=.7,Labels=TradeQuantityLabels.Off};custom.Normalize();
+        Assert.Equal(18,custom.MinDiameter);Assert.Equal(.7,custom.Opacity);Assert.Equal(TradeQuantityLabels.Off,custom.Labels);
+    }
+    [Fact] public void Saved_legacy_style_migrates_once_and_later_user_choices_are_preserved()
+    {
+        var profile=System.Text.Json.JsonSerializer.Deserialize<LargeTradeProfile>("{\"MinContracts\":75,\"MinDiameter\":12,\"MaxDiameter\":42,\"Opacity\":0.2,\"Labels\":1}")!;
+        profile.Normalize();Assert.Equal(75,profile.MinContracts);Assert.Equal(TradeQuantityLabels.All,profile.Labels);
+        profile.MinDiameter=12;profile.MaxDiameter=42;profile.Opacity=.2;profile.Labels=TradeQuantityLabels.Large;
+        var saved=System.Text.Json.JsonSerializer.Deserialize<LargeTradeProfile>(System.Text.Json.JsonSerializer.Serialize(profile))!;saved.Normalize();
+        Assert.Equal(12,saved.MinDiameter);Assert.Equal(TradeQuantityLabels.Large,saved.Labels);
+    }
     static CandleChartControl Fixture(ChartPaneSettings settings)
     {
         var chart=new CandleChartControl(settings);

@@ -21,6 +21,56 @@ public class BridgeOrderTests : IDisposable
     void Command(string json) => Call("Handle",new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(json));
     Order Entry => account.Orders.Single(o=>o.Name=="BDIQ entry");
     List<Order> Legs => account.Orders.Where(o=>o.Name!="BDIQ entry" && Account.Working(o)).ToList();
+    void Manual(string side,string kind,int qty,double price)
+    {Command("{\"t\":\"order\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"side\":\""+side+"\",\"type\":\""+kind+"\",\"price\":"+price.ToString(System.Globalization.CultureInfo.InvariantCulture)+",\"qty\":"+qty+"}");}
+    [Theory]
+    [InlineData("buy","sell",true)] [InlineData("buy","sell",false)]
+    [InlineData("sell","buy",true)] [InlineData("sell","buy",false)]
+    public void Manual_stop_and_targets_have_independent_coverage_and_shrink_on_actual_fills(string opening,string closing,bool stopFirst)
+    {
+        Manual(opening,"market",3,0);account.Fill(Entry,3,30000);
+        if(stopFirst) Manual(closing,"stop",3,opening=="buy"?29990:30010);
+        Manual(closing,"limit",1,opening=="buy"?30010:29990);
+        Manual(closing,"limit",2,opening=="buy"?30020:29980);
+        if(!stopFirst) Manual(closing,"stop",3,opening=="buy"?29990:30010);
+        var exits=account.Orders.Skip(1).ToArray();Assert.Equal(3,exits.Length);
+        Assert.All(exits,o=>Assert.True(Account.Working(o)));
+        var stop=exits.Single(o=>o.OrderType==OrderType.StopMarket);
+        var targets=exits.Where(o=>o.OrderType==OrderType.Limit).ToArray();
+        account.Fill(targets[1],1,30000);Assert.Equal(2,stop.Quantity-stop.Filled);
+        Assert.True(Account.Working(targets[0]));Assert.True(Account.Working(stop));
+        account.Fill(stop,1,30000);
+        Assert.Equal(1,account.Orders.Where(o=>Account.Working(o)&&o.OrderType==OrderType.Limit).Sum(o=>o.Quantity-o.Filled));
+        account.Fill(stop,1,30000);Assert.Equal(MarketPosition.Flat,account.Positions.Single().MarketPosition);
+        Assert.DoesNotContain(account.Orders,Account.Working);Assert.Equal(4,account.Orders.Count);
+    }
+    [Fact] public void Independent_exit_families_still_reject_duplicate_overcoverage()
+    {
+        Manual("buy","market",3,0);account.Fill(Entry,3,30000);
+        Manual("sell","stop",3,29990);Manual("sell","limit",3,30010);
+        Manual("sell","stop",1,29980);Manual("sell","limit",1,30020);
+        Assert.Equal(3,account.Orders.Count);
+        Assert.Equal(3,account.Orders.Where(o=>Account.Working(o)&&o.OrderType==OrderType.StopMarket).Sum(o=>o.Quantity-o.Filled));
+        Assert.Equal(3,account.Orders.Where(o=>Account.Working(o)&&o.OrderType==OrderType.Limit).Sum(o=>o.Quantity-o.Filled));
+    }
+    [Fact] public void Manual_stop_remains_until_close_half_fills_and_then_resizes()
+    {
+        Manual("buy","market",4,0);account.Fill(Entry,4,30000);Manual("sell","stop",4,29990);
+        var stop=account.Orders.Last();
+        Command("{\"t\":\"closePart\",\"acct\":\"Sim101\",\"inst\":\"MNQ 12-26\",\"qty\":2}");
+        var close=account.Orders.Last();Assert.Equal("BDIQ close",close.Name);Assert.Equal(4,stop.Quantity);
+        account.Fill(close,2,30000);Assert.Equal(2,stop.Quantity-stop.Filled);
+    }
+    [Fact] public void Manual_exit_reconciliation_recovers_after_delayed_change_confirmation()
+    {
+        Manual("buy","market",3,0);account.Fill(Entry,3,30000);
+        Manual("sell","stop",3,29990);Manual("sell","limit",3,30010);
+        var stop=account.Orders.Single(o=>o.OrderType==OrderType.StopMarket);var target=account.Orders.Single(o=>o.OrderType==OrderType.Limit);
+        account.DeferChanges=true;account.Fill(target,1,30010);account.Fill(target,1,30010);
+        account.ConfirmChanges();Assert.Equal(1,stop.Quantity-stop.Filled);
+        account.DeferCancels=true;account.Fill(target,1,30010);Assert.Equal(OrderState.CancelPending,stop.OrderState);
+        account.ConfirmCancels();Assert.DoesNotContain(account.Orders,Account.Working);
+    }
     [Theory]
     [InlineData("buy",30008,29996)] [InlineData("sell",29992,30004)]
     public void Real_bridge_attaches_correct_tp_sl_per_partial_fill(string side,double tp,double sl)

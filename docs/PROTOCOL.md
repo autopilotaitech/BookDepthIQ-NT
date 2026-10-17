@@ -34,7 +34,7 @@ See [development verification limits](CHART-WORKSPACE.md) before assuming native
 
 | `t` | Fields | When |
 |---|---|---|
-| `hello` | `v`, `orderVersion`, `accounts: [{name, conn}]` | on connect; `orderVersion >= 2` is required for new Ticket orders |
+| `hello` | `v`, `orderVersion`, `accounts: [{name, conn}]` | on connect; `orderVersion >= 3` is required for new Ticket orders |
 | `accounts` | `v`, `orderVersion`, `accounts: [{name, conn}]` | discovery reply and account/connection changes; not a new bridge session |
 | `inst` | `name`, `tick` (TickSize), `pv` (PointValue), `desc` | after `sub` |
 | `book` | `bids: [[price, size]…]`, `asks: […]`, `ms` | depth changed (coalesced, ≤ 20/s, every level NinjaTrader holds, up to 1000 a side) |
@@ -71,7 +71,7 @@ priced in ticks from that execution's fill, so a partial fill is protected at on
 
 SCALE child slices optionally include their original 1-based target number: `[64,1,2]` remains
 `BDIQ TP2` / `BDIQ SL2` even when it is the child's only target. Legacy pairs retain their list index.
-The DOM requires `orderVersion >= 2` before new orders, and complete fresh balance, selected-instrument
+The DOM requires `orderVersion >= 3` before new orders, and complete fresh balance, selected-instrument
 position and orders snapshots. Session loss or a new `hello` invalidates readiness and pending reverse
 intent synchronously. Every instrument subscription also re-sends position/order snapshots.
 

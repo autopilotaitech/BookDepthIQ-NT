@@ -376,7 +376,7 @@ public sealed partial class MainWindow : Window
             Flight.Labeled("TRAIL", trailBox),
             Row(Flight.Labeled("START AFTER R", trailR)) } }));
         t.Children.Add(Flight.Card("ENTRY", new StackPanel { Spacing = 6, Children = {
-            Row(Flight.Labeled("SETUP", setupIn), Flight.Labeled(" ", armBtn)),
+            Row(Flight.Labeled("SETUP", setupIn), Flight.Labeled(" ", armBtn),ladder.CreateColumnHelpToggle(cfg.Save)),
             Flight.Labeled("PREVIEW", previewBox),
             Row(scaleChk, Flight.Labeled("ORDERS", scaleCount), Flight.Labeled("SPAN", scaleSpan), Flight.Labeled("SKEW", scaleSkew)),
             scaleDir } }));

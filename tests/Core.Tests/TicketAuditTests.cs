@@ -47,7 +47,7 @@ sealed class TicketHarness : IDisposable
         State.CommandAcknowledged += (cid,ok)=>Call("OnCommandAcknowledged",cid,ok);
         State.TradingSessionReset += ()=>Call("ClearManagement");
         State.AccountChanged += ()=>Call("ClearManagement");
-        Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":2,\"accounts\":[]}");
+        Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":3,\"accounts\":[]}");
         Message("{\"t\":\"account\",\"name\":\"Sim101\",\"cash\":50000}");
         FlatSnapshot(); EmptyOrders();
     }
@@ -147,7 +147,7 @@ public class TicketAuditTests
     public void Old_bridge_must_not_accept_entries_with_new_scale_semantics()
     {
         using var h=new TicketHarness();
-        h.Message("{\"t\":\"hello\",\"v\":2,\"accounts\":[]}");
+        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":2,\"accounts\":[]}");
         h.Message("{\"t\":\"account\",\"name\":\"Sim101\",\"cash\":50000}");
         h.FlatSnapshot(); h.EmptyOrders();
         h.Call("Market",true); Assert.Empty(h.Commands); Assert.Contains("bridge",h.State.LastResult!,StringComparison.OrdinalIgnoreCase);
@@ -159,7 +159,7 @@ public class TicketAuditTests
     {
         using var h=new TicketHarness(); h.Position(4); h.Call("Reverse");
         h.State.Connected=false;
-        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":2,\"accounts\":[]}");
+        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":3,\"accounts\":[]}");
         h.Message("{\"t\":\"account\",\"name\":\"Sim101\",\"cash\":50000}");
         h.FlatSnapshot(); h.EmptyOrders(); h.Ack(true); h.Manage(); Assert.Single(h.Commands);
     }
@@ -168,7 +168,7 @@ public class TicketAuditTests
     public void Balance_only_message_is_not_a_complete_trading_snapshot()
     {
         using var h=new TicketHarness();
-        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":2,\"accounts\":[]}");
+        h.Message("{\"t\":\"hello\",\"v\":2,\"orderVersion\":3,\"accounts\":[]}");
         h.Message("{\"t\":\"account\",\"name\":\"Sim101\",\"cash\":50000}");
         h.Call("Market",true); Assert.Empty(h.Commands);
         h.FlatSnapshot(); h.EmptyOrders(); h.Call("Market",true); Assert.Single(h.Commands);

@@ -39,14 +39,16 @@ public sealed partial class CandleChartControl
             var x=plot.X(bubble.BarPosition);var y=plot.Y(bubble.Print.Tick);if(x<0||x>=plot.PlotWidth) continue;
             var color=TradeProfile.ColorFor(bubble.Print.Side);var radius=bubble.Diameter/2;
             var fill=new SolidColorBrush(color,TradeProfile.Opacity);
-            context.DrawEllipse(fill,new Pen(Pal.B(color),1.2),new Point(x,y),radius,radius);
+            // Opaque dark separation prevents a sell marker disappearing into an orange candle/level.
+            context.DrawEllipse(new SolidColorBrush(Pal.Bg,.94),new Pen(Pal.B(Pal.Bg),3),new Point(x,y),radius+1,radius+1);
+            context.DrawEllipse(fill,new Pen(Pal.B(color),2),new Point(x,y),radius,radius);
             if(TradeProfile.Labels==TradeQuantityLabels.Off||(TradeProfile.Labels==TradeQuantityLabels.Large&&bubble.Diameter<24)) continue;
             var text=bubble.Print.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var size=Math.Clamp(bubble.Diameter*.33,8,13);var ft=Formatted(text,Pal.Text,size,true);
-            if(ft.Width>bubble.Diameter-4) ft=Formatted(text,Pal.Text,Math.Max(6,size*(bubble.Diameter-4)/ft.Width),true);
-            // Dark underlay keeps quantities legible over candles and user-selected colors.
-            using(context.PushOpacity(.8)) context.FillRectangle(Pal.B(Pal.Bg),new Rect(x-ft.Width/2-1,y-ft.Height/2,ft.Width+2,ft.Height));
-            context.DrawText(ft,new Point(x-ft.Width/2,y-ft.Height/2));
+            var ft=Formatted(text,Pal.Text,11,true);
+            // Keep the exact quantity at a readable font size rather than squeezing it down to 6 DIP.
+            var left=Math.Clamp(x-ft.Width/2,3,Math.Max(3,plot.PlotWidth-ft.Width-3));
+            context.DrawRectangle(Pal.B(Pal.Bg),null,new Rect(left-2,y-ft.Height/2-1,ft.Width+4,ft.Height+2),2,2);
+            context.DrawText(ft,new Point(left,y-ft.Height/2));
         }
     }
     void RefreshTradeTooltip()

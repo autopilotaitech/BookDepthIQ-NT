@@ -80,6 +80,7 @@ public sealed class Settings
     /// <summary>ATR / swing mode: targets as R multiples of the stop.</summary>
     public double[] TpR { get; set; } = { 2, 0, 0 };
     public bool BracketOn { get; set; } = true;
+    public bool ColumnHelp { get; set; } = true;
     public bool BeAfterTp1 { get; set; }
     public int BeOffsetTicks { get; set; } = 1;
     public TrailMode Trail { get; set; } = TrailMode.Off;
