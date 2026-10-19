@@ -4,7 +4,9 @@
 
 <p align="center">
   <a href="https://buy.stripe.com/dRmaEW9AnfzT3gpf1senS0a"><img src="https://img.shields.io/badge/%F0%9F%92%B8_TIP_JAR-any_amount_%E2%86%92-635BFF?style=for-the-badge&logo=stripe&logoColor=white" alt="Tip jar: leave a tip, any amount (Stripe)" height="40"></a>
-  <br><sub><b>Free to use.</b> If it helps your trading, leave a tip, any amount you like. Secure checkout by Stripe.</sub>
+  <a href="https://discord.gg/r2y7xY3jEG"><img src="https://img.shields.io/badge/DISCORD-join_the_community_%E2%86%92-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the BookDepthIQ Discord" height="40"></a>
+  <br><sub><b>Free to use.</b> If it helps your trading, leave a tip, any amount you like. Secure checkout by Stripe.
+  Questions, bugs and setups: <a href="https://discord.gg/r2y7xY3jEG">join the Discord</a> (#nt-dom).</sub>
 </p>
 
 A modern standalone pop-out **DOM for NinjaTrader 8**, built with **Avalonia** (.NET 8). It is a full
